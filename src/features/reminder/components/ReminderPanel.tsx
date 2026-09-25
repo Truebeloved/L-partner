@@ -71,21 +71,20 @@ export function ReminderPanel({
         )}
         {permission === 'denied' && (
           <>
-            <span className="badge">已被浏览器拒绝</span>
-            <span className="hint">需要在浏览器的站点设置里重新允许；页面内提醒不受影响</span>
+            <span className="badge">已被系统拒绝</span>
+            <span className="hint">需要在系统的通知设置里重新允许；应用内提醒不受影响</span>
           </>
         )}
-        {permission === 'unsupported' && <span className="badge">当前浏览器不支持</span>}
+        {permission === 'unsupported' && <span className="badge">当前系统不支持通知</span>}
       </div>
 
       {/* 这一段原来是琥珀色警示底。按设计约束，红色只能用于逾期 / 错误 / 破坏性操作，
-          而「页面关掉后不会提醒」是一条功能限制说明，不是错误，所以用中性底纹。
-          注：正文里的「这是一个网页应用」在当前桌面版下已经过时，但按约定不改文案（测试依赖它）。 */}
+          而「应用关掉后不会提醒」是一条功能限制说明，不是错误，所以用中性底纹。 */}
       <p className="mt-4 rounded-sm bg-ink/5 px-3 py-2 text-small leading-relaxed text-ink">
-        关于限制：这是一个网页应用，定时提醒只在
-        <strong className="font-bold">页面打开时</strong>
-        有效。页面被关掉、或者标签页被浏览器休眠之后，没有任何代码在运行，到点不会有提醒 ——
-        这一点我们不会假装能做到。页面重新可见时，如果错过的提醒在 2 小时以内，会立刻补上。
+        关于限制：定时提醒只在
+        <strong className="font-bold">应用运行时</strong>
+        有效。窗口被关掉之后，没有任何代码在运行，到点不会有提醒 ——
+        这一点我们不会假装能做到。应用重新回到前台时，如果错过的提醒在 2 小时以内，会立刻补上。
       </p>
     </section>
   )

@@ -86,7 +86,9 @@ export function CoursesPage({ onGenerateWithAi }: CoursesPageProps = {}) {
   }
 
   return (
-    <>
+    // 外壳的 <main> 只负责滚动、不带内边距（这样书架这类需要自己控制
+    // 边距的页面才能贴边排布），所以每个功能页要自己给边距
+    <div className="px-6 pb-8">
       <PageHeader
         title="课程"
         description="导入课程或让 AI 帮你生成一份学习方案，再排成每天能执行的待办"
@@ -186,6 +188,6 @@ export function CoursesPage({ onGenerateWithAi }: CoursesPageProps = {}) {
           onCancel={() => setPendingDelete(null)}
         />
       )}
-    </>
+    </div>
   )
 }

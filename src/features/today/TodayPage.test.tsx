@@ -39,8 +39,8 @@ describe('TodayPage', () => {
 
     expect(screen.getByText('今天还没有安排')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /去课程页生成学习计划/ })).toBeInTheDocument()
-    // 页面关掉后不会提醒这件事必须写在界面上，不能只写在文档里
-    expect(screen.getByText(/页面打开时/)).toBeInTheDocument()
+    // 应用关掉后不会提醒这件事必须写在界面上，不能只写在文档里
+    expect(screen.getByText(/应用运行时/)).toBeInTheDocument()
   })
 
   it('回车即可添加待办，勾选后进度条走满并给出完成反馈', async () => {

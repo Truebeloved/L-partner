@@ -119,7 +119,9 @@ export function TodayPage() {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-body text-ink-soft">今日完成</p>
-            <p className="tabular mt-1 text-display font-bold text-ink">
+            {/* 用 h1(24px) 而不是 display(42px)：这是卡片里的一个统计数字，
+                42px 会把「今日完成」这句话压成配角，层级关系反转 */}
+            <p className="tabular mt-1 font-display text-h1 font-bold text-ink">
               {doneCount}
               <span className="text-body text-ink-faint"> / {totalCount} 项</span>
             </p>

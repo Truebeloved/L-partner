@@ -10,6 +10,7 @@ import { PersonaPage } from '@/features/persona/PersonaPage'
 import { SettingsPage } from '@/features/settings/SettingsPage'
 import { ShelfPage } from '@/features/shelf/ShelfPage'
 import { SplashScreen } from '@/features/splash/SplashScreen'
+import { TodayPage } from '@/features/today/TodayPage'
 import { getAppInfo } from '@/lib/platform'
 
 /**
@@ -69,6 +70,9 @@ export default function App() {
           {/* 一级界面 */}
           <Route element={<AppLayout />}>
             <Route index element={<ShelfPage />} />
+            {/* 今日待办在侧栏有常驻的紧凑视图；这个页面是它的完整版
+                （逾期分区、提醒状态、手动添加）。侧栏里放「查看全部」入口。 */}
+            <Route path="today" element={<TodayPage />} />
             <Route path="chat" element={<ChatPage />} />
             <Route path="memory" element={<MemoryPage />} />
             <Route path="personas" element={<PersonaPage />} />

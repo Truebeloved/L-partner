@@ -57,9 +57,21 @@ const RULES = [
     pattern: /\btext-\[[\d.]+(?:px|rem)\]/g,
     reason: '不要用任意值字号绕过档位，改用 text-small / text-micro 等令牌',
   },
+  {
+    // 补盲区：旧的 .btn-outline 被删掉后，残留用法不会被上面任何规则命中 ——
+    // 它是组件类而非 Tailwind 调色板类。后果很隐蔽：按钮会静默退化成
+    // 「只有 .btn 基础样式」，既没边框也没底色，看起来像坏了，却依然通过检查。
+    id: 'unknown-btn-variant',
+    pattern: /\bbtn-(?!(?:primary|secondary|ghost|danger|sm)\b)[a-z][a-z-]*/g,
+    reason:
+      '未知的按钮变体。可用变体只有 btn-primary / btn-secondary / btn-ghost / btn-danger / btn-sm',
+  },
 ]
 
 const IGNORE_MARKER = 'design-token-ignore'
+
+/** 纯注释行不参与检查：在注释里写「这里原来用的是 shadow-lg」不该让门禁变红 */
+const COMMENT_LINE = /^\s*(?:\/\/|\*|\/\*|\{\/\*)/
 
 async function collectFiles(dir) {
   const entries = await readdir(dir, { withFileTypes: true })
@@ -88,6 +100,7 @@ for (const dir of SCAN_DIRS) {
 
     lines.forEach((line, index) => {
       if (line.includes(IGNORE_MARKER)) return
+      if (COMMENT_LINE.test(line)) return
 
       for (const rule of RULES) {
         // 每次都要重置 lastIndex：正则带 g 标志，复用时会从上次位置继续

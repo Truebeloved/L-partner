@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 
 import { syncMasteryForCourse } from '@/features/memory/mastery'
 import { formatDateHuman, formatRelativeDay, isOverdue, todayKey } from '@/lib/date'
@@ -75,8 +76,18 @@ export function TodaySidebarWidget() {
     <section className="flex min-h-0 flex-1 flex-col border-t border-line-soft px-3 pt-3">
       <div className="flex items-baseline justify-between px-1">
         <h2 className="text-label font-bold tracking-[0.05em] text-ink-soft uppercase">今日</h2>
-        <span className="text-small text-ink-faint">
-          {formatDateHuman(today)} · {formatRelativeDay(today)}
+        <span className="flex items-baseline gap-2 text-small text-ink-faint">
+          <span>
+            {formatDateHuman(today)} · {formatRelativeDay(today)}
+          </span>
+          {/* 侧栏只放得下紧凑视图；完整版（逾期分区、提醒状态）在 /today */}
+          <Link
+            to="/today"
+            className="transition-all duration-200 hover:text-ink"
+            title="打开完整今日页"
+          >
+            全部 →
+          </Link>
         </span>
       </div>
 

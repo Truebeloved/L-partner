@@ -3,19 +3,23 @@ import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 
 import { AppLayout } from '@/components/AppLayout'
 import { ChatPage } from '@/features/chat/ChatPage'
-import { CourseDetailPage } from '@/features/course/CourseDetailPage'
+import { CourseStudyPage } from '@/features/course/CourseStudyPage'
 import { CoursesRoute } from '@/features/course/CoursesRoute'
 import { MemoryPage } from '@/features/memory/MemoryPage'
 import { PersonaPage } from '@/features/persona/PersonaPage'
 import { SettingsPage } from '@/features/settings/SettingsPage'
+import { ShelfPage } from '@/features/shelf/ShelfPage'
 import { SplashScreen } from '@/features/splash/SplashScreen'
-import { TodayPage } from '@/features/today/TodayPage'
 import { getAppInfo } from '@/lib/platform'
 
 /**
  * 使用 HashRouter 而非 BrowserRouter：桌面端从 file:// 加载页面，
  * 而 file:// 下 history API 无法为子路由提供 fallback，BrowserRouter 会直接白屏。
  * HashRouter 在 file:// 与任何静态托管上都能工作，代价只是 URL 里多一个 #。
+ *
+ * 路由分成两层：
+ * - **一级界面**（`<AppLayout />` 下）：带固定侧栏，书架是默认页
+ * - **二级界面**（`/courses/:courseId`）：全屏覆盖，连同侧栏一起盖掉，所以放在 AppLayout 之外
  */
 
 /** 浏览器调试时的开屏称呼兜底 —— 网页拿不到计算机名 */
@@ -59,14 +63,18 @@ export default function App() {
 
       <HashRouter>
         <Routes>
+          {/* 二级界面：全屏，不带侧栏 */}
+          <Route path="courses/:courseId" element={<CourseStudyPage />} />
+
+          {/* 一级界面 */}
           <Route element={<AppLayout />}>
-            <Route index element={<TodayPage />} />
-            <Route path="courses" element={<CoursesRoute />} />
-            <Route path="courses/:courseId" element={<CourseDetailPage />} />
+            <Route index element={<ShelfPage />} />
             <Route path="chat" element={<ChatPage />} />
             <Route path="memory" element={<MemoryPage />} />
             <Route path="personas" element={<PersonaPage />} />
             <Route path="settings" element={<SettingsPage />} />
+            {/* 过渡期：添加/编辑课程的表单页，等导航栏定稿后会改成弹窗入口 */}
+            <Route path="courses" element={<CoursesRoute />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

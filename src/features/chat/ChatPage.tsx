@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { Icon } from '@/components/Icon'
+import { PersonaAvatar } from '@/components/PersonaAvatar'
 import { Composer } from '@/features/chat/components/Composer'
 import { MessageBubble } from '@/features/chat/components/MessageBubble'
 import { useActiveConversation, useChatSession } from '@/features/chat/useChatSession'
@@ -110,8 +111,10 @@ export function ChatPage() {
           title="切换角色 —— 记忆是跨角色共享的，换了老师它依然了解你"
         >
           {personas.map((persona) => (
+            // 原生 <option> 里放不了 SVG，所以只给名字。
+            // 头像在各处已经有了，这里不缺那一个字形
             <option key={persona.id} value={persona.id}>
-              {persona.avatar} {persona.name}
+              {persona.name}
             </option>
           ))}
         </select>
@@ -180,7 +183,9 @@ export function ChatPage() {
       <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto bg-surface px-4 py-5">
         {messages.length === 0 ? (
           <div className="mx-auto max-w-lg pt-6 text-center">
-            <div className="avatar-glyph text-display">{activePersona?.avatar ?? '🙂'}</div>
+            <div className="flex justify-center">
+              <PersonaAvatar value={activePersona?.avatar} size={56} />
+            </div>
             <h2 className="card-title mt-4">我是{activePersona?.name ?? '你的学伴'}</h2>
             <p className="muted mt-2 leading-relaxed">
               {activePersona?.speakingStyle ?? '有什么想问的，直接说'}

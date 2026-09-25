@@ -1,12 +1,25 @@
 /* ---------------------------------------------------------------------------
-   字体必须在最前 —— CSS 规范要求 @import 出现在所有规则之前。
-   本地打包而不是走 CDN：Electron 从 file:// 加载，离线时外部字体链接会直接丢字体。
-   注意这两个字体都**只覆盖拉丁字母与数字**，中文字形靠 --font-sans 里的系统字体回退。
+   字体
+
+   设计约束原文指定 Josefin Sans（标题）+ Lato（正文）。**这两个字体没有中文字形**，
+   而这个应用几乎全是中文 —— 照做的话实际效果是「什么都没变」，全部回退到系统默认。
+   所以这里改成真正的解决方案：直接给中文选字体。
+
+   两个角色：
+   - display（开屏）：思源宋体。衬线在大字号 + 纯黑底上最有味道，
+     而它本来就要为页面标题打包，等于开屏的"艺术化"是零额外成本的
+   - sans（正文与界面）：思源黑体，替换微软雅黑，跨机器一致且字形更讲究
+
+   考虑过用霞鹜文楷做开屏（楷体更有文人气），但它这个包没做 unicode 分块、
+   且 CSS 同时引用 woff2 与 woff，实测会让产物多出 21MB —— 为了两行字不值得。
+   如果之后想要更手写的味道，可以只引它的 woff2（约 8.8MB）。
+
+   字体必须本地打包（@fontsource），不能用 CDN：Electron 从 file:// 加载，离线会丢字体。
+   CJK 字体按 unicode-range 切成 100+ 块，只加载实际用到的那几块。
 --------------------------------------------------------------------------- */
-@import '@fontsource/josefin-sans/latin-400.css';
-@import '@fontsource/josefin-sans/latin-700.css';
-@import '@fontsource/lato/latin-400.css';
-@import '@fontsource/lato/latin-700.css';
+@import '@fontsource/noto-serif-sc/700.css';
+@import '@fontsource/noto-sans-sc/400.css';
+@import '@fontsource/noto-sans-sc/700.css';
 @import 'tailwindcss';
 
 /* ---------------------------------------------------------------------------
@@ -15,15 +28,23 @@
    层级只靠 背景深浅 + 边框粗细 + 字重，不靠阴影堆叠。
 --------------------------------------------------------------------------- */
 @theme {
-  /* 字体族。中文回退放在字体栈里 —— 西文字体没有中文字形是客观事实，
-     与其假装设计能覆盖中文，不如把回退写成显式的一部分 */
-  --font-display: 'Josefin Sans', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
-  --font-sans: 'Lato', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, sans-serif;
+  /* 字体族。三个角色分得很清：
+     - display：**只给开屏**。思源宋体大字号，在纯黑底上最有味道
+     - serif：**只给页面标题**，整页唯一一处衬线锚点，克制但有质感
+     - sans：其余全部（正文、卡片、按钮、区块标题）
+     「内部不浮夸」的执行方式就是：衬线只出现在"一句话"的位置，不铺满界面。 */
+  --font-display: 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+  --font-serif: 'Noto Serif SC', 'Songti SC', 'SimSun', 'PingFang SC', serif;
+  --font-sans:
+    'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, sans-serif;
   --font-mono: 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
 
   /* ---- 表面：三层，靠明度区分而不是靠阴影 ---- */
   --color-surface: #d0d0d0;
-  --color-raised: #ffffff;
+  /* 卡片不用纯白。纯白在中灰底上（#FFFFFF vs #D0D0D0 相差 47 级）是一块发光的板子，
+     长时间看会刺眼，也让"层级"变成"刺眼程度"。压到 #efefef 后相差 31 级 ——
+     足够把卡片从背景里托起来，又不至于抢走内容的注意力。 */
+  --color-raised: #efefef;
   --color-sunken: #b9b9b9;
 
   /* ---- 文字 ---- */
@@ -178,19 +199,20 @@
     @apply my-2 h-px w-full bg-line-soft;
   }
 
-  /* 区块标题：H2 档 */
+  /* 区块标题：H2 档。用无衬线 —— 衬线只留给页面标题与开屏，
+     否则满屏都是"楷/宋"，反而失去重点 */
   .section-title {
-    @apply font-display text-h2 font-bold text-ink;
+    @apply text-h2 font-bold text-ink;
   }
 
-  /* 页面标题：H1 档 */
+  /* 页面标题：H1 档。整页唯一的一处衬线锚点 */
   .page-title {
-    @apply font-display text-h1 font-bold text-ink;
+    @apply font-serif text-h1 font-bold tracking-[0.01em] text-ink;
   }
 
-  /* 卡片标题：H3 档 */
+  /* 卡片标题：H3 档，无衬线 */
   .card-title {
-    @apply font-display text-h3 font-bold text-ink;
+    @apply text-h3 font-bold text-ink;
   }
 
   /* 表单标签：12px 大写 + 字距 */
@@ -205,19 +227,6 @@
   /* 需要弱化的极小说明文字 */
   .hint {
     @apply text-label text-ink-faint;
-  }
-
-  /*
-   * 角色头像是 emoji，而 emoji 是**彩色字形** —— 在一套单色界面里，它们是仅次于
-   * 书脊的最强色源，四个大号头像排在一起会把整页的调子带跑。
-   *
-   * 处理方式是转灰度而不是换掉：设计约束本身就写明「图片与插画统一做灰度处理」，
-   * emoji 本质上就是图片。灰度之后每个头像仍然保留独一无二的形状（靶心、幼苗、
-   * 立柱、闪电一眼可分），但不再是彩色噪声。这样也保住了「让 AI 有一张可辨认的脸」
-   * 这个功能，不必把头像字段砍掉。
-   */
-  .avatar-glyph {
-    filter: grayscale(1);
   }
 }
 
@@ -253,5 +262,34 @@
 
   .splash-leaving {
     animation: splash-dim 600ms ease-in forwards;
+  }
+
+  /*
+   * 开屏两屏文字的排版。
+   * 放在样式表里而不是堆原子类：开屏是全应用唯一讲究"排版"而非"效率"的地方，
+   * 字样集中一处才好调；而且它的字号（26 / 46px）刻意跳出了内部那套档位。
+   */
+  .splash-greeting {
+    font-family: var(--font-display);
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    color: rgba(255, 255, 255, 0.66);
+  }
+
+  /* 名字靠颜色提亮而不是靠加粗 —— 与其余文字同为 700，只差亮度 */
+  .splash-greeting strong {
+    font-weight: 700;
+    color: #ffffff;
+  }
+
+  .splash-question {
+    font-family: var(--font-display);
+    font-size: 46px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    /* 字距拉开后右侧会多出一份空隙，往左挪半个字距才是视觉居中 */
+    text-indent: 0.14em;
+    color: #ffffff;
   }
 }

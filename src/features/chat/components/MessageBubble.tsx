@@ -1,3 +1,4 @@
+import { PersonaAvatar } from '@/components/PersonaAvatar'
 import { MarkdownLite } from '@/features/chat/components/MarkdownLite'
 import type { ChatMessage, Persona } from '@/types/models'
 
@@ -29,8 +30,7 @@ export function MessageBubble({ message, persona }: MessageBubbleProps) {
 
   return (
     <div className="flex gap-2.5">
-      {/* 头像转灰度，与角色页保持一致 —— 否则同一个人物在两处的观感对不上 */}
-      <span className="avatar-glyph mt-0.5 text-h3 leading-none">{persona?.avatar ?? '🙂'}</span>
+      <PersonaAvatar value={persona?.avatar} size={28} className="mt-0.5" />
       <div className="min-w-0 flex-1">
         <div className="mb-1 text-small text-ink-faint">{persona?.name ?? '学伴'}</div>
         <div

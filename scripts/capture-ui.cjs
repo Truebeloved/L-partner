@@ -35,35 +35,29 @@ const ROUTE_WAIT = 700
 const APPEAR_TIMEOUT = 25000
 const SPLASH_TIMEOUT = 25000
 
+/**
+ * 开屏两屏各自的取样时刻（毫秒，从开屏挂载算起）。
+ * 开屏是全应用唯一讲究排版的地方，必须留档 —— 否则每次改版都没法比对。
+ * 时刻参照 SplashScreen 里的节奏：第一屏 0–1800ms，第二屏 1800–3500ms。
+ */
+const SPLASH_SHOTS = [
+  ['0-splash-1-greeting', 900],
+  ['0-splash-2-question', 2600],
+]
+
 // 必须在 app ready 之前设置：强制 1:1 像素，否则高分屏上会拿到 2 倍图
 app.commandLine.appendSwitch('force-device-scale-factor', '1')
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 /**
- * 等开屏播完。
+ * 轮询直到表达式为真。
  *
- * 必须分成「先等它出现、再等它消失」两步 —— 只等消失是不够的：
+ * 「先等开屏出现、再等它消失」这两步都不能省 —— 只等消失是不够的：
  * 开屏要等 HydrationGate 把 IndexedDB 读完才会挂载，在那之前查询
  * 「开屏在不在」会立刻得到「不在」，于是截到的是加载态而不是应用界面。
  * 这个坑很隐蔽：图能出、不报错，只是内容不对。
  */
-async function waitForSplashCycle(window) {
-  const appeared = await poll(
-    window,
-    `Boolean(document.querySelector('[data-testid="splash"]'))`,
-    APPEAR_TIMEOUT,
-  )
-  if (!appeared) return 'never-appeared'
-
-  const gone = await poll(
-    window,
-    `!document.querySelector('[data-testid="splash"]')`,
-    SPLASH_TIMEOUT,
-  )
-  return gone ? 'ok' : 'stuck'
-}
-
 async function poll(window, expression, timeoutMs) {
   const startedAt = Date.now()
   while (Date.now() - startedAt < timeoutMs) {
@@ -72,6 +66,13 @@ async function poll(window, expression, timeoutMs) {
     await sleep(200)
   }
   return false
+}
+
+async function capture(window, name) {
+  const image = await window.webContents.capturePage()
+  fs.writeFileSync(path.join(OUT_DIR, `${name}.png`), image.toPNG())
+  const { width, height } = image.getSize()
+  console.log(`  ${name.padEnd(20)} ${width}x${height}`)
 }
 
 app.whenReady().then(async () => {
@@ -100,22 +101,35 @@ app.whenReady().then(async () => {
     return
   }
 
-  const splash = await waitForSplashCycle(window)
-  if (splash === 'stuck') {
-    console.warn('  ⚠ 开屏未在预期时间内消失，截到的可能是开屏')
+  // 开屏：等它出现后按时间点取样，再等它消失
+  const appeared = await poll(
+    window,
+    `Boolean(document.querySelector('[data-testid="splash"]'))`,
+    APPEAR_TIMEOUT,
+  )
+
+  if (appeared) {
+    let elapsed = 0
+    for (const [name, at] of SPLASH_SHOTS) {
+      await sleep(Math.max(0, at - elapsed))
+      elapsed = at
+      await capture(window, name)
+    }
+    const gone = await poll(
+      window,
+      `!document.querySelector('[data-testid="splash"]')`,
+      SPLASH_TIMEOUT,
+    )
+    if (!gone) console.warn('  ⚠ 开屏未在预期时间内消失，后续截图可能不准')
+  } else {
+    console.warn('  ⚠ 开屏没有出现，跳过开屏取样')
   }
 
   for (const [name, route] of ROUTES) {
     // 用 hash 做客户端跳转：不会重载页面，也就不必每次重等开屏
     await window.webContents.executeJavaScript(`location.hash = '#${route}'`)
     await sleep(ROUTE_WAIT)
-
-    const image = await window.webContents.capturePage()
-    const file = path.join(OUT_DIR, `${name}.png`)
-    fs.writeFileSync(file, image.toPNG())
-
-    const { width, height } = image.getSize()
-    console.log(`  ${name.padEnd(12)} ${route.padEnd(12)} ${width}x${height}`)
+    await capture(window, name)
   }
 
   console.log(`\n已输出到 ${OUT_DIR}`)

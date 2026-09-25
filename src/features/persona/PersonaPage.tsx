@@ -1,6 +1,8 @@
 import { useState } from 'react'
 
 import { PageHeader } from '@/components/PageHeader'
+import { PersonaAvatar } from '@/components/PersonaAvatar'
+import { AVATAR_KEYS } from '@/components/avatar-marks'
 import { usePersonaStore } from '@/store/personas'
 import type { PersonaDraft } from '@/store/personas'
 import { useSettingsStore } from '@/store/settings'
@@ -8,15 +10,13 @@ import type { Id, Persona } from '@/types/models'
 
 const EMPTY_DRAFT: PersonaDraft = {
   name: '',
-  avatar: '🧑‍🏫',
+  avatar: 'quill',
   identity: '',
   personality: '',
   speakingStyle: '',
   teachingStrategy: '',
   taboos: '',
 }
-
-const AVATAR_CHOICES = ['🧑‍🏫', '🎯', '🌱', '🏛️', '⚡', '🦉', '🧭', '🛠️', '📐', '🐢']
 
 export function PersonaPage() {
   const personas = usePersonaStore((state) => state.personas)
@@ -111,21 +111,17 @@ export function PersonaPage() {
                 </div>
                 <div>
                   <span className="label">头像</span>
-                  <div className="flex flex-wrap gap-1">
-                    {AVATAR_CHOICES.map((avatar) => (
+                  <div className="flex flex-wrap gap-2">
+                    {AVATAR_KEYS.map((key) => (
                       <button
-                        key={avatar}
+                        key={key}
                         type="button"
-                        /* 选择器里同样转灰度：否则用户在这里看到的彩色头像
-                           和卡片上、对话里的灰度头像对不上 */
-                        className={
-                          draft.avatar === avatar
-                            ? 'avatar-glyph rounded-sm border-2 border-ink px-1.5 py-1 text-h2'
-                            : 'avatar-glyph rounded-sm border-2 border-transparent px-1.5 py-1 text-h2 hover:bg-ink/5'
-                        }
-                        onClick={() => setDraft({ ...draft, avatar })}
+                        className="rounded-full transition-all duration-200 ease-out hover:opacity-80"
+                        aria-label={`选择头像 ${key}`}
+                        aria-pressed={draft.avatar === key}
+                        onClick={() => setDraft({ ...draft, avatar: key })}
                       >
-                        {avatar}
+                        <PersonaAvatar value={key} size={34} selected={draft.avatar === key} />
                       </button>
                     ))}
                   </div>
@@ -205,7 +201,7 @@ export function PersonaPage() {
                 className={`card flex flex-col ${isActive ? 'border-line' : 'card-hover'}`}
               >
                 <div className="flex items-start gap-4">
-                  <span className="avatar-glyph text-display leading-none">{persona.avatar}</span>
+                  <PersonaAvatar value={persona.avatar} size={44} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <h3 className="card-title">{persona.name}</h3>

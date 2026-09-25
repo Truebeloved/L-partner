@@ -78,15 +78,11 @@ export function SplashScreen({ name, onDone }: SplashScreenProps) {
       <div className="px-8 text-center">
         {phase === 'greeting' ? (
           // key 让这一屏每次进入都重新触发动画，而不是复用上一屏的动画状态
-          <p key="greeting" className="splash-line font-display text-h1 text-ink-inverse/75">
-            欢迎回来，
-            <span className="font-bold text-ink-inverse">{name}</span>
+          <p key="greeting" className="splash-line splash-greeting">
+            欢迎回来，<strong>{name}</strong>
           </p>
         ) : (
-          <p
-            key="question"
-            className="splash-line font-display text-display font-bold tracking-tight text-ink-inverse"
-          >
+          <p key="question" className="splash-line splash-question">
             今天学点什么？
           </p>
         )}

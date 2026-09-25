@@ -12,7 +12,7 @@ export function ShelfPage() {
 
   return (
     <div className="flex min-h-full flex-col">
-      <header className="flex items-baseline justify-between px-6 pt-6 pb-1">
+      <header className="flex items-baseline justify-between px-6 pt-8 pb-2">
         <h1 className="text-label font-bold tracking-[0.05em] text-ink-soft uppercase">我的书架</h1>
         <span className="text-small text-ink-faint">
           {courseCount === 0 ? '还没有课程' : `共 ${courseCount} 门课程`}

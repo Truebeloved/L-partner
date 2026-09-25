@@ -72,7 +72,7 @@ export function SettingsPage() {
     <>
       <PageHeader title="设置" description="接入你自己的大模型，以及提醒与记忆偏好" />
 
-      <div className="max-w-3xl space-y-5 px-6 pb-8">
+      <div className="page-container space-y-8">
         <LlmSettingsCard />
 
         <section className="card">

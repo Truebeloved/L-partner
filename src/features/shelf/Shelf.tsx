@@ -16,16 +16,19 @@ import type { Id } from '@/types/models'
 const GAP = 12
 const PADDING_X = 24
 /**
- * 基准尺寸按真实书籍比例定：厚高比约 1:3.7。
- * 之前是 88×196（约 1:2.2），八本并排看着像一排白柱子而不是书 ——
- * 这个比例是「像书」与「一排能放下八本」之间的平衡点。
+ * 基准尺寸按真实书籍比例定：厚高比约 1:3.3。
+ *
+ * 这里有个**数学上无法同时满足的三角**：一排 8 本、填满整行、保持书的比例。
+ * 书架容器若铺满 1174px，8 本书每本要 130px 厚，配 232px 高就是 1:1.8 —— 那是盒子。
+ * 所以解法是**把书架限宽居中**（max-w-3xl = 768px），让 8 本书填满"自己那一排"：
+ * 可用 720px、8 本 + 7 道缝 → 每本约 79px，配 260px 高正好是 1:3.3。
  */
-const BASE_HEIGHT = 232
-/** 书的厚度会随可用宽度伸缩，但夹在这个区间内 —— 太薄不像书，太厚一排八本就放不下 */
-const MIN_THICKNESS = 34
-const MAX_THICKNESS = 62
-/** 默认宽度取标准窗口下一整排 8 本的档位；真实宽度由 ResizeObserver 立刻修正 */
-const DEFAULT_WIDTH = 1200
+const BASE_HEIGHT = 260
+/** 书厚随可用宽度伸缩，但夹在区间内 —— 太薄不像书，太厚就不是 8 本一排了 */
+const MIN_THICKNESS = 38
+const MAX_THICKNESS = 96
+/** 默认宽度取容器上限（max-w-3xl）—— 首帧还没测量时也要排成 8 本，不能先排错再修正 */
+const DEFAULT_WIDTH = 768
 
 const MAX_BOOK_HEIGHT = BASE_HEIGHT * Math.max(...HEIGHT_SCALE_BY_TIER)
 
@@ -60,9 +63,13 @@ export function Shelf() {
     const element = containerRef.current
     if (!element || typeof ResizeObserver === 'undefined') return
 
-    const observer = new ResizeObserver((entries) => {
-      const measured = entries[0]?.contentRect.width
-      if (typeof measured === 'number' && measured > 0) setWidth(measured)
+    // 用 clientWidth（含 padding）而不是 contentRect.width（不含 padding）。
+    // 这不是风格问题：下方的厚度计算已经减掉了 PADDING_X * 2，如果测量值也不含 padding，
+    // 等于 padding 被扣了两次。后果很隐蔽 —— 8 本书会排成两排（7 + 1），
+    // 而且不报错、不看图根本发现不了。
+    const observer = new ResizeObserver(() => {
+      const measured = element.clientWidth
+      if (measured > 0) setWidth(measured)
     })
     observer.observe(element)
     return () => observer.disconnect()
@@ -140,12 +147,20 @@ export function Shelf() {
   }
 
   return (
-    <div ref={containerRef} data-testid="shelf-surface" className="flex flex-1 flex-col px-6 pb-6">
-      <div className="flex flex-col gap-1">
+    <div
+      ref={containerRef}
+      data-testid="shelf-surface"
+      // 限宽居中：8 本一排、填满整行、保持书的比例，这三件事在同一宽度下无法同时成立
+      // （见上方 BASE_HEIGHT 的注释）。收窄容器是唯一能让三者同时成立的做法，
+      // 顺带也把左右留白给了出来。
+      className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-6 pb-8"
+    >
+      {/* 行间距要留出「书被抽出」往上走的空间，否则上移的书会压到上一行的隔板 */}
+      <div className="flex flex-col gap-2">
         {layout.rows.map((row) => (
           // 隔板宽度要跟这一排书一致，所以整排（书 + 板）包在同一个 inline-block 里；
           // 直接把板拉满整页宽度会变成一条贯穿屏幕的横线，不像书架
-          <div key={row.index} className="flex justify-center">
+          <div key={row.index} className="flex justify-center pt-6">
             <div className="inline-block">
               <div className="flex items-end" style={{ gap: GAP, minHeight: MAX_BOOK_HEIGHT }}>
                 {row.slots.map((slot) =>

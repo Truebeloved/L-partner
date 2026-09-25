@@ -109,7 +109,7 @@ export function TodayPage() {
   }
 
   return (
-    <>
+    <div className="page-container">
       <PageHeader title="今日" description={formatDateHuman(today)} />
 
       {/* 一条待办都没有时不渲染统计卡：0 / 0 配一条全空的进度条没有任何信息量，
@@ -235,6 +235,6 @@ export function TodayPage() {
           void requestPermission()
         }}
       />
-    </>
+    </div>
   )
 }

@@ -81,7 +81,7 @@ export function PersonaPage() {
         }
       />
 
-      <div className="max-w-4xl space-y-5 px-6 pb-8">
+      <div className="page-container space-y-8">
         <section className="card-flat bg-ink/5">
           <p className="text-body leading-relaxed text-ink-soft">
             记忆是<strong className="font-bold text-ink">跟着你</strong>的，角色只决定

@@ -103,7 +103,7 @@ export function MemoryPage() {
         }
       />
 
-      <div className="max-w-4xl space-y-5 px-6 pb-8">
+      <div className="page-container space-y-8">
         {/* 分层说明：这是设计的一部分，值得直接讲给用户听。
             用浅底无阴影的卡片把它压成"说明性区块"，与下方功能性卡片拉开层次 */}
         <section className="card-flat bg-ink/5">

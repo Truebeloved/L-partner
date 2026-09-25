@@ -86,17 +86,23 @@ export function BookSpine({
       <span
         className={[
           'absolute inset-0 flex flex-col items-center justify-between rounded-sm px-1 pt-2.5 pb-2',
-          'transition-[transform,box-shadow,filter] duration-200 ease-out',
-          'group-hover:-translate-y-3 group-focus-visible:-translate-y-3',
-          'group-hover:brightness-110 group-focus-visible:brightness-110',
-          selected ? '-translate-y-3 brightness-110' : '',
+          // 只过渡这三个属性：它们都能交给合成器，不触发重排
+          'origin-bottom transition-[transform,box-shadow,filter] duration-200 ease-out',
+          // 「抽出」= 往前 + 往上。单纯上移读起来像"跳"，加上放大才像
+          // 「这本书离开书架朝你过来」。阴影是纵深唯一的信息载体，所以它必须跟着变 ——
+          // 这也是阴影用工具类而不是内联 style 的原因：内联的没法写 hover 变体。
+          'shadow-[0_6px_10px_-6px_rgba(0,0,0,0.35)]',
+          'group-hover:-translate-y-4 group-hover:scale-[1.06] group-hover:brightness-110',
+          'group-hover:shadow-[0_18px_30px_-8px_rgba(0,0,0,0.5)]',
+          'group-focus-visible:-translate-y-4 group-focus-visible:scale-[1.06]',
+          'group-focus-visible:shadow-[0_18px_30px_-8px_rgba(0,0,0,0.5)]',
+          // 选中态（小窗已开）保持抽出，视觉上与悬浮一致
+          selected
+            ? '-translate-y-4 scale-[1.06] brightness-110 shadow-[0_18px_30px_-8px_rgba(0,0,0,0.5)]'
+            : '',
         ].join(' ')}
         style={{
           background: `linear-gradient(100deg, ${palette.from} 0%, ${palette.to} 55%, ${palette.edge} 100%)`,
-          // 阴影是「这本书离开了隔板」这条信息唯一的载体
-          boxShadow: selected
-            ? '0 14px 22px -8px rgba(0, 0, 0, 0.45)'
-            : '0 6px 10px -6px rgba(0, 0, 0, 0.35)',
         }}
       >
         {/* 书脊高光：一条竖向的亮边，模拟书脊的圆角反光 */}

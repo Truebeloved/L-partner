@@ -88,7 +88,7 @@ export function CoursesPage({ onGenerateWithAi }: CoursesPageProps = {}) {
   return (
     // 外壳的 <main> 只负责滚动、不带内边距（这样书架这类需要自己控制
     // 边距的页面才能贴边排布），所以每个功能页要自己给边距
-    <div className="px-6 pb-8">
+    <div className="page-container">
       <PageHeader
         title="课程"
         description="建立课程，生成学习计划与每日待办"

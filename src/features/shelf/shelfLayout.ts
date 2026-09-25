@@ -9,13 +9,23 @@
  *    而这类规则最容易在改样式时被悄悄改坏。
  */
 
-/** 一排 8 本是标准窗口宽度下的目标；窗口变窄时逐级减少 */
+/**
+ * 一排几本。
+ *
+ * 断点按**书架容器自己的宽度**算，而不是窗口宽度 —— 书架现在是限宽居中的
+ * （见 Shelf 的 max-w-3xl）：排满 1174px 的 8 本书每本要 130px 厚，
+ * 配 232px 高就是 1:1.8，那是盒子不是书。收窄容器之后 8 本书才可能既有书的样子、
+ * 又恰好填满一排。
+ *
+ * 每档的取值依据：容器宽 - 左右各 24px 的内边距，再除以「书厚 + 缝宽」。
+ * 例如 768px 的容器：可用 720px，(720 - 7×12) / 8 ≈ 79px 一本，正好是舒服的书厚。
+ */
 const WIDTH_BREAKPOINTS: readonly { minWidth: number; perRow: number }[] = [
-  { minWidth: 1180, perRow: 8 },
-  { minWidth: 1020, perRow: 7 },
-  { minWidth: 880, perRow: 6 },
-  { minWidth: 720, perRow: 5 },
-  { minWidth: 560, perRow: 4 },
+  { minWidth: 768, perRow: 8 },
+  { minWidth: 676, perRow: 7 },
+  { minWidth: 584, perRow: 6 },
+  { minWidth: 492, perRow: 5 },
+  { minWidth: 400, perRow: 4 },
   { minWidth: 0, perRow: 3 },
 ]
 

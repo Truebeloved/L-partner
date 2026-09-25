@@ -45,6 +45,9 @@ const SPLASH_SHOTS = [
   ['0-splash-2-question', 2600],
 ]
 
+/** 可选：CAPTURE_SEED_COURSES=8 会先塞入 8 门课程再截图，用于验证书架排版规则 */
+const SEED_COURSES = Number(process.env.CAPTURE_SEED_COURSES || 0)
+
 // 必须在 app ready 之前设置：强制 1:1 像素，否则高分屏上会拿到 2 倍图
 app.commandLine.appendSwitch('force-device-scale-factor', '1')
 
@@ -66,6 +69,102 @@ async function poll(window, expression, timeoutMs) {
     await sleep(200)
   }
   return false
+}
+
+/**
+ * 可选：往 IndexedDB 里塞 N 门课程。
+ *
+ * 存在的理由：书架「一排 8 本 + 空书脊补齐」这类规则，没有真实数据根本验证不了 ——
+ * 空书架只能看到 8 个空位，看不出规则对不对。直接写 store 的持久化数据比
+ * 在界面上点 N 次「载入示例课程」可靠得多，也快得多。
+ */
+const SEED_TITLES = [
+  '两个月上手 React',
+  '线性代数',
+  '概率论与数理统计',
+  '大学物理',
+  '数据结构与算法',
+  '英语六级词汇',
+  '微观经济学',
+  '中国近代史纲要',
+  '离散数学',
+  '操作系统原理',
+]
+
+async function seedCourses(window, count) {
+  const now = new Date().toISOString()
+  const courses = Array.from({ length: count }, (_, index) => {
+    const serial = index + 1
+    return {
+      id: `seed-course-${serial}`,
+      title: SEED_TITLES[index % SEED_TITLES.length],
+      source: 'manual',
+      goal: '示例目标：走通课程到待办的完整链路',
+      stages: [
+        {
+          id: `seed-${serial}-stage-1`,
+          title: '第一阶段',
+          order: 0,
+          units: [
+            {
+              id: `seed-${serial}-unit-1`,
+              title: '单元一',
+              knowledgePoints: ['知识点 A', '知识点 B'],
+              estimatedMinutes: 90,
+              order: 0,
+            },
+          ],
+        },
+      ],
+      createdAt: now,
+      updatedAt: now,
+    }
+  })
+
+  const payload = JSON.stringify({ state: { courses }, version: 1 })
+
+  await window.webContents.executeJavaScript(`
+    new Promise((resolve, reject) => {
+      const request = indexedDB.open('keyval-store')
+      request.onupgradeneeded = () => { request.result.createObjectStore('keyval') }
+      request.onsuccess = () => {
+        const db = request.result
+        const tx = db.transaction('keyval', 'readwrite')
+        tx.objectStore('keyval').put(${JSON.stringify(payload)}, 'lpartner.courses')
+        tx.oncomplete = () => { db.close(); resolve(true) }
+        tx.onerror = () => reject(tx.error)
+      }
+      request.onerror = () => reject(request.error)
+    })
+  `)
+}
+
+/**
+ * 把鼠标真的移到某个元素上再截图。
+ *
+ * 为什么不用 JS 触发事件：悬浮效果是 CSS 的 `:hover` 伪类，合成事件不会真的
+ * 进入 hover 状态。`sendInputEvent` 走的是 Chromium 的输入管线，`:hover` 会真实生效 ——
+ * 「悬浮动画到底做没做」这种问题只有这样才验得出来。
+ */
+async function captureHover(window, name, selector) {
+  const point = await window.webContents.executeJavaScript(`
+    (() => {
+      const el = document.querySelector(${JSON.stringify(selector)})
+      if (!el) return null
+      const rect = el.getBoundingClientRect()
+      return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height * 0.45) }
+    })()
+  `)
+
+  if (!point) {
+    console.warn(`  ⚠ 找不到用于悬浮的元素：${selector}`)
+    return
+  }
+
+  window.webContents.sendInputEvent({ type: 'mouseMove', x: point.x, y: point.y })
+  // 过渡是 200ms，留足时间让动画停稳，否则截到中间帧
+  await sleep(700)
+  await capture(window, name)
 }
 
 async function capture(window, name) {
@@ -123,6 +222,29 @@ app.whenReady().then(async () => {
     if (!gone) console.warn('  ⚠ 开屏未在预期时间内消失，后续截图可能不准')
   } else {
     console.warn('  ⚠ 开屏没有出现，跳过开屏取样')
+  }
+
+  // 需要真实课程数据时：先塞数据、重载、再等一轮开屏 —— 之后才开始逐页截图
+  if (SEED_COURSES > 0) {
+    await seedCourses(window, SEED_COURSES)
+    await window.webContents.reload()
+    const seededSplash = await poll(
+      window,
+      `Boolean(document.querySelector('[data-testid="splash"]'))`,
+      APPEAR_TIMEOUT,
+    )
+    if (seededSplash) {
+      await poll(window, `!document.querySelector('[data-testid="splash"]')`, SPLASH_TIMEOUT)
+    }
+    await sleep(400)
+
+    console.log(`  （已塞入 ${SEED_COURSES} 门课程）`)
+    await capture(window, `1-shelf-${SEED_COURSES}books`)
+    // 把鼠标真的移到第一本书上，验证「抽出」动效
+    await captureHover(window, '1-shelf-hover', '[data-shelf-interactive] button')
+    // 移开鼠标，免得影响后面的页面截图
+    window.webContents.sendInputEvent({ type: 'mouseMove', x: 4, y: 4 })
+    await sleep(300)
   }
 
   for (const [name, route] of ROUTES) {

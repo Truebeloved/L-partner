@@ -41,7 +41,13 @@ export function BlankSpine({ seed, baseThickness, baseHeight }: BlankSpineProps)
       style={{ width: thickness, height }}
     >
       <span
-        className="absolute inset-0 rounded-sm transition-[transform,filter] duration-200 ease-out hover:-translate-y-0.5 hover:brightness-[0.97]"
+        className={[
+          'absolute inset-0 rounded-sm transition-[transform,filter] duration-200 ease-out',
+          // 空书脊也有轻微反馈（按约定"可悬停但不可点击"），但刻意做得比真书弱得多：
+          // 真书是上移 16px + 放大 + 阴影变大，这里只是轻轻抬一下 ——
+          // 视觉上分得清"这本书能打开"和"这里是个空位"
+          'hover:-translate-y-1.5 hover:brightness-[0.96]',
+        ].join(' ')}
         style={{
           // 比页面底色的 #d0d0d0 稍微亮一点点：读起来是"一格没印内容的位置"，
           // 而不是一本纯白的书。之前的 #e6e6e6 起手太亮，八本并排像一排白柱子

@@ -12,20 +12,19 @@ import {
 const WIDE = 1400
 
 describe('perRowForWidth', () => {
-  it('标准窗口宽度下一排 8 本', () => {
+  it('书架容器满宽（768px，限宽居中的上限）时一排 8 本', () => {
+    expect(perRowForWidth(768)).toBe(8)
     expect(perRowForWidth(1400)).toBe(8)
-    expect(perRowForWidth(1180)).toBe(8)
   })
 
-  it('窗口变窄时逐级减少列数', () => {
-    expect(perRowForWidth(1100)).toBe(7)
-    expect(perRowForWidth(900)).toBe(6)
-    expect(perRowForWidth(800)).toBe(5)
-    expect(perRowForWidth(600)).toBe(4)
-    expect(perRowForWidth(400)).toBe(3)
+  it('容器变窄时逐级减少列数', () => {
+    expect(perRowForWidth(700)).toBe(7)
+    expect(perRowForWidth(600)).toBe(6)
+    expect(perRowForWidth(500)).toBe(5)
+    expect(perRowForWidth(420)).toBe(4)
   })
 
-  it('极窄窗口下也不会低于 3 列', () => {
+  it('极窄容器下也不会低于 3 列', () => {
     expect(perRowForWidth(0)).toBe(3)
     expect(perRowForWidth(-100)).toBe(3)
   })
@@ -64,10 +63,10 @@ describe('buildShelfLayout', () => {
     expect(layout.rows[0]?.slots.every((slot) => slot.kind === 'filler')).toBe(true)
   })
 
-  it('窗口变窄时空书脊随之减少（先削装饰、不动真书）', () => {
+  it('容器变窄时空书脊随之减少（先削装饰、不动真书）', () => {
     const ids = ['a', 'b', 'c']
     const wide = buildShelfLayout(ids, 1400)
-    const narrow = buildShelfLayout(ids, 600)
+    const narrow = buildShelfLayout(ids, 420)
 
     expect(wide.fillerCount).toBe(5)
     expect(narrow.fillerCount).toBe(1)

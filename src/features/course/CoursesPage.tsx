@@ -94,12 +94,12 @@ export function CoursesPage({ onGenerateWithAi }: CoursesPageProps = {}) {
           <>
             <button
               type="button"
-              className="btn btn-outline"
+              className="btn btn-secondary"
               onClick={() => setAiOpen(true)}
               disabled={!aiReady}
               title={aiReady ? undefined : AI_DISABLED_HINT}
             >
-              ✨ 让 AI 帮我生成方案
+              让 AI 帮我生成方案
             </button>
             <button type="button" className="btn btn-primary" onClick={openManualForm}>
               新建课程
@@ -110,8 +110,7 @@ export function CoursesPage({ onGenerateWithAi }: CoursesPageProps = {}) {
 
       {rows.length === 0 ? (
         <section className="card text-center">
-          <div className="text-4xl">📚</div>
-          <h2 className="mt-3 text-base font-semibold text-slate-900">还没有课程</h2>
+          <h2 className="card-title">还没有课程</h2>
           <p className="muted mx-auto mt-2 max-w-lg leading-relaxed">
             课程是整条主循环的起点：课程 → 学习计划 → 每日待办 → 到点提醒。
             手头没有材料也没关系，先载入一份示例课程，完整走一遍再换成你自己的目标。
@@ -121,21 +120,21 @@ export function CoursesPage({ onGenerateWithAi }: CoursesPageProps = {}) {
             <button type="button" className="btn btn-primary px-5 py-2.5" onClick={handleLoadDemo}>
               载入示例课程
             </button>
-            <button type="button" className="btn btn-outline" onClick={openManualForm}>
+            <button type="button" className="btn btn-secondary" onClick={openManualForm}>
               手写新建课程
             </button>
             <button
               type="button"
-              className="btn btn-outline"
+              className="btn btn-secondary"
               onClick={() => setAiOpen(true)}
               disabled={!aiReady}
               title={aiReady ? undefined : AI_DISABLED_HINT}
             >
-              ✨ 让 AI 帮我生成方案
+              让 AI 帮我生成方案
             </button>
           </div>
 
-          <p className="muted mt-4 text-xs leading-relaxed">
+          <p className="mt-4 text-small leading-relaxed text-ink-soft">
             「两个月上手 React」共 3 个阶段 11 个单元，载入后可直接生成学习计划与今日待办。
             {!aiReady && ' AI 生成方案需要先在「设置」里配置大模型 API。'}
           </p>

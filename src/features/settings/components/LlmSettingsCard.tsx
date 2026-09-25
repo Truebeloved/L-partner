@@ -69,19 +69,19 @@ export function LlmSettingsCard() {
     <section className="card">
       <div className="mb-4">
         <h2 className="section-title">大模型接入</h2>
-        <p className="muted mt-1">
+        <p className="muted mt-2">
           L-partner 不内置任何密钥。你填自己的
           API，配置只保存在这台设备的浏览器里，不会上传到任何服务器。
         </p>
       </div>
 
-      <div className="mb-4 flex flex-wrap gap-1.5">
+      <div className="mb-4 flex flex-wrap gap-2">
         {PRESETS.map((preset) => (
           <button
             key={preset.label}
             type="button"
             title={preset.note}
-            className="btn btn-outline px-2.5 py-1 text-xs"
+            className="btn btn-secondary btn-sm"
             onClick={() => {
               updateLlm({ baseUrl: preset.baseUrl, model: preset.model })
               setTest({ status: 'idle' })
@@ -104,9 +104,9 @@ export function LlmSettingsCard() {
             placeholder="https://api.deepseek.com/v1"
             onChange={(event) => updateLlm({ baseUrl: event.target.value })}
           />
-          <p className="mt-1 text-xs text-slate-400">
-            多数厂商需要以 <code className="rounded bg-slate-100 px-1">/v1</code> 结尾。填错会返回
-            404。
+          <p className="hint mt-1">
+            多数厂商需要以 <code className="rounded-sm bg-ink/5 px-1 font-mono">/v1</code>{' '}
+            结尾。填错会返回 404。
           </p>
         </div>
 
@@ -139,20 +139,20 @@ export function LlmSettingsCard() {
             />
             <button
               type="button"
-              className="btn btn-outline"
+              className="btn btn-secondary"
               onClick={() => setShowKey((value) => !value)}
             >
               {showKey ? '隐藏' : '显示'}
             </button>
           </div>
-          <p className="mt-1 text-xs text-slate-400">
-            以 <code className="rounded bg-slate-100 px-1">sk-</code> 开头的密钥只存在本地 IndexedDB
-            里。共用电脑时请记得清除。
+          <p className="hint mt-1">
+            以 <code className="rounded-sm bg-ink/5 px-1 font-mono">sk-</code> 开头的密钥只存在本地
+            IndexedDB 里。共用电脑时请记得清除。
           </p>
         </div>
 
-        <details className="rounded-lg bg-slate-50 px-4 py-3">
-          <summary className="cursor-pointer text-sm font-medium text-slate-700">
+        <details className="rounded-sm bg-ink/5 px-4 py-3">
+          <summary className="cursor-pointer text-body font-bold text-ink">
             高级参数（一般不用改）
           </summary>
           <div className="mt-3 grid gap-4 sm:grid-cols-2">
@@ -167,12 +167,11 @@ export function LlmSettingsCard() {
                 max={2}
                 step={0.1}
                 value={llm.temperature}
-                className="w-full"
+                /* accent-ink：滑块的默认主题色是浏览器蓝，不改成黑会在单色界面里格外扎眼 */
+                className="w-full accent-ink"
                 onChange={(event) => updateLlm({ temperature: Number(event.target.value) })}
               />
-              <p className="mt-1 text-xs text-slate-400">
-                越低越稳定，越高越发散。答疑建议 0.3~0.8。
-              </p>
+              <p className="hint mt-1">越低越稳定，越高越发散。答疑建议 0.3~0.8。</p>
             </div>
             <div>
               <label className="label" htmlFor="llm-max-tokens">
@@ -184,7 +183,7 @@ export function LlmSettingsCard() {
                 min={256}
                 max={32768}
                 step={256}
-                className="input"
+                className="input tabular"
                 value={llm.maxTokens}
                 onChange={(event) => updateLlm({ maxTokens: Number(event.target.value) || 2048 })}
               />
@@ -192,7 +191,7 @@ export function LlmSettingsCard() {
           </div>
         </details>
 
-        <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
+        <div className="flex flex-wrap items-center gap-4 border-t border-line-soft pt-4">
           <button
             type="button"
             className="btn btn-primary"
@@ -202,15 +201,16 @@ export function LlmSettingsCard() {
             {test.status === 'testing' ? '正在测试…' : '测试连接'}
           </button>
 
-          {test.status === 'ok' && (
-            <span className="badge bg-emerald-50 text-emerald-700">✅ 连接成功</span>
-          )}
+          {/* 成功态：单色系统里没有绿色。连接成功是一个"事实陈述"，
+              不是需要警觉的事，所以用中性徽章而不是 alert 红 */}
+          {test.status === 'ok' && <span className="badge">✅ 连接成功</span>}
         </div>
 
+        {/* 错误态：这是 alert 红的正当使用场景 */}
         {test.status === 'error' && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm">
-            <p className="font-medium text-red-700">{test.message}</p>
-            {test.hint && <p className="mt-1 leading-relaxed text-red-600">{test.hint}</p>}
+          <div className="rounded-card border border-alert bg-alert-soft px-4 py-3 text-body">
+            <p className="font-bold text-alert">{test.message}</p>
+            {test.hint && <p className="mt-1 leading-relaxed text-alert">{test.hint}</p>}
           </div>
         )}
       </div>

@@ -85,17 +85,18 @@ export function BookSpine({
     >
       <span
         className={[
-          'absolute inset-0 flex flex-col items-center justify-between rounded-[3px] px-1 pt-2.5 pb-2',
-          'transition-[transform,box-shadow,filter] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]',
+          'absolute inset-0 flex flex-col items-center justify-between rounded-sm px-1 pt-2.5 pb-2',
+          'transition-[transform,box-shadow,filter] duration-200 ease-out',
           'group-hover:-translate-y-3 group-focus-visible:-translate-y-3',
           'group-hover:brightness-110 group-focus-visible:brightness-110',
           selected ? '-translate-y-3 brightness-110' : '',
         ].join(' ')}
         style={{
           background: `linear-gradient(100deg, ${palette.from} 0%, ${palette.to} 55%, ${palette.edge} 100%)`,
+          // 阴影是「这本书离开了隔板」这条信息唯一的载体
           boxShadow: selected
-            ? '0 14px 22px -8px rgba(15, 23, 42, 0.55)'
-            : '0 6px 10px -6px rgba(15, 23, 42, 0.45)',
+            ? '0 14px 22px -8px rgba(0, 0, 0, 0.45)'
+            : '0 6px 10px -6px rgba(0, 0, 0, 0.35)',
         }}
       >
         {/* 书脊高光：一条竖向的亮边，模拟书脊的圆角反光 */}
@@ -107,16 +108,16 @@ export function BookSpine({
 
         {/* 竖向书名。中文书脊本来就是竖排，用 writing-mode 而不是逐字换行 */}
         <span
-          className="max-h-[62%] overflow-hidden text-[11px] leading-tight font-medium tracking-wider"
+          className="max-h-[62%] overflow-hidden text-micro tracking-wider"
           style={{ writingMode: 'vertical-rl', color: palette.text }}
         >
           {title}
         </span>
 
-        {/* 底部进度细线：这门课学到哪了。2px，不抢视觉，但让书架承载信息而不是纯装饰 */}
-        <span aria-hidden className="h-0.5 w-3/5 overflow-hidden rounded-full bg-white/20">
+        {/* 底部进度细线：这门课学到哪了。不抢视觉，但让书架承载信息而不是纯装饰 */}
+        <span aria-hidden className="h-0.5 w-3/5 overflow-hidden rounded-pill bg-ink-inverse/25">
           <span
-            className="block h-full rounded-full bg-white/75 transition-[width] duration-500"
+            className="block h-full rounded-pill bg-ink-inverse/80 transition-[width] duration-500"
             style={{ width: `${Math.round(Math.min(Math.max(progress, 0), 1) * 100)}%` }}
           />
         </span>

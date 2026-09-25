@@ -118,19 +118,19 @@ export function TodayPage() {
       <section className="card">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-sm text-slate-500">今日完成</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-900">
+            <p className="text-body text-ink-soft">今日完成</p>
+            <p className="tabular mt-1 text-display font-bold text-ink">
               {doneCount}
-              <span className="text-base font-normal text-slate-400"> / {totalCount} 项</span>
+              <span className="text-body text-ink-faint"> / {totalCount} 项</span>
             </p>
           </div>
-          <p className="text-sm text-slate-500">
+          <p className="text-body text-ink-soft">
             {totalCount === 0 ? '今天还没有待办' : `预计学习 ${formatMinutes(plannedMinutes)}`}
           </p>
         </div>
 
         <div
-          className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-100"
+          className="mt-4 h-2 w-full overflow-hidden rounded-pill bg-sunken"
           role="progressbar"
           aria-label="今日完成进度"
           aria-valuenow={percent}
@@ -138,13 +138,14 @@ export function TodayPage() {
           aria-valuemax={100}
         >
           <div
-            className="h-full rounded-full bg-brand-500 transition-all"
+            className="h-full rounded-pill bg-ink transition-all duration-200 ease-out"
             style={{ width: `${percent}%` }}
           />
         </div>
 
+        {/* 完成反馈不用绿色（单色系没有绿色），靠黑字本身的前后文来表达 */}
         {allDone && (
-          <p className="mt-3 text-sm text-emerald-600">
+          <p className="mt-4 text-body text-ink">
             今天安排的 {totalCount} 项都打勾了。
             {overdueTodos.length > 0 ? '逾期那几项抽空收拾一下就好。' : '剩下的时间留给自己。'}
           </p>
@@ -175,19 +176,18 @@ export function TodayPage() {
         </div>
 
         {totalCount === 0 ? (
-          <div className="mt-3 rounded-xl border border-dashed border-slate-300 bg-white/60 px-6 py-10 text-center">
-            <div className="text-3xl">🗓️</div>
-            <p className="mt-3 text-sm font-medium text-slate-600">今天还没有安排</p>
-            <p className="mx-auto mt-1.5 max-w-md text-xs leading-relaxed text-slate-400">
+          <div className="mt-3 rounded-card border border-dashed border-line-soft bg-raised/60 px-6 py-10 text-center">
+            <p className="text-body font-bold text-ink">今天还没有安排</p>
+            <p className="mx-auto mt-2 max-w-md text-small leading-relaxed text-ink-faint">
               去「课程」页生成一份学习计划，计划会按天拆成待办自动出现在这里；
               也可以直接用上面的输入框手写一条。
             </p>
-            <Link to="/courses" className="btn btn-primary mt-4">
+            <Link to="/courses" className="btn btn-primary mt-5">
               去课程页生成学习计划
             </Link>
           </div>
         ) : (
-          <ul className="card mt-3 divide-y divide-slate-100 p-0">
+          <ul className="card mt-3 divide-y divide-line-soft p-0">
             {todayTodos.map((todo) => (
               <TodoItem
                 key={todo.id}
@@ -203,11 +203,12 @@ export function TodayPage() {
 
       {overdueTodos.length > 0 && (
         <section className="mt-8">
-          <h2 className="section-title text-amber-700">逾期未完成</h2>
+          {/* 逾期是允许用红色的场景 —— 这里用 alert 表达「已经晚了」 */}
+          <h2 className="section-title text-alert">逾期未完成</h2>
           <p className="muted mt-1">
             这些任务已经过了计划日期。补上，或者直接删掉 —— 一直挂着最消耗意志力。
           </p>
-          <ul className="card mt-3 divide-y divide-slate-100 p-0">
+          <ul className="card mt-3 divide-y divide-line-soft p-0">
             {overdueTodos.map((todo) => (
               <TodoItem
                 key={todo.id}

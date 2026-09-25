@@ -20,28 +20,32 @@ export function CourseStructure({ course }: CourseStructureProps) {
       {course.stages.map((stage, stageIndex) => {
         const stageMinutes = stage.units.reduce((sum, unit) => sum + unit.estimatedMinutes, 0)
         return (
-          <section key={stage.id} className="rounded-lg border border-slate-200 p-4">
+          <section key={stage.id} className="rounded-card border border-line-soft p-4">
             <header className="flex flex-wrap items-baseline justify-between gap-2">
-              <h3 className="text-sm font-semibold text-slate-900">
+              <h3 className="font-display text-h3 font-bold text-ink">
                 阶段 {stageIndex + 1}｜{stage.title}
               </h3>
-              <span className="muted text-xs">
+              <span className="tabular text-small text-ink-soft">
                 {stage.units.length} 个单元 · {formatMinutes(stageMinutes)}
               </span>
             </header>
-            {stage.objective && <p className="muted mt-1 text-xs">目标：{stage.objective}</p>}
+            {stage.objective && (
+              <p className="mt-1 text-small text-ink-soft">目标：{stage.objective}</p>
+            )}
 
             <ul className="mt-3 space-y-3">
               {stage.units.map((unit) => (
                 <li key={unit.id}>
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <span className="text-sm text-slate-700">{unit.title}</span>
-                    <span className="muted text-xs">{formatMinutes(unit.estimatedMinutes)}</span>
+                    <span className="text-body text-ink">{unit.title}</span>
+                    <span className="tabular text-small text-ink-soft">
+                      {formatMinutes(unit.estimatedMinutes)}
+                    </span>
                   </div>
                   {unit.knowledgePoints.length > 0 && (
                     <div className="mt-1.5 flex flex-wrap gap-1.5">
                       {unit.knowledgePoints.map((point) => (
-                        <span key={point} className="badge bg-slate-100 text-slate-600">
+                        <span key={point} className="badge">
                           {point}
                         </span>
                       ))}

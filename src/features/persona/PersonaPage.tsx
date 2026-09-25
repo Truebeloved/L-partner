@@ -81,17 +81,19 @@ export function PersonaPage() {
         }
       />
 
-      <div className="max-w-4xl space-y-5">
-        <section className="card bg-slate-50">
-          <p className="text-sm leading-relaxed text-slate-600">
-            记忆是<strong className="font-medium">跟着你</strong>的，角色只决定
-            <strong className="font-medium">现在是谁在教你</strong>。所以随时切换角色都不会丢记忆 ——
-            换个老师，他依然知道你哪块薄弱。
+      <div className="max-w-4xl space-y-5 px-6 pb-8">
+        <section className="card-flat bg-ink/5">
+          <p className="text-body leading-relaxed text-ink-soft">
+            记忆是<strong className="font-bold text-ink">跟着你</strong>的，角色只决定
+            <strong className="font-bold text-ink">现在是谁在教你</strong>
+            。所以随时切换角色都不会丢记忆 —— 换个老师，他依然知道你哪块薄弱。
           </p>
         </section>
 
+        {/* 编辑区用一道实心黑边强调"正在编辑"，而不是彩色边框 ——
+            单色系统里加强层级只能靠边框粗细/深浅与底色，不靠颜色 */}
         {editing !== null && (
-          <section className="card border-brand-300">
+          <section className="card border-line">
             <h2 className="section-title">{editing === 'new' ? '新建角色' : '编辑角色'}</h2>
             <div className="mt-4 space-y-4">
               <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
@@ -116,8 +118,8 @@ export function PersonaPage() {
                         type="button"
                         className={
                           draft.avatar === avatar
-                            ? 'rounded-lg border-2 border-brand-500 px-1.5 py-1 text-xl'
-                            : 'rounded-lg border-2 border-transparent px-1.5 py-1 text-xl hover:bg-slate-100'
+                            ? 'rounded-sm border-2 border-ink px-1.5 py-1 text-h2'
+                            : 'rounded-sm border-2 border-transparent px-1.5 py-1 text-h2 hover:bg-ink/5'
                         }
                         onClick={() => setDraft({ ...draft, avatar })}
                       >
@@ -169,7 +171,7 @@ export function PersonaPage() {
                 onChange={(value) => setDraft({ ...draft, taboos: value })}
               />
 
-              <div className="flex gap-2 border-t border-slate-100 pt-4">
+              <div className="flex gap-4 border-t border-line-soft pt-4">
                 <button
                   type="button"
                   className="btn btn-primary"
@@ -178,7 +180,11 @@ export function PersonaPage() {
                 >
                   保存
                 </button>
-                <button type="button" className="btn btn-outline" onClick={() => setEditing(null)}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setEditing(null)}
+                >
                   取消
                 </button>
               </div>
@@ -192,37 +198,39 @@ export function PersonaPage() {
             return (
               <div
                 key={persona.id}
-                className={`card flex flex-col ${
-                  isActive ? 'border-brand-400 ring-1 ring-brand-200' : 'card-hover'
-                }`}
+                /* 当前使用的角色用实心黑边强调。原来靠彩色边框 + 彩色 ring，
+                   现在靠边框深浅 —— 而"使用中"本身还有实心标签，双保险 */
+                className={`card flex flex-col ${isActive ? 'border-line' : 'card-hover'}`}
               >
                 <div className="flex items-start gap-3">
-                  <span className="text-3xl leading-none">{persona.avatar}</span>
+                  <span className="text-display leading-none">{persona.avatar}</span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-slate-900">{persona.name}</h3>
+                      <h3 className="card-title">{persona.name}</h3>
                       {persona.builtin && (
-                        <span className="badge bg-slate-100 text-slate-500">内置</span>
+                        <span className="badge border-transparent bg-ink/5 text-ink-soft">
+                          内置
+                        </span>
                       )}
-                      {isActive && <span className="badge bg-brand-50 text-brand-700">使用中</span>}
+                      {isActive && <span className="badge-solid">使用中</span>}
                     </div>
-                    <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
+                    <p className="mt-1.5 text-small leading-relaxed text-ink-soft">
                       {persona.identity}
                     </p>
                   </div>
                 </div>
 
-                <dl className="mt-3 space-y-1.5 border-t border-slate-100 pt-3 text-xs">
+                <dl className="mt-3 space-y-1.5 border-t border-line-soft pt-3 text-small">
                   <Row label="性格" value={persona.personality} />
                   <Row label="风格" value={persona.speakingStyle} />
                   <Row label="教法" value={persona.teachingStrategy} />
                   {persona.taboos && <Row label="禁忌" value={persona.taboos} />}
                 </dl>
 
-                <div className="mt-4 flex flex-wrap gap-1.5 border-t border-slate-100 pt-3">
+                <div className="mt-4 flex flex-wrap gap-1.5 border-t border-line-soft pt-3">
                   <button
                     type="button"
-                    className={isActive ? 'btn btn-outline text-xs' : 'btn btn-primary text-xs'}
+                    className={isActive ? 'btn btn-secondary btn-sm' : 'btn btn-primary btn-sm'}
                     onClick={() => updateSettings({ activePersonaId: persona.id })}
                     disabled={isActive}
                   >
@@ -230,7 +238,7 @@ export function PersonaPage() {
                   </button>
                   <button
                     type="button"
-                    className="btn btn-outline text-xs"
+                    className="btn btn-secondary btn-sm"
                     onClick={() => startEdit(persona)}
                     title={
                       persona.builtin ? '内置角色会先复制一份再编辑，原角色保持不变' : undefined
@@ -241,7 +249,7 @@ export function PersonaPage() {
                   {!persona.builtin && (
                     <button
                       type="button"
-                      className="btn btn-danger ml-auto text-xs"
+                      className="btn btn-danger btn-sm ml-auto"
                       onClick={() => {
                         if (persona.id === activePersonaId) {
                           updateSettings({ activePersonaId: personas[0]?.id ?? '' })
@@ -301,7 +309,7 @@ function Field({
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
       />
-      <p className="mt-1 text-xs text-slate-400">{hint}</p>
+      <p className="hint mt-1">{hint}</p>
     </div>
   )
 }
@@ -310,8 +318,8 @@ function Row({ label, value }: { label: string; value: string }) {
   if (!value) return null
   return (
     <div className="flex gap-2">
-      <dt className="w-8 shrink-0 text-slate-400">{label}</dt>
-      <dd className="min-w-0 flex-1 leading-relaxed text-slate-600">{value}</dd>
+      <dt className="w-8 shrink-0 text-ink-faint">{label}</dt>
+      <dd className="min-w-0 flex-1 leading-relaxed text-ink-soft">{value}</dd>
     </div>
   )
 }

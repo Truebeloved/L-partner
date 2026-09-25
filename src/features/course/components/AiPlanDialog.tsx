@@ -47,15 +47,15 @@ export function AiPlanDialog({ generate, onCancel, onGenerated }: AiPlanDialogPr
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4">
       <div
         role="dialog"
         aria-modal="true"
         aria-label="让 AI 帮我生成方案"
-        className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl"
+        className="w-full max-w-md rounded-card bg-raised p-5 shadow-pop"
       >
-        <h2 className="text-base font-semibold text-slate-900">让 AI 帮我生成方案</h2>
-        <p className="muted mt-2 text-xs leading-relaxed">
+        <h2 className="card-title">让 AI 帮我生成方案</h2>
+        <p className="mt-2 text-small leading-relaxed text-ink-soft">
           说清楚目标，由你配置的大模型拆出阶段、单元与知识点；生成结果会先填进表单，改完再保存。
         </p>
 
@@ -103,14 +103,15 @@ export function AiPlanDialog({ generate, onCancel, onGenerated }: AiPlanDialogPr
           </div>
         </div>
 
+        {/* 生成失败是错误信息，属于红色允许出现的场景 */}
         {error && (
-          <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          <p className="mt-3 rounded-sm border border-alert bg-alert-soft px-3 py-2 text-small text-alert">
             {error}
           </p>
         )}
 
         <div className="mt-5 flex justify-end gap-2">
-          <button type="button" className="btn btn-outline" onClick={onCancel} disabled={busy}>
+          <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={busy}>
             取消
           </button>
           <button

@@ -28,7 +28,7 @@ export function Composer({ onSend, onStop, streaming, disabled, placeholder }: C
   }
 
   return (
-    <div className="border-t border-slate-200 bg-white px-3 py-3">
+    <div className="border-t border-line-soft bg-raised px-3 py-3">
       <div className="flex items-end gap-2">
         <textarea
           ref={textareaRef}
@@ -46,7 +46,7 @@ export function Composer({ onSend, onStop, streaming, disabled, placeholder }: C
           }}
         />
         {streaming ? (
-          <button type="button" className="btn btn-outline shrink-0" onClick={onStop}>
+          <button type="button" className="btn btn-secondary shrink-0" onClick={onStop}>
             停止
           </button>
         ) : (

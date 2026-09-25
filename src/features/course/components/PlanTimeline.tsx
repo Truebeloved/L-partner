@@ -38,28 +38,28 @@ export function PlanTimeline({ items, unitTitleById, todos = [] }: PlanTimelineP
         const dayItems = grouped.get(date) ?? []
         const minutes = dayItems.reduce((sum, item) => sum + item.minutes, 0)
         return (
-          <li key={date} className="rounded-lg border border-slate-200 px-4 py-3">
+          <li key={date} className="rounded-card border border-line-soft px-4 py-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-slate-900">{formatDateHuman(date)}</span>
-                <span className="muted text-xs">{formatRelativeDay(date)}</span>
-                {date === today && <span className="badge bg-brand-50 text-brand-700">今天</span>}
+                <span className="tabular text-body font-bold text-ink">
+                  {formatDateHuman(date)}
+                </span>
+                <span className="text-small text-ink-soft">{formatRelativeDay(date)}</span>
+                {/* 「今天」是当前定位标记，属于选中/激活语义 —— 用实心标签，
+                    而不是红色（红色在这套系统里专供警示） */}
+                {date === today && <span className="badge-solid">今天</span>}
               </div>
-              <span className="muted text-xs">共 {formatMinutes(minutes)}</span>
+              <span className="tabular text-small text-ink-soft">共 {formatMinutes(minutes)}</span>
             </div>
             <ul className="mt-2 space-y-1">
               {dayItems.map((item) => {
                 const state = planItemState(item, todos)
                 return (
-                  <li key={item.id} className="flex items-center justify-between gap-2 text-sm">
-                    <span
-                      className={
-                        state === 'done' ? 'text-slate-400 line-through' : 'text-slate-700'
-                      }
-                    >
+                  <li key={item.id} className="flex items-center justify-between gap-2 text-body">
+                    <span className={state === 'done' ? 'text-ink-faint line-through' : 'text-ink'}>
                       {unitTitleById.get(item.unitId) ?? '未知单元'}
                     </span>
-                    <span className="shrink-0 text-xs text-slate-500">
+                    <span className="tabular shrink-0 text-small text-ink-soft">
                       {state === 'done' && '已完成 · '}
                       {state === 'dropped' && '已跳过 · '}
                       {formatMinutes(item.minutes)}

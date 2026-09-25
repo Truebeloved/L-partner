@@ -21,22 +21,24 @@ export function ConfirmDialog({
   onCancel,
 }: ConfirmDialogProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4">
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl"
+        className="w-full max-w-sm rounded-card bg-raised p-5 shadow-pop"
       >
-        <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+        <h2 className="card-title">{title}</h2>
         <p className="muted mt-2 leading-relaxed">{message}</p>
         <div className="mt-5 flex justify-end gap-2">
-          <button type="button" className="btn btn-outline" onClick={onCancel}>
+          <button type="button" className="btn btn-secondary" onClick={onCancel}>
             取消
           </button>
+          {/* 破坏性操作用 btn-danger（红色在这套系统里的三个合法用途之一），
+              而不是原来的「红底白字实心按钮」——实心红面积太大，与极简基调冲突 */}
           <button
             type="button"
-            className={danger ? 'btn bg-red-600 text-white hover:bg-red-700' : 'btn btn-primary'}
+            className={danger ? 'btn btn-danger' : 'btn btn-primary'}
             onClick={onConfirm}
           >
             {confirmText}

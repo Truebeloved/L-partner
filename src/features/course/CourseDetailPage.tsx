@@ -47,7 +47,7 @@ export function CourseDetailPage() {
     return (
       <>
         <PageHeader title="课程不存在" description="它可能已经被删除，或链接来自另一个浏览器。" />
-        <button type="button" className="btn btn-outline" onClick={() => navigate('/courses')}>
+        <button type="button" className="btn btn-secondary" onClick={() => navigate('/courses')}>
           返回课程列表
         </button>
       </>
@@ -99,7 +99,7 @@ export function CourseDetailPage() {
             {plan && (
               <button
                 type="button"
-                className="btn btn-outline"
+                className="btn btn-secondary"
                 onClick={() => setAskReschedule(true)}
               >
                 重新排期
@@ -112,16 +112,15 @@ export function CourseDetailPage() {
         }
       />
 
+      {/* 操作反馈是「说明」不是「错误」，所以用中性底纹 */}
       {feedback && (
-        <p className="mb-4 rounded-lg border border-brand-200 bg-brand-50 px-4 py-2.5 text-sm text-brand-800">
-          {feedback}
-        </p>
+        <p className="mb-4 rounded-sm bg-ink/5 px-4 py-2.5 text-body text-ink">{feedback}</p>
       )}
 
       <section className="card mb-5">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="badge bg-slate-100 text-slate-600">{SOURCE_LABEL[course.source]}</span>
-          <span className="muted text-xs">
+          <span className="badge">{SOURCE_LABEL[course.source]}</span>
+          <span className="tabular text-small text-ink-soft">
             {totals.stageCount} 阶段 · {totals.unitCount} 单元 · {totals.knowledgePointCount}{' '}
             个知识点 · {formatMinutes(totals.totalMinutes)}
           </span>
@@ -129,30 +128,30 @@ export function CourseDetailPage() {
 
         <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
-            <dt className="muted text-xs">学习目标</dt>
-            <dd className="mt-0.5 text-sm text-slate-700">{course.goal ?? '未填写'}</dd>
+            <dt className="text-small text-ink-soft">学习目标</dt>
+            <dd className="mt-0.5 text-body text-ink">{course.goal ?? '未填写'}</dd>
           </div>
           <div>
-            <dt className="muted text-xs">期望完成</dt>
+            <dt className="text-small text-ink-soft">期望完成</dt>
             <dd
-              className={`mt-0.5 text-sm ${
+              className={`tabular mt-0.5 text-body ${
                 course.deadline && isOverdue(course.deadline) && summary.remainingMinutes > 0
-                  ? 'font-medium text-red-600'
-                  : 'text-slate-700'
+                  ? 'font-bold text-alert'
+                  : 'text-ink'
               }`}
             >
               {course.deadline ? formatDateHuman(course.deadline) : '未设置'}
             </dd>
           </div>
           <div>
-            <dt className="muted text-xs">每周可投入</dt>
-            <dd className="mt-0.5 text-sm text-slate-700">
+            <dt className="text-small text-ink-soft">每周可投入</dt>
+            <dd className="tabular mt-0.5 text-body text-ink">
               {course.weeklyMinutes ? formatMinutes(course.weeklyMinutes) : '未填写'}
             </dd>
           </div>
           <div>
-            <dt className="muted text-xs">已完成</dt>
-            <dd className="mt-0.5 text-sm text-slate-700">
+            <dt className="text-small text-ink-soft">已完成</dt>
+            <dd className="tabular mt-0.5 text-body text-ink">
               {formatMinutes(summary.doneMinutes)} / {formatMinutes(summary.totalMinutes)}
             </dd>
           </div>
@@ -163,7 +162,7 @@ export function CourseDetailPage() {
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="section-title">学习计划</h2>
           {plan && (
-            <span className="muted text-xs">
+            <span className="text-small text-ink-soft">
               {plan.generatedBy === 'ai' ? 'AI 排期' : '规则排期'} · {summary.studyDays} 个学习日
             </span>
           )}
@@ -186,16 +185,20 @@ export function CourseDetailPage() {
               />
             </dl>
 
+            {/* 「按当前投入排不完」是一个需要用户行动的问题，属于警示场景 ——
+                这是红色在这套系统里合法的三个用途之一（逾期 / 错误 / 破坏性）之外的
+                「警告」，按令牌映射表统一到 alert */}
             {summary.exceedsDeadline && course.deadline && summary.finishDate && (
-              <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                <p className="font-medium">按当前每周投入排不完</p>
+              <div className="mt-4 rounded-sm border border-alert bg-alert-soft px-4 py-3 text-body text-alert">
+                <p className="font-bold">按当前每周投入排不完</p>
                 <p className="mt-1 leading-relaxed">
-                  以现在的节奏，预计 <strong>{formatDateHuman(summary.finishDate)}</strong>{' '}
+                  以现在的节奏，预计{' '}
+                  <strong className="font-bold">{formatDateHuman(summary.finishDate)}</strong>{' '}
                   才能学完， 晚于 deadline（{formatDateHuman(course.deadline)}）。 可以二选一：把
                   deadline 放到 {formatDateHuman(summary.finishDate)} 之后，
                   或在课程设置里提高每周可投入时长。
                 </p>
-                <p className="mt-1 text-xs text-amber-800">
+                <p className="mt-1 text-small">
                   我们没有硬把内容塞进 deadline ——
                   一天学五小时的计划执行不下去，不如如实告诉你差多少。
                 </p>
@@ -231,9 +234,9 @@ export function CourseDetailPage() {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg bg-slate-50 px-3 py-2">
-      <dt className="muted text-xs">{label}</dt>
-      <dd className="mt-0.5 text-sm font-medium text-slate-800">{value}</dd>
+    <div className="rounded-sm bg-ink/5 px-3 py-2">
+      <dt className="text-small text-ink-soft">{label}</dt>
+      <dd className="tabular mt-0.5 text-body font-bold text-ink">{value}</dd>
     </div>
   )
 }

@@ -13,12 +13,15 @@
     "package": "npm run build && electron-builder --win",
     "package:dir": "npm run build && electron-builder --win --dir",
     "typecheck": "tsc -b",
+    "check:design": "node scripts/check-design-tokens.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
   "dependencies": {
+    "@fontsource/josefin-sans": "^5.3.0",
+    "@fontsource/lato": "^5.3.0",
     "dayjs": "^1.11.23",
     "idb-keyval": "^6.3.0",
     "react": "^19.3.0",

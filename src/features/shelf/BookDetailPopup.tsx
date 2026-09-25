@@ -68,23 +68,21 @@ export function BookDetailPopup({ course, plan, anchor }: BookDetailPopupProps) 
       // 标记为交互元素：Shelf 的「点空白处关闭」以此判断是否该跳过。
       // 小窗本身不响应点击（按约定进入课程要再点那本书），但点在它上面也不该关掉它。
       data-shelf-interactive
-      className="fixed z-40 rounded-xl border border-slate-200 bg-white p-4 shadow-xl"
+      className="fixed z-40 rounded-card border border-line-soft bg-raised p-4 shadow-pop"
       style={{ width: POPUP_WIDTH, left: position.left, top: position.top }}
     >
       <div className="flex items-start gap-2">
-        <h3 className="min-w-0 flex-1 text-sm leading-snug font-semibold text-slate-900">
+        <h3 className="min-w-0 flex-1 font-display text-h3 leading-snug font-bold text-ink">
           {course.title}
         </h3>
-        <span className="badge shrink-0 bg-slate-100 text-slate-500">
-          {SOURCE_LABEL[course.source]}
-        </span>
+        <span className="badge shrink-0">{SOURCE_LABEL[course.source]}</span>
       </div>
 
       {course.goal && (
-        <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-slate-500">{course.goal}</p>
+        <p className="mt-2 line-clamp-2 text-small leading-relaxed text-ink-soft">{course.goal}</p>
       )}
 
-      <dl className="mt-3 grid grid-cols-3 gap-2 border-y border-slate-100 py-2.5 text-center">
+      <dl className="mt-4 grid grid-cols-3 gap-2 border-y border-line-soft py-2 text-center">
         <Stat label="进度" value={stats.itemCount === 0 ? '未排期' : `${stats.percent}%`} />
         <Stat label="单元" value={`${stats.unitCount} 个`} />
         <Stat
@@ -102,21 +100,22 @@ export function BookDetailPopup({ course, plan, anchor }: BookDetailPopupProps) 
       </dl>
 
       {course.stages.length > 0 && (
-        <ul className="mt-2.5 space-y-1 text-xs text-slate-500">
+        <ul className="mt-3 space-y-1 text-small text-ink-soft">
           {course.stages.slice(0, 3).map((stage) => (
-            <li key={stage.id} className="flex gap-1.5">
-              <span className="text-slate-300">·</span>
+            <li key={stage.id} className="flex gap-2">
+              <span className="text-ink-faint">·</span>
               <span className="min-w-0 flex-1 truncate">{stage.title}</span>
-              <span className="shrink-0 text-slate-400">{stage.units.length} 单元</span>
+              <span className="shrink-0 text-ink-faint">{stage.units.length} 单元</span>
             </li>
           ))}
           {course.stages.length > 3 && (
-            <li className="pl-3 text-slate-400">还有 {course.stages.length - 3} 个阶段…</li>
+            <li className="pl-4 text-ink-faint">还有 {course.stages.length - 3} 个阶段…</li>
           )}
         </ul>
       )}
 
-      <p className="mt-3 rounded-lg bg-brand-50 px-2.5 py-2 text-[11px] leading-relaxed text-brand-700">
+      {/* 交互提示：用黑底白字的实心标签，而不是彩色提示块 —— 单色系统里没有"信息色" */}
+      <p className="mt-4 rounded-sm bg-ink/5 px-3 py-2 text-small leading-relaxed text-ink">
         再次单击这本书，进入课程开始学习
       </p>
     </div>
@@ -132,8 +131,8 @@ const SOURCE_LABEL: Record<Course['source'], string> = {
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-[11px] text-slate-400">{label}</dt>
-      <dd className="mt-0.5 text-sm font-medium text-slate-800">{value}</dd>
+      <dt className="text-label font-bold tracking-[0.05em] text-ink-faint uppercase">{label}</dt>
+      <dd className="tabular mt-1 text-body font-bold text-ink">{value}</dd>
     </div>
   )
 }

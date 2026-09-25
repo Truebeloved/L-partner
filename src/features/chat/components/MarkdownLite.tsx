@@ -17,7 +17,7 @@ export function MarkdownLite({ source }: { source: string }) {
         block.type === 'code' ? (
           <pre
             key={index}
-            className="overflow-x-auto rounded-lg bg-slate-900 px-3.5 py-3 text-xs leading-relaxed text-slate-100"
+            className="overflow-x-auto rounded-sm bg-ink px-3.5 py-3 font-mono text-small leading-relaxed text-ink-inverse"
           >
             <code>{block.content}</code>
           </pre>
@@ -85,7 +85,7 @@ function renderTextBlock(text: string): ReactNode[] {
     const heading = trimmed.match(/^(#{1,4})\s+(.*)$/)
     if (heading) {
       nodes.push(
-        <p key={index} className="font-semibold text-slate-900">
+        <p key={index} className="font-bold text-ink">
           {renderInline(heading[2] ?? '')}
         </p>,
       )
@@ -105,14 +105,14 @@ function renderInline(text: string): ReactNode[] {
   return parts.filter(Boolean).map((part, index) => {
     if (part.startsWith('`') && part.endsWith('`') && part.length > 2) {
       return (
-        <code key={index} className="rounded bg-slate-100 px-1 py-0.5 text-[0.9em] text-brand-700">
+        <code key={index} className="rounded-sm bg-ink/5 px-1 py-0.5 font-mono text-ink">
           {part.slice(1, -1)}
         </code>
       )
     }
     if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
       return (
-        <strong key={index} className="font-semibold text-slate-900">
+        <strong key={index} className="font-bold text-ink">
           {part.slice(2, -2)}
         </strong>
       )

@@ -127,8 +127,9 @@ describe('Shelf 交互状态机', () => {
     await user.click(screen.getByRole('button', { name: 'React' }))
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
 
-    // 点书架容器本身（非任何书籍、非小窗）
-    await user.click(screen.getByText('', { selector: 'div.relative.px-7' }))
+    // 点书架容器本身（非任何书籍、非小窗）。
+    // 用 testid 而不是 CSS 类选择器：类名会随样式调整而变，测试不该被样式改动牵连
+    await user.click(screen.getByTestId('shelf-surface'))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 

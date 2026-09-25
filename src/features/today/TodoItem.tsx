@@ -14,31 +14,34 @@ interface TodoItemProps {
 /** 待办行：今日列表与逾期列表共用，两处的勾选/删除行为必须一致，不该写两份 */
 export function TodoItem({ todo, courseTitle, showDate, onToggle, onRemove }: TodoItemProps) {
   return (
-    <li className="flex items-start gap-3 px-4 py-3 transition hover:bg-slate-50">
+    <li className="flex items-start gap-3 px-4 py-3 transition-all duration-200 ease-out hover:bg-ink/5">
       <input
         type="checkbox"
-        className="mt-0.5 size-4 shrink-0 accent-brand-600"
+        className="mt-0.5 size-4 shrink-0 accent-ink"
         checked={todo.done}
         aria-label={`完成「${todo.title}」`}
         onChange={() => onToggle(todo)}
       />
 
       <div className="min-w-0 flex-1">
-        <p className={todo.done ? 'text-sm text-slate-400 line-through' : 'text-sm text-slate-800'}>
+        <p className={todo.done ? 'text-body text-ink-faint line-through' : 'text-body text-ink'}>
           {todo.title}
         </p>
-        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-          {courseTitle && <span className="badge bg-brand-50 text-brand-700">{courseTitle}</span>}
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+          {courseTitle && <span className="badge">{courseTitle}</span>}
           {todo.minutes ? (
-            <span className="text-xs text-slate-400">预计 {formatMinutes(todo.minutes)}</span>
+            <span className="tabular text-small text-ink-faint">
+              预计 {formatMinutes(todo.minutes)}
+            </span>
           ) : null}
+          {/* 逾期日期是全应用里少数几个允许用红色的地方之一：它就是在说「这件事已经晚了」 */}
           {showDate && (
-            <span className="text-xs text-amber-600">
+            <span className="tabular text-small text-alert">
               {formatRelativeDay(todo.date)} · 原定 {dayjs(todo.date).format('M月D日')}
             </span>
           )}
           {/* 区分来源很重要：计划派生的任务完成会回流到课程进度，手写任务不会 */}
-          <span className="text-xs text-slate-300">
+          <span className="text-small text-ink-faint">
             {todo.planItemId ? '来自学习计划' : '手动添加'}
           </span>
         </div>
@@ -46,7 +49,7 @@ export function TodoItem({ todo, courseTitle, showDate, onToggle, onRemove }: To
 
       <button
         type="button"
-        className="btn btn-ghost shrink-0 px-2 py-1 text-xs"
+        className="btn btn-ghost btn-sm shrink-0"
         onClick={() => onRemove(todo)}
         aria-label={`删除「${todo.title}」`}
       >

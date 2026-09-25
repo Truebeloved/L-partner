@@ -58,7 +58,7 @@ export default function App() {
           <SplashScreen name={name} onDone={() => setSplashDone(true)} />
         ) : (
           // 与开屏同一底色，避免首帧闪白
-          <div className="fixed inset-0 bg-[#0b1020]" />
+          <div className="fixed inset-0 bg-[#141414]" />
         ))}
 
       <HashRouter>

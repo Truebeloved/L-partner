@@ -1,113 +1,218 @@
+/* ---------------------------------------------------------------------------
+   字体必须在最前 —— CSS 规范要求 @import 出现在所有规则之前。
+   本地打包而不是走 CDN：Electron 从 file:// 加载，离线时外部字体链接会直接丢字体。
+   注意这两个字体都**只覆盖拉丁字母与数字**，中文字形靠 --font-sans 里的系统字体回退。
+--------------------------------------------------------------------------- */
+@import '@fontsource/josefin-sans/latin-400.css';
+@import '@fontsource/josefin-sans/latin-700.css';
+@import '@fontsource/lato/latin-400.css';
+@import '@fontsource/lato/latin-700.css';
 @import 'tailwindcss';
 
 /* ---------------------------------------------------------------------------
-   设计令牌
-   整体基调：安静、专注、不喧哗 —— 这是个学习工具，不是营销落地页。
-   主色取 indigo（蓝紫），传达「理性 / 学习」，避免用红色系造成紧张感。
+   设计令牌：Mono Gray Minimal
+   单色系（黑 / 白 / 中灰）+ 一个仅用于警示的强调色。
+   层级只靠 背景深浅 + 边框粗细 + 字重，不靠阴影堆叠。
 --------------------------------------------------------------------------- */
 @theme {
-  --font-sans:
-    'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, -apple-system,
-    sans-serif;
+  /* 字体族。中文回退放在字体栈里 —— 西文字体没有中文字形是客观事实，
+     与其假装设计能覆盖中文，不如把回退写成显式的一部分 */
+  --font-display: 'Josefin Sans', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --font-sans: 'Lato', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-mono: 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
 
-  --color-brand-50: #eef2ff;
-  --color-brand-100: #e0e7ff;
-  --color-brand-200: #c7d2fe;
-  --color-brand-300: #a5b4fc;
-  --color-brand-400: #818cf8;
-  --color-brand-500: #6366f1;
-  --color-brand-600: #4f46e5;
-  --color-brand-700: #4338ca;
-  --color-brand-800: #3730a3;
-  --color-brand-900: #312e81;
+  /* ---- 表面：三层，靠明度区分而不是靠阴影 ---- */
+  --color-surface: #d0d0d0;
+  --color-raised: #ffffff;
+  --color-sunken: #b9b9b9;
 
-  /* 掌握状态的语义色，热力图与进度条共用 */
-  --color-mastery-unknown: #cbd5e1;
-  --color-mastery-learning: #60a5fa;
-  --color-mastery-weak: #fbbf24;
-  --color-mastery-mastered: #34d399;
+  /* ---- 文字 ---- */
+  --color-ink: #000000;
+  --color-ink-soft: rgba(0, 0, 0, 0.6);
+  --color-ink-faint: rgba(0, 0, 0, 0.3);
+  --color-ink-inverse: #ffffff;
+
+  /* ---- 线条 ---- */
+  --color-line: #000000;
+  --color-line-soft: rgba(0, 0, 0, 0.12);
+
+  /* ---- 强调色：只用于警示（逾期、错误、破坏性操作），面积 < 5% ---- */
+  --color-alert: #ff0000;
+  --color-alert-soft: rgba(255, 0, 0, 0.08);
+
+  /* ---- 字号层级 ---- */
+  --text-display: 42px;
+  --text-display--line-height: 1.2;
+  --text-display--letter-spacing: -0.02em;
+  --text-h1: 24px;
+  --text-h1--line-height: 1.3;
+  --text-h2: 21px;
+  --text-h2--line-height: 1.2;
+  --text-h3: 18px;
+  --text-h3--line-height: 1.3;
+  --text-body: 14px;
+  --text-body--line-height: 1.5;
+  --text-caption: 14px;
+  --text-caption--line-height: 1.4;
+  --text-label: 12px;
+  --text-label--line-height: 1.3;
+  --text-label--letter-spacing: 0.05em;
+  /* 设计约束的字号档位里缺「12px 常规字重」这一档 —— 只有 label(12px/700/大写)
+     和 micro(10px)。但时间戳、课程名、次要说明这类文字既不该加粗也不该大写，
+     强行套 label 会读起来很别扭，所以补这一档。 */
+  --text-small: 12px;
+  --text-small--line-height: 1.4;
+  /* 设计稿写的是 6px，但 6px 在任何屏幕上都无法阅读且不满足无障碍下限，修正为 10px */
+  --text-micro: 10px;
+  --text-micro--line-height: 1.2;
+
+  /* ---- 圆角 ---- */
+  --radius-sm: 4px;
+  --radius-card: 15px;
+  --radius-pill: 999px;
+
+  /* ---- 极轻阴影 ----
+     设计约束原文要求完全无阴影（flat）。这里保留一层极轻的，
+     因为纯靠边框区分层级在桌面应用里会让浮层（弹窗、小窗）失去"浮起来"的信息。
+     仅用于：卡片、浮层、被抽出的书。 */
+  --shadow-lift: 0 1px 2px rgba(0, 0, 0, 0.05), 0 4px 14px rgba(0, 0, 0, 0.06);
+  --shadow-pop: 0 10px 30px rgba(0, 0, 0, 0.16);
 }
 
 @layer base {
   html {
+    /* 拉窗口时整体缩放而不是突然跳断点，符合"内容有余量地调整" */
     scroll-behavior: smooth;
   }
 
   body {
-    @apply bg-slate-50 text-slate-800 antialiased;
-    font-family: var(--font-sans);
+    @apply bg-surface font-sans text-body text-ink antialiased;
   }
 
-  /* 键盘可访问性：统一焦点环，别让 focus 样式在不同浏览器里各自为政 */
+  /* 键盘可访问性：焦点环用纯黑，与单色系统一致 */
   :focus-visible {
-    @apply outline-2 outline-offset-2 outline-brand-500;
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+  }
+
+  /* 数字用等宽，避免进度、时长在更新时宽度跳动 */
+  .tabular {
+    font-variant-numeric: tabular-nums;
   }
 }
 
 @layer components {
-  .card {
-    @apply rounded-xl border border-slate-200 bg-white p-5 shadow-sm;
-  }
-
-  .card-hover {
-    @apply transition hover:border-brand-300 hover:shadow-md;
-  }
-
-  /*
-   * 按钮采用「基础类 + 变体类」双类名写法：class="btn btn-primary"。
-   * 注意 Tailwind v4 里 @apply 只能作用于工具类，不能 @apply 自定义组件类
-   * （写 `@apply btn` 会直接构建报错），所以变体不重复引用 .btn。
-   */
+  /* ---------------------------------------------------------------------
+     按钮。采用「基础类 + 变体类」双类名：class="btn btn-primary"。
+     Tailwind v4 里 @apply 不能作用于自定义组件类，所以变体不引用 .btn。
+  --------------------------------------------------------------------- */
   .btn {
-    @apply inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg px-3.5 py-2
-      text-sm font-medium transition select-none
-      disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-pill px-4 py-1.5
+      text-body font-bold whitespace-nowrap transition-all duration-200 ease-out select-none
+      disabled:cursor-not-allowed disabled:opacity-40;
   }
 
+  /* 主按钮：透明底 + 黑色描边胶囊 */
   .btn-primary {
-    @apply bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800;
+    @apply border-[1.5px] border-line bg-transparent text-ink
+      hover:bg-ink hover:text-ink-inverse;
   }
 
+  /* 次按钮：白底 + 浅灰细边。注意按设计约束它是 4px 小圆角，不是胶囊 */
+  .btn-secondary {
+    @apply rounded-sm border border-line-soft bg-raised text-ink hover:border-line;
+  }
+
+  /* 幽灵按钮：无边框无底色，hover 出现浅灰底 */
   .btn-ghost {
-    @apply text-slate-600 hover:bg-slate-100 hover:text-slate-900;
+    @apply text-ink hover:bg-ink/5;
   }
 
-  .btn-outline {
-    @apply border border-slate-300 bg-white text-slate-700 hover:border-brand-300
-      hover:text-brand-700;
-  }
-
+  /* 破坏性操作：唯一的红色使用场景之一 */
   .btn-danger {
-    @apply text-red-600 hover:bg-red-50;
+    @apply border-[1.5px] border-alert bg-transparent text-alert hover:bg-alert hover:text-ink-inverse;
+  }
+
+  /* 紧凑变体：设计约束给的按钮规格是 18px 字号，用在工具栏和列表行里太大 */
+  .btn-sm {
+    @apply gap-1.5 px-3 py-1 text-label;
   }
 
   .input {
-    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm
-      placeholder:text-slate-400
-      focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none;
+    @apply w-full rounded-sm border border-transparent bg-sunken px-3 py-2 text-body text-ink
+      transition-all duration-200 ease-out placeholder:text-ink-faint
+      focus:border-[1.5px] focus:border-line focus:bg-raised focus:outline-none;
   }
 
-  .label {
-    @apply mb-1.5 block text-sm font-medium text-slate-700;
+  /* 卡片：白底、15px 圆角、浅灰细边、16px 内边距 */
+  .card {
+    @apply rounded-card border border-line-soft bg-raised p-4 shadow-lift;
   }
 
+  .card-flat {
+    @apply rounded-card border border-line-soft bg-raised p-4;
+  }
+
+  .card-hover {
+    @apply transition-all duration-200 ease-out hover:border-line;
+  }
+
+  /* 标签：胶囊、大写、字距放宽 */
   .badge {
-    @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium;
+    @apply inline-flex items-center rounded-pill border border-line bg-raised px-2.5 py-0.5
+      text-label font-bold uppercase text-ink;
   }
 
+  .badge-solid {
+    @apply inline-flex items-center rounded-pill bg-ink px-2.5 py-0.5 text-label font-bold
+      uppercase text-ink-inverse;
+  }
+
+  /* 警示标签：红色只在这里和逾期提示上出现 */
+  .badge-alert {
+    @apply inline-flex items-center rounded-pill bg-alert px-2.5 py-0.5 text-label font-bold
+      uppercase text-ink-inverse;
+  }
+
+  .divider {
+    @apply my-2 h-px w-full bg-line-soft;
+  }
+
+  /* 区块标题：H2 档 */
   .section-title {
-    @apply text-lg font-semibold text-slate-900;
+    @apply font-display text-h2 font-bold text-ink;
+  }
+
+  /* 页面标题：H1 档 */
+  .page-title {
+    @apply font-display text-h1 font-bold text-ink;
+  }
+
+  /* 卡片标题：H3 档 */
+  .card-title {
+    @apply font-display text-h3 font-bold text-ink;
+  }
+
+  /* 表单标签：12px 大写 + 字距 */
+  .label {
+    @apply mb-2 block text-label font-bold uppercase tracking-[0.05em] text-ink-soft;
   }
 
   .muted {
-    @apply text-sm text-slate-500;
+    @apply text-body text-ink-soft;
+  }
+
+  /* 需要弱化的极小说明文字 */
+  .hint {
+    @apply text-label text-ink-faint;
   }
 }
 
 /* ---------------------------------------------------------------------------
    开屏动效
-   开屏是应用唯一「不讲效率」的地方 —— 它的任务是让人感到被迎接，
+   开屏是应用里唯一"不讲效率"的地方，它的任务是让人感到被迎接，
    所以用缓慢的缓出曲线和轻微的上浮 + 去模糊，而不是任何弹跳或缩放。
+   （设计约束里的 0.2s 快速过渡是针对组件交互反馈的，不适用于这段开场。）
 --------------------------------------------------------------------------- */
 @keyframes splash-rise {
   from {
@@ -130,10 +235,10 @@
 
 @layer components {
   .splash-line {
-    animation: splash-rise 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation: splash-rise 800ms cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 
   .splash-leaving {
-    animation: splash-dim 650ms ease-in forwards;
+    animation: splash-dim 600ms ease-in forwards;
   }
 }

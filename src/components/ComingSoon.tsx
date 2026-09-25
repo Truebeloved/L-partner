@@ -3,12 +3,15 @@ interface ComingSoonProps {
   note: string
 }
 
+/**
+ * 未完成模块的占位。
+ * 单色系统里没有"提示色"可用，所以靠虚线边框 + 字号对比来表达"此处待建"。
+ */
 export function ComingSoon({ note }: ComingSoonProps) {
   return (
-    <div className="rounded-xl border border-dashed border-slate-300 bg-white/60 px-6 py-14 text-center">
-      <div className="text-3xl">🚧</div>
-      <p className="mt-3 text-sm font-medium text-slate-600">此模块正在开发中</p>
-      <p className="mx-auto mt-1.5 max-w-md text-xs leading-relaxed text-slate-400">{note}</p>
+    <div className="rounded-card border border-dashed border-line-soft bg-raised/60 px-6 py-12 text-center">
+      <p className="font-display text-h3 font-bold text-ink">此模块正在开发中</p>
+      <p className="hint mx-auto mt-2 max-w-md leading-relaxed">{note}</p>
     </div>
   )
 }

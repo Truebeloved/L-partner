@@ -24,12 +24,12 @@ export function CourseStudyPage() {
   )
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-slate-200 bg-white/95 px-6 py-3 backdrop-blur">
-        <button type="button" className="btn btn-ghost" onClick={() => navigate('/')}>
+    <div className="min-h-screen bg-surface">
+      <header className="sticky top-0 z-20 flex items-center gap-4 border-b border-line-soft bg-surface/95 px-6 py-3 backdrop-blur">
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => navigate('/')}>
           ← 返回书架
         </button>
-        <span className="min-w-0 flex-1 truncate text-sm text-slate-400">{title ?? '课程'}</span>
+        <span className="min-w-0 flex-1 truncate text-small text-ink-soft">{title ?? '课程'}</span>
       </header>
 
       <div className="mx-auto max-w-4xl px-6 py-6">

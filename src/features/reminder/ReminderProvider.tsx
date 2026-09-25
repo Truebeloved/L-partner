@@ -43,7 +43,9 @@ export function ReminderProvider({ children }: { children: ReactNode }) {
       {children}
       {scheduler.activeReminder && (
         <div className="pointer-events-none fixed inset-x-0 top-4 z-40 flex justify-center px-4">
-          <div className="pointer-events-auto w-full max-w-lg drop-shadow-lg">
+          {/* 原来套的是一层 Tailwind 内置投影档位，而设计系统只留 shadow-lift / shadow-pop。
+              提醒是浮层，用 shadow-pop。阴影施加在横幅自身即可，不必套一层代理元素 */}
+          <div className="pointer-events-auto w-full max-w-lg">
             <ReminderBanner reminder={scheduler.activeReminder} onDismiss={scheduler.dismiss} />
           </div>
         </div>

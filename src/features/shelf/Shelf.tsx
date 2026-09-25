@@ -14,7 +14,7 @@ import type { Id } from '@/types/models'
 
 /** 书与书之间的缝 */
 const GAP = 14
-const PADDING_X = 28
+const PADDING_X = 24
 const BASE_HEIGHT = 196
 /** 书的厚度会随可用宽度伸缩，但夹在这个区间内 —— 太薄不像书，太厚一排八本就放不下 */
 const MIN_THICKNESS = 44
@@ -135,13 +135,13 @@ export function Shelf() {
   }
 
   return (
-    <div ref={containerRef} className="relative px-7 pb-6">
+    <div ref={containerRef} data-testid="shelf-surface" className="relative px-6 pb-6">
       {courses.length === 0 && (
         <div className="pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center">
-          <div className="pointer-events-auto rounded-xl border border-slate-200 bg-white/95 px-5 py-3 text-center shadow-sm backdrop-blur">
-            <p className="text-sm font-medium text-slate-700">书架还是空的</p>
-            <p className="muted mt-0.5 text-xs">建立第一门课程，它就会成为这里的一本书</p>
-            <Link to="/courses" className="btn btn-primary mt-2.5 text-xs">
+          <div className="pointer-events-auto rounded-card border border-line-soft bg-raised/95 px-4 py-3 text-center shadow-lift backdrop-blur">
+            <p className="text-body font-bold text-ink">书架还是空的</p>
+            <p className="hint mt-1">建立第一门课程，它就会成为这里的一本书</p>
+            <Link to="/courses" className="btn btn-primary btn-sm mt-2">
               添加课程
             </Link>
           </div>
@@ -179,12 +179,13 @@ export function Shelf() {
               )}
             </div>
 
-            {/* 隔板：有了它整排书才"站"在什么东西上，否则像悬空漂浮 */}
+            {/* 隔板：有了它整排书才"站"在什么东西上，否则像悬空漂浮。
+                用中性深灰而不是木色 —— 单色系统里木色会和书脊争色彩注意力 */}
             <div
-              className="h-2.5 rounded-b-[3px]"
+              className="h-2.5 rounded-sm"
               style={{
-                background: 'linear-gradient(to bottom, #cfc8bc 0%, #b8b0a2 60%, #9c9486 100%)',
-                boxShadow: '0 6px 10px -6px rgba(15, 23, 42, 0.45)',
+                background: 'linear-gradient(to bottom, #a8a8a8 0%, #8c8c8c 60%, #6f6f6f 100%)',
+                boxShadow: '0 6px 10px -6px rgba(0, 0, 0, 0.35)',
               }}
             />
           </div>

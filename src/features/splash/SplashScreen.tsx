@@ -24,6 +24,8 @@ interface SplashScreenProps {
  * - **不显示加载进度**：这里没有真实工作在进行，做进度条就是撒谎。它的定位是「迎接」，不是「加载」。
  * - **用 transform + opacity + blur 做动效**：这三样都能交给合成器，不触发重排，
  *   所以在低配机器上也是流畅的。用 width/top 之类做动画会掉帧。
+ * - 底色是纯黑到深灰：与后面中灰的界面形成一次明确的「开场 → 进入」分界，
+ *   而不是彩色渐变 —— 整套设计系统是单色系，开屏不该是唯一的例外。
  */
 export function SplashScreen({ name, onDone }: SplashScreenProps) {
   const [phase, setPhase] = useState<Phase>('greeting')
@@ -63,9 +65,8 @@ export function SplashScreen({ name, onDone }: SplashScreenProps) {
   return (
     <div
       className={[
-        // 固定整屏，盖在主界面之上
         'fixed inset-0 z-50 flex items-center justify-center overflow-hidden',
-        'bg-[radial-gradient(120%_120%_at_50%_0%,#1a2340_0%,#0b1020_55%,#070a14_100%)]',
+        'bg-[radial-gradient(120%_120%_at_50%_0%,#2b2b2b_0%,#141414_55%,#000000_100%)]',
         phase === 'leaving' ? 'splash-leaving' : '',
       ].join(' ')}
       role="presentation"
@@ -73,17 +74,14 @@ export function SplashScreen({ name, onDone }: SplashScreenProps) {
       <div className="px-8 text-center">
         {phase === 'greeting' ? (
           // key 让这一屏每次进入都重新触发动画，而不是复用上一屏的动画状态
-          <p
-            key="greeting"
-            className="splash-line text-2xl font-light tracking-wide text-slate-300 md:text-3xl"
-          >
+          <p key="greeting" className="splash-line font-display text-h1 text-ink-inverse/75">
             欢迎回来，
-            <span className="font-normal text-white">{name}</span>
+            <span className="font-bold text-ink-inverse">{name}</span>
           </p>
         ) : (
           <p
             key="question"
-            className="splash-line text-3xl font-semibold tracking-tight text-white md:text-5xl"
+            className="splash-line font-display text-display font-bold tracking-tight text-ink-inverse"
           >
             今天学点什么？
           </p>
@@ -91,7 +89,9 @@ export function SplashScreen({ name, onDone }: SplashScreenProps) {
       </div>
 
       {/* 极暗的底部提示：只在不打扰的前提下告诉用户能跳过 */}
-      <p className="absolute bottom-8 text-xs tracking-widest text-slate-600">点击任意处跳过</p>
+      <p className="absolute bottom-8 text-label tracking-[0.05em] text-ink-inverse/35 uppercase">
+        点击任意处跳过
+      </p>
     </div>
   )
 }

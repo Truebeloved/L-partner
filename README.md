@@ -166,12 +166,13 @@ src/
 
 ## 文档
 
-| 文档                                                   | 内容                         |
-| ------------------------------------------------------ | ---------------------------- |
-| [`docs/architecture.md`](docs/architecture.md)         | 模块划分、数据流转、取舍     |
-| [`docs/design-decisions.md`](docs/design-decisions.md) | 每项选型的原因与被放弃的方案 |
-| [`docs/ui-spec.md`](docs/ui-spec.md)                   | 界面规格（描述整理中）       |
-| [`docs/roadmap.md`](docs/roadmap.md)                   | 开发阶段与进度               |
+| 文档                                                   | 内容                           |
+| ------------------------------------------------------ | ------------------------------ |
+| [`docs/design-system.md`](docs/design-system.md)       | 设计系统：令牌、刻意偏离与原因 |
+| [`docs/ui-spec.md`](docs/ui-spec.md)                   | 界面规格（书架、交互、动效）   |
+| [`docs/architecture.md`](docs/architecture.md)         | 模块划分、数据流转、取舍       |
+| [`docs/design-decisions.md`](docs/design-decisions.md) | 每项选型的原因与被放弃的方案   |
+| [`docs/roadmap.md`](docs/roadmap.md)                   | 开发阶段与进度                 |
 
 ---
 

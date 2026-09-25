@@ -72,34 +72,37 @@ export function TodaySidebarWidget() {
   }
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col border-t border-slate-100 px-3 pt-3">
+    <section className="flex min-h-0 flex-1 flex-col border-t border-line-soft px-3 pt-3">
       <div className="flex items-baseline justify-between px-1">
-        <h2 className="text-xs font-semibold tracking-wide text-slate-500">今日</h2>
-        <span className="text-[11px] text-slate-400">
+        <h2 className="text-label font-bold tracking-[0.05em] text-ink-soft uppercase">今日</h2>
+        <span className="text-small text-ink-faint">
           {formatDateHuman(today)} · {formatRelativeDay(today)}
         </span>
       </div>
 
       {/* 进度：细线即可，侧栏里不需要一个大进度环 */}
       <div className="mt-2 px-1">
-        <div className="flex items-baseline justify-between text-[11px]">
-          <span className="text-slate-500">
+        <div className="flex items-baseline justify-between text-small">
+          <span className="text-ink-soft">
             {totalCount === 0 ? '还没有安排' : `${doneCount} / ${totalCount} 已完成`}
           </span>
+          {/* 完成态不用绿色（单色系没有绿色），靠字重加重来表达「达成了」。
+              原来这里还缀了个彩色 emoji，与整套单色约束冲突，已去掉 */}
           {percent === 100 && totalCount > 0 && (
-            <span className="text-emerald-600">全部完成 🎉</span>
+            <span className="font-bold text-ink">全部完成</span>
           )}
         </div>
-        <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-slate-100">
+        <div className="mt-2 h-1 overflow-hidden rounded-pill bg-sunken">
           <div
-            className="h-full rounded-full bg-brand-500 transition-[width] duration-500"
+            className="h-full rounded-pill bg-ink transition-[width] duration-200 ease-out"
             style={{ width: `${percent}%` }}
           />
         </div>
       </div>
 
+      {/* 逾期是允许用红色的场景之一 —— 它就是在说「有事情已经晚了」 */}
       {overdue.length > 0 && (
-        <p className="mx-1 mt-2 rounded-md bg-amber-50 px-2 py-1 text-[11px] text-amber-700">
+        <p className="mx-1 mt-2 rounded-sm bg-alert-soft px-2 py-1 text-small text-alert">
           另有 {overdue.length} 项逾期未完成
         </p>
       )}
@@ -107,16 +110,16 @@ export function TodaySidebarWidget() {
       {/* 列表自己滚动：侧栏高度必须守恒，不能待办一多就把导航挤出去 */}
       <ul className="mt-2 min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-0.5">
         {todayTodos.length === 0 ? (
-          <li className="px-1 py-3 text-[11px] leading-relaxed text-slate-400">
+          <li className="px-1 py-3 text-small leading-relaxed text-ink-faint">
             今天还没有安排。去书架打开一门课程生成学习计划。
           </li>
         ) : (
           todayTodos.map((todo) => (
             <li key={todo.id}>
-              <label className="flex cursor-pointer items-start gap-2 rounded-md px-1.5 py-1.5 hover:bg-slate-50">
+              <label className="flex cursor-pointer items-start gap-2 rounded-sm px-1.5 py-1.5 transition-all duration-200 ease-out hover:bg-ink/5">
                 <input
                   type="checkbox"
-                  className="mt-0.5 size-3.5 shrink-0 accent-brand-600"
+                  className="mt-0.5 size-3.5 shrink-0 accent-ink"
                   checked={todo.done}
                   aria-label={`完成「${todo.title}」`}
                   onChange={() => handleToggle(todo)}
@@ -125,14 +128,14 @@ export function TodaySidebarWidget() {
                   <span
                     className={
                       todo.done
-                        ? 'block text-xs leading-snug text-slate-400 line-through'
-                        : 'block text-xs leading-snug text-slate-700'
+                        ? 'block text-small leading-snug text-ink-faint line-through'
+                        : 'block text-small leading-snug text-ink'
                     }
                   >
                     {todo.title}
                   </span>
                   {todo.courseId && courseTitles.get(todo.courseId) && (
-                    <span className="mt-0.5 block truncate text-[10px] text-slate-400">
+                    <span className="mt-0.5 block truncate text-micro text-ink-faint">
                       {courseTitles.get(todo.courseId)}
                     </span>
                   )}
@@ -145,7 +148,7 @@ export function TodaySidebarWidget() {
 
       <form onSubmit={handleAdd} className="mt-2 px-1 pb-3">
         <input
-          className="input py-1.5 text-xs"
+          className="input py-1.5 text-small"
           placeholder="添加今日待办…"
           aria-label="添加今日待办"
           value={draft}

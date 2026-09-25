@@ -25,10 +25,10 @@ const PERSISTED_STORES: { persist: { rehydrate: () => Promise<void> | void } }[]
 
 function SplashScreen() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50">
+    <div className="flex min-h-screen items-center justify-center bg-surface">
       <div className="text-center">
-        <div className="animate-pulse text-4xl">📘</div>
-        <p className="mt-3 text-sm text-slate-400">正在读取本地数据…</p>
+        <div className="animate-pulse font-display text-h1 font-bold text-ink">L-partner</div>
+        <p className="hint mt-2">正在读取本地数据…</p>
       </div>
     </div>
   )

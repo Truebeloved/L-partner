@@ -114,27 +114,29 @@ export function CourseFormDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 p-4 sm:p-8">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-ink/40 p-4 sm:p-8">
       <div
         role="dialog"
         aria-modal="true"
         aria-label="新建课程"
-        className="mx-auto w-full max-w-3xl rounded-xl bg-white p-6 shadow-xl"
+        className="mx-auto w-full max-w-3xl rounded-card bg-raised p-6 shadow-pop"
       >
         <header className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">新建课程</h2>
-            <p className="muted mt-1 text-xs">
+            <h2 className="card-title">新建课程</h2>
+            <p className="mt-1 text-small text-ink-soft">
               填完保存后进入课程详情，再生成学习计划与今日待办。时长留空会按知识点数量估算。
             </p>
           </div>
-          <button type="button" className="btn btn-ghost px-2 py-1" onClick={onCancel}>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onCancel}>
             关闭
           </button>
         </header>
 
+        {/* AI 初稿提示。原来是紫色信息块 —— 单色系里没有「信息色」，
+            用中性底纹表达「这是一段说明」即可 */}
         {fromAi && (
-          <p className="mt-4 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs text-brand-800">
+          <p className="mt-4 rounded-sm bg-ink/5 px-3 py-2 text-small text-ink">
             以下内容是 AI 生成的初稿。阶段、单元、时长都可以直接改 —— 确认无误再保存。
           </p>
         )}
@@ -194,7 +196,7 @@ export function CourseFormDialog({
                 value={form.weeklyHours}
                 onChange={(event) => patch({ weeklyHours: event.target.value })}
               />
-              <p className="muted mt-1 text-xs">排期按它推算每天该学多久。</p>
+              <p className="mt-1 text-small text-ink-soft">排期按它推算每天该学多久。</p>
             </div>
             <div>
               <label className="label" htmlFor="course-description">
@@ -213,12 +215,12 @@ export function CourseFormDialog({
 
         <section className="mt-6">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-slate-900">
+            <h3 className="text-body font-bold text-ink">
               阶段与单元（{form.stages.length} 个阶段）
             </h3>
             <button
               type="button"
-              className="btn btn-outline px-2.5 py-1 text-xs"
+              className="btn btn-secondary btn-sm"
               onClick={() =>
                 setForm((previous) => ({
                   ...previous,
@@ -232,7 +234,7 @@ export function CourseFormDialog({
 
           <div className="mt-3 space-y-4">
             {form.stages.map((stage, stageIndex) => (
-              <div key={stageIndex} className="rounded-lg border border-slate-200 p-4">
+              <div key={stageIndex} className="rounded-card border border-line-soft p-4">
                 <div className="flex flex-wrap items-end gap-3">
                   <div className="min-w-[200px] flex-1">
                     <label className="label">阶段 {stageIndex + 1} 标题</label>
@@ -257,7 +259,7 @@ export function CourseFormDialog({
                   {form.stages.length > 1 && (
                     <button
                       type="button"
-                      className="btn btn-danger px-2.5 py-1 text-xs"
+                      className="btn btn-danger btn-sm"
                       onClick={() =>
                         setForm((previous) => ({
                           ...previous,
@@ -271,8 +273,11 @@ export function CourseFormDialog({
                 </div>
 
                 <div className="mt-4 space-y-3">
+                  {/* 单元块需要「比白略深一点」的凹陷感来和白色卡片分层。
+                      单色系里没有「极浅灰」档位：surface(#d0d0d0) 会重得像一块砖，
+                      ink/5 才是这里要的效果 */}
                   {stage.units.map((unit, unitIndex) => (
-                    <div key={unitIndex} className="rounded-md bg-slate-50 p-3">
+                    <div key={unitIndex} className="rounded-sm bg-ink/5 p-3">
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div>
                           <label className="label">单元标题</label>
@@ -318,7 +323,7 @@ export function CourseFormDialog({
                         <div className="mt-2 text-right">
                           <button
                             type="button"
-                            className="btn btn-danger px-2 py-0.5 text-xs"
+                            className="btn btn-danger btn-sm"
                             onClick={() => removeUnit(stageIndex, unitIndex)}
                           >
                             删除单元
@@ -331,7 +336,7 @@ export function CourseFormDialog({
 
                 <button
                   type="button"
-                  className="btn btn-outline mt-3 px-2.5 py-1 text-xs"
+                  className="btn btn-secondary btn-sm mt-3"
                   onClick={() => addUnit(stageIndex)}
                 >
                   ＋ 新增单元
@@ -341,14 +346,15 @@ export function CourseFormDialog({
           </div>
         </section>
 
+        {/* 表单校验失败是错误信息，属于红色允许出现的场景 */}
         {error && (
-          <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          <p className="mt-4 rounded-sm border border-alert bg-alert-soft px-3 py-2 text-small text-alert">
             {error}
           </p>
         )}
 
         <footer className="mt-6 flex justify-end gap-2">
-          <button type="button" className="btn btn-outline" onClick={onCancel}>
+          <button type="button" className="btn btn-secondary" onClick={onCancel}>
             取消
           </button>
           <button type="button" className="btn btn-primary" onClick={handleSubmit}>

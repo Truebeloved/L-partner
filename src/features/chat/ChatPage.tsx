@@ -71,10 +71,10 @@ export function ChatPage() {
 
   if (!hasLlm) {
     return (
-      <div className="mx-auto max-w-xl pt-10">
+      <div className="mx-auto max-w-xl px-4 pt-10">
         <div className="card text-center">
-          <div className="text-4xl">🔑</div>
-          <h2 className="mt-4 text-lg font-semibold text-slate-900">先接入你的大模型 API</h2>
+          <div className="text-display">🔑</div>
+          <h2 className="card-title mt-4">先接入你的大模型 API</h2>
           <p className="muted mx-auto mt-2 max-w-md leading-relaxed">
             学伴由你自己的模型驱动，L-partner 不内置密钥、也没有服务端。 填入 API
             地址与密钥后，对话、教学方案生成和记忆抽取就都能用了。
@@ -84,7 +84,7 @@ export function ChatPage() {
               去设置里填写
             </Link>
           </div>
-          <p className="mt-5 border-t border-slate-100 pt-4 text-xs text-slate-400">
+          <p className="mt-5 border-t border-line-soft pt-4 text-small text-ink-faint">
             没有 API Key 也不影响使用：课程、学习计划、每日待办和提醒都可以正常工作。
           </p>
         </div>
@@ -93,11 +93,13 @@ export function ChatPage() {
   }
 
   return (
-    <div className="flex h-[calc(100dvh-7.5rem)] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white md:h-[calc(100dvh-4rem)]">
+    /* 外壳已改为「主区域自己滚动」，所以这里用 h-full 填满可用高度，
+       而不是再按视口高度做减法（那会因为侧栏结构的调整而算错，留出一截空白） */
+    <div className="flex h-full flex-col overflow-hidden rounded-card border border-line-soft bg-raised">
       {/* 顶栏：角色、课程、记忆状态 */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-3 py-2.5">
+      <div className="flex flex-wrap items-center gap-2 border-b border-line-soft px-3 py-2.5">
         <select
-          className="input w-auto py-1.5 text-sm"
+          className="input w-auto py-1.5"
           value={settings.activePersonaId}
           onChange={(event) => {
             update({ activePersonaId: event.target.value })
@@ -113,7 +115,7 @@ export function ChatPage() {
         </select>
 
         <select
-          className="input w-auto py-1.5 text-sm"
+          className="input w-auto py-1.5"
           value={conversation?.courseId ?? ''}
           onChange={(event) => {
             const courseId = event.target.value || undefined
@@ -131,19 +133,18 @@ export function ChatPage() {
 
         <div className="ml-auto flex items-center gap-2">
           {session.usedMemoryCount > 0 && (
-            <span
-              className="badge bg-brand-50 text-brand-700"
-              title="本轮回答注入的记忆条数，可在「记忆」页查看和修改"
-            >
+            <span className="badge" title="本轮回答注入的记忆条数，可在「记忆」页查看和修改">
               🧠 引用 {session.usedMemoryCount} 条记忆
             </span>
           )}
-          <span className="badge hidden bg-slate-100 text-slate-500 sm:inline-flex">
+          {/* 计数标签做成无边框浅底：它和上面的引用标签不是同级信息，
+              用同一套外框会让两个标签抢注意力 */}
+          <span className="badge hidden border-transparent bg-ink/5 text-ink-soft sm:inline-flex">
             共 {memoryCount} 条记忆
           </span>
           <button
             type="button"
-            className="btn btn-outline px-2.5 py-1.5 text-xs"
+            className="btn btn-secondary btn-sm"
             onClick={handleRemember}
             disabled={messages.length === 0}
             title="不等自动抽取，立刻让学伴把这次对话记下来"
@@ -152,7 +153,7 @@ export function ChatPage() {
           </button>
           {conversations.length > 0 && (
             <select
-              className="input w-auto py-1.5 text-xs"
+              className="input w-auto py-1.5 text-small"
               value={conversation?.id ?? ''}
               onChange={(event) => setActive(event.target.value || null)}
             >
@@ -165,7 +166,7 @@ export function ChatPage() {
           )}
           <button
             type="button"
-            className="btn btn-outline px-2.5 py-1.5 text-xs"
+            className="btn btn-secondary btn-sm"
             onClick={() => createConversation(settings.activePersonaId, conversation?.courseId)}
           >
             新对话
@@ -174,13 +175,11 @@ export function ChatPage() {
       </div>
 
       {/* 消息区 */}
-      <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto bg-slate-50 px-4 py-5">
+      <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto bg-surface px-4 py-5">
         {messages.length === 0 ? (
           <div className="mx-auto max-w-lg pt-6 text-center">
-            <div className="text-4xl">{activePersona?.avatar ?? '💬'}</div>
-            <h2 className="mt-3 font-semibold text-slate-900">
-              我是{activePersona?.name ?? '你的学伴'}
-            </h2>
+            <div className="text-display">{activePersona?.avatar ?? '💬'}</div>
+            <h2 className="card-title mt-3">我是{activePersona?.name ?? '你的学伴'}</h2>
             <p className="muted mt-1.5 leading-relaxed">
               {activePersona?.speakingStyle ?? '有什么想问的，直接说'}
             </p>
@@ -190,7 +189,7 @@ export function ChatPage() {
                   <button
                     key={suggestion}
                     type="button"
-                    className="btn btn-outline text-xs"
+                    className="btn btn-secondary btn-sm"
                     onClick={() => handleSend(suggestion)}
                   >
                     {suggestion}
@@ -206,17 +205,19 @@ export function ChatPage() {
         )}
       </div>
 
+      {/* 错误条：这是 alert 红正当的使用场景（真的出错了） */}
       {session.error && (
-        <div className="border-t border-red-200 bg-red-50 px-4 py-2.5 text-sm">
-          <p className="font-medium text-red-700">{session.error.message}</p>
+        <div className="border-t border-alert bg-alert-soft px-4 py-2.5 text-body">
+          <p className="font-bold text-alert">{session.error.message}</p>
           {session.error.hint && (
-            <p className="mt-0.5 text-xs leading-relaxed text-red-600">{session.error.hint}</p>
+            <p className="mt-1 text-small leading-relaxed text-alert">{session.error.hint}</p>
           )}
         </div>
       )}
 
+      {/* 提示条：中性信息，用浅灰底而不是彩色 —— 单色系统里没有"信息色" */}
       {notice && (
-        <div className="border-t border-brand-100 bg-brand-50 px-4 py-2 text-sm text-brand-700">
+        <div className="border-t border-line-soft bg-ink/5 px-4 py-2 text-body text-ink">
           {notice}
         </div>
       )}

@@ -1,5 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 
+import { ReminderProvider } from '@/features/reminder/ReminderProvider'
+
 interface NavItem {
   to: string
   label: string
@@ -33,55 +35,57 @@ function navLinkClass({ isActive }: { isActive: boolean }): string {
  */
 export function AppLayout() {
   return (
-    <div className="flex min-h-screen flex-col md:flex-row">
-      {/* 桌面端侧边栏 */}
-      <aside className="hidden shrink-0 border-r border-slate-200 bg-white md:flex md:w-56 md:flex-col">
-        <div className="flex items-center gap-2.5 px-5 py-5">
-          <span className="text-2xl leading-none">📘</span>
-          <div>
-            <div className="text-sm font-semibold text-slate-900">L-partner</div>
-            <div className="text-[11px] text-slate-400">你的学习搭档</div>
+    <ReminderProvider>
+      <div className="flex min-h-screen flex-col md:flex-row">
+        {/* 桌面端侧边栏 */}
+        <aside className="hidden shrink-0 border-r border-slate-200 bg-white md:flex md:w-56 md:flex-col">
+          <div className="flex items-center gap-2.5 px-5 py-5">
+            <span className="text-2xl leading-none">📘</span>
+            <div>
+              <div className="text-sm font-semibold text-slate-900">L-partner</div>
+              <div className="text-[11px] text-slate-400">你的学习搭档</div>
+            </div>
           </div>
-        </div>
-        <nav className="flex-1 space-y-1 px-3 pb-4">
+          <nav className="flex-1 space-y-1 px-3 pb-4">
+            {NAV_ITEMS.map((item) => (
+              <NavLink key={item.to} to={item.to} end={item.end} className={navLinkClass}>
+                <span className="text-base leading-none">{item.icon}</span>
+                {item.label}
+              </NavLink>
+            ))}
+          </nav>
+        </aside>
+
+        {/* 移动端顶部标题 */}
+        <header className="flex items-center gap-2 border-b border-slate-200 bg-white px-4 py-3 md:hidden">
+          <span className="text-xl leading-none">📘</span>
+          <span className="font-semibold text-slate-900">L-partner</span>
+        </header>
+
+        <main className="min-w-0 flex-1 px-4 pt-6 pb-24 md:px-8 md:pb-10">
+          <Outlet />
+        </main>
+
+        {/* 移动端底部导航 */}
+        <nav className="fixed inset-x-0 bottom-0 z-20 flex border-t border-slate-200 bg-white md:hidden">
           {NAV_ITEMS.map((item) => (
-            <NavLink key={item.to} to={item.to} end={item.end} className={navLinkClass}>
-              <span className="text-base leading-none">{item.icon}</span>
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.end}
+              className={({ isActive }) =>
+                [
+                  'flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-medium transition',
+                  isActive ? 'text-brand-600' : 'text-slate-400',
+                ].join(' ')
+              }
+            >
+              <span className="text-lg leading-none">{item.icon}</span>
               {item.label}
             </NavLink>
           ))}
         </nav>
-      </aside>
-
-      {/* 移动端顶部标题 */}
-      <header className="flex items-center gap-2 border-b border-slate-200 bg-white px-4 py-3 md:hidden">
-        <span className="text-xl leading-none">📘</span>
-        <span className="font-semibold text-slate-900">L-partner</span>
-      </header>
-
-      <main className="min-w-0 flex-1 px-4 pt-6 pb-24 md:px-8 md:pb-10">
-        <Outlet />
-      </main>
-
-      {/* 移动端底部导航 */}
-      <nav className="fixed inset-x-0 bottom-0 z-20 flex border-t border-slate-200 bg-white md:hidden">
-        {NAV_ITEMS.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.end}
-            className={({ isActive }) =>
-              [
-                'flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-medium transition',
-                isActive ? 'text-brand-600' : 'text-slate-400',
-              ].join(' ')
-            }
-          >
-            <span className="text-lg leading-none">{item.icon}</span>
-            {item.label}
-          </NavLink>
-        ))}
-      </nav>
-    </div>
+      </div>
+    </ReminderProvider>
   )
 }

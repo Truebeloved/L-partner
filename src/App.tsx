@@ -3,7 +3,7 @@ import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from '@/components/AppLayout'
 import { ChatPage } from '@/features/chat/ChatPage'
 import { CourseDetailPage } from '@/features/course/CourseDetailPage'
-import { CoursesPage } from '@/features/course/CoursesPage'
+import { CoursesRoute } from '@/features/course/CoursesRoute'
 import { MemoryPage } from '@/features/memory/MemoryPage'
 import { PersonaPage } from '@/features/persona/PersonaPage'
 import { SettingsPage } from '@/features/settings/SettingsPage'
@@ -20,7 +20,7 @@ export default function App() {
       <Routes>
         <Route element={<AppLayout />}>
           <Route index element={<TodayPage />} />
-          <Route path="courses" element={<CoursesPage />} />
+          <Route path="courses" element={<CoursesRoute />} />
           <Route path="courses/:courseId" element={<CourseDetailPage />} />
           <Route path="chat" element={<ChatPage />} />
           <Route path="memory" element={<MemoryPage />} />

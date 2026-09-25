@@ -11,6 +11,10 @@ interface ChatState {
   getById: (id: Id) => Conversation | undefined
   create: (personaId: Id, courseId?: Id) => Id
   setActive: (id: Id | null) => void
+  /** 切换当前会话绑定的课程 —— 决定回答时注入哪门课的情境 */
+  setCourse: (conversationId: Id, courseId: Id | undefined) => void
+  /** 切换角色。记忆是跨角色共享的，所以这里只换「谁在教」 */
+  setPersona: (conversationId: Id, personaId: Id) => void
   appendMessage: (conversationId: Id, message: Pick<ChatMessage, 'role' | 'content'>) => Id
   updateMessage: (conversationId: Id, messageId: Id, patch: Partial<ChatMessage>) => void
   /** 记忆第 1 层：会话过长时写入的摘要压缩结果 */
@@ -47,6 +51,20 @@ export const useChatStore = create<ChatState>()(
       },
 
       setActive: (id) => set({ activeId: id }),
+
+      setCourse: (conversationId, courseId) =>
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c.id === conversationId ? { ...c, courseId } : c,
+          ),
+        })),
+
+      setPersona: (conversationId, personaId) =>
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c.id === conversationId ? { ...c, personaId } : c,
+          ),
+        })),
 
       appendMessage: (conversationId, message) => {
         const full: ChatMessage = {

@@ -12,10 +12,14 @@ interface PageHeaderProps {
  */
 export function PageHeader({ title, description, actions }: PageHeaderProps) {
   return (
-    // pt-8：页面标题原来是"顶格"的 —— 窗口内容区从最顶端开始，标题直接贴边，
-    // 看起来像被裁掉了。桌面端页边距是 24px，纵向刻意给到 32px：
-    // 横向留白由内容宽度天然提供，纵向必须手动给够才不压抑。
-    <div className="mb-6 flex flex-wrap items-start justify-between gap-4 pt-8">
+    /*
+     * 容器宽度必须和 .page-container 完全一致（max-w-3xl + px-8）。
+     *
+     * 之前 PageHeader 是**裸渲染在 <main> 里**的：标题铺满整行、而卡片在居中的容器里，
+     * 于是标题贴左边、内容在中间，看起来像"标题顶满了左右"。
+     * 让两者共用同一套宽度，对齐就是自然而然的结果，不必去改每个页面的结构。
+     */
+    <div className="mx-auto flex w-full max-w-3xl flex-wrap items-start justify-between gap-4 px-8 pt-8 pb-6">
       <div className="min-w-0">
         <h1 className="page-title">{title}</h1>
         {/* 设计约束：标题与下方内容间距 8px */}

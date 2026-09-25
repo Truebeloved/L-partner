@@ -3,10 +3,9 @@ import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 
 import { AppLayout } from '@/components/AppLayout'
 import { ChatPage } from '@/features/chat/ChatPage'
+import { CompanionPage } from '@/features/companion/CompanionPage'
 import { CourseStudyPage } from '@/features/course/CourseStudyPage'
 import { CoursesRoute } from '@/features/course/CoursesRoute'
-import { MemoryPage } from '@/features/memory/MemoryPage'
-import { PersonaPage } from '@/features/persona/PersonaPage'
 import { SettingsPage } from '@/features/settings/SettingsPage'
 import { ShelfPage } from '@/features/shelf/ShelfPage'
 import { SplashScreen } from '@/features/splash/SplashScreen'
@@ -74,8 +73,10 @@ export default function App() {
                 （逾期分区、提醒状态、手动添加）。侧栏里放「查看全部」入口。 */}
             <Route path="today" element={<TodayPage />} />
             <Route path="chat" element={<ChatPage />} />
-            <Route path="memory" element={<MemoryPage />} />
-            <Route path="personas" element={<PersonaPage />} />
+            {/* 角色与记忆合并为「学伴」，旧路径保留重定向，避免旧书签直接白屏 */}
+            <Route path="companion" element={<CompanionPage />} />
+            <Route path="memory" element={<Navigate to="/companion" replace />} />
+            <Route path="personas" element={<Navigate to="/companion" replace />} />
             <Route path="settings" element={<SettingsPage />} />
             {/* 过渡期：添加/编辑课程的表单页，等导航栏定稿后会改成弹窗入口 */}
             <Route path="courses" element={<CoursesRoute />} />

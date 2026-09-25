@@ -1,6 +1,5 @@
 import { useState } from 'react'
 
-import { PageHeader } from '@/components/PageHeader'
 import { PersonaAvatar } from '@/components/PersonaAvatar'
 import { AVATAR_KEYS } from '@/components/avatar-marks'
 import { usePersonaStore } from '@/store/personas'
@@ -18,7 +17,7 @@ const EMPTY_DRAFT: PersonaDraft = {
   taboos: '',
 }
 
-export function PersonaPage() {
+export function PersonaSection() {
   const personas = usePersonaStore((state) => state.personas)
   const addPersona = usePersonaStore((state) => state.add)
   const duplicatePersona = usePersonaStore((state) => state.duplicate)
@@ -70,26 +69,21 @@ export function PersonaPage() {
   }
 
   return (
-    <>
-      <PageHeader
-        title="角色"
-        description="决定你的学伴是谁、用什么方式教你"
-        actions={
-          <button type="button" className="btn btn-primary" onClick={startCreate}>
-            新建角色
-          </button>
-        }
-      />
+    <div className="space-y-6">
+      {/* 角色与记忆合并成「学伴设定」之后，页面标题由 CompanionPage 提供，
+          操作按钮留在本区块内 —— 它只属于角色，不该出现在记忆那一栏 */}
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-body leading-relaxed text-ink-soft">
+          记忆是<strong className="font-bold text-ink">跟着你</strong>的，角色只决定
+          <strong className="font-bold text-ink">现在是谁在教你</strong>
+          。随时切换角色都不会丢记忆。
+        </p>
+        <button type="button" className="btn btn-primary btn-sm shrink-0" onClick={startCreate}>
+          新建角色
+        </button>
+      </div>
 
-      <div className="page-container space-y-8">
-        <section className="card-flat bg-ink/5">
-          <p className="text-body leading-relaxed text-ink-soft">
-            记忆是<strong className="font-bold text-ink">跟着你</strong>的，角色只决定
-            <strong className="font-bold text-ink">现在是谁在教你</strong>
-            。所以随时切换角色都不会丢记忆 —— 换个老师，他依然知道你哪块薄弱。
-          </p>
-        </section>
-
+      <div className="space-y-6">
         {/* 编辑区用一道实心黑边强调"正在编辑"，而不是彩色边框 ——
             单色系统里加强层级只能靠边框粗细/深浅与底色，不靠颜色 */}
         {editing !== null && (
@@ -261,7 +255,7 @@ export function PersonaPage() {
           })}
         </div>
       </div>
-    </>
+    </div>
   )
 }
 

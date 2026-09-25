@@ -24,9 +24,8 @@ const ROUTES = [
   ['2-courses', '/courses'],
   ['3-today', '/today'],
   ['4-chat', '/chat'],
-  ['5-memory', '/memory'],
-  ['6-personas', '/personas'],
-  ['7-settings', '/settings'],
+  ['5-companion-persona', '/companion'],
+  ['6-settings', '/settings'],
 ]
 
 /** 单次路由切换后的等待：状态是同步的，留 700ms 给动效收尾 */
@@ -252,6 +251,26 @@ app.whenReady().then(async () => {
     await window.webContents.executeJavaScript(`location.hash = '#${route}'`)
     await sleep(ROUTE_WAIT)
     await capture(window, name)
+  }
+
+  // 学伴设定的两个标签是组件内部状态，hash 切不过去，只能真的点一下
+  await window.webContents.executeJavaScript(`location.hash = '#/companion'`)
+  await sleep(ROUTE_WAIT)
+  const switched = await window.webContents.executeJavaScript(`
+    (() => {
+      const tab = [...document.querySelectorAll('button')].find(
+        (node) => node.textContent.trim() === '记忆',
+      )
+      if (!tab) return false
+      tab.click()
+      return true
+    })()
+  `)
+  if (switched) {
+    await sleep(ROUTE_WAIT)
+    await capture(window, '8-companion-memory')
+  } else {
+    console.warn('  ⚠ 没找到「记忆」标签，跳过该截图')
   }
 
   console.log(`\n已输出到 ${OUT_DIR}`)

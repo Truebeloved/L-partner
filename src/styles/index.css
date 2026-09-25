@@ -239,7 +239,7 @@
    * 书架页不用这个类：书架需要按自己的规则铺开（见 ShelfPage 的注释）。
    */
   .page-container {
-    @apply mx-auto w-full max-w-4xl px-8 pb-10;
+    @apply mx-auto w-full max-w-3xl px-8 pb-10;
   }
 }
 

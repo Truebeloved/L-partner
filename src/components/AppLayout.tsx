@@ -22,8 +22,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { to: '/', label: '书架', icon: 'shelf', end: true },
   { to: '/chat', label: '学伴对话', icon: 'chat' },
-  { to: '/memory', label: '记忆', icon: 'layers' },
-  { to: '/personas', label: '角色', icon: 'user' },
+  { to: '/companion', label: '学伴设定', icon: 'user' },
   { to: '/settings', label: '设置', icon: 'sliders' },
   { to: '/courses', label: '添加书籍', icon: 'plus' },
 ]

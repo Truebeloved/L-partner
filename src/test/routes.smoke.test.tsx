@@ -1,7 +1,15 @@
-import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { cleanup, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import App from '@/App'
+
+/**
+ * vitest 没开 globals，Testing Library 的自动清理不生效 ——
+ * 不手动清理的话，每个用例渲染的 DOM 都会留在 document 上，
+ * 下一个用例就会「找到多个同名元素」而失败，而且失败信息会指向无辜的选择器。
+ */
+afterEach(cleanup)
 
 /**
  * 路由冒烟测试。
@@ -40,14 +48,22 @@ describe('路由冒烟', () => {
     expect(await screen.findByText('先接入你的大模型 API')).toBeInTheDocument()
   })
 
-  it('记忆页可渲染', async () => {
-    renderAt('#/memory')
+  it('学伴设定可渲染，默认落在角色标签，且内置角色存在', async () => {
+    renderAt('#/companion')
+    expect(await screen.findByRole('heading', { name: '学伴设定' })).toBeInTheDocument()
+    expect(await screen.findByText('耐心学长')).toBeInTheDocument()
+  })
+
+  it('切到记忆标签后能看到四层说明', async () => {
+    const user = userEvent.setup()
+    renderAt('#/companion')
+    await user.click(await screen.findByRole('button', { name: '记忆' }))
     expect(await screen.findByText('记忆分四层')).toBeInTheDocument()
   })
 
-  it('角色页可渲染，且内置角色存在', async () => {
-    renderAt('#/personas')
-    expect(await screen.findByText('耐心学长')).toBeInTheDocument()
+  it('旧的 /memory 与 /personas 路径会重定向到学伴设定', async () => {
+    renderAt('#/memory')
+    expect(await screen.findByRole('heading', { name: '学伴设定' })).toBeInTheDocument()
   })
 
   it('设置页可渲染', async () => {

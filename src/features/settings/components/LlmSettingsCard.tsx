@@ -1,5 +1,6 @@
 import { useState } from 'react'
 
+import { Icon } from '@/components/Icon'
 import { createProvider } from '@/lib/llm'
 import { LlmError } from '@/lib/llm/types'
 import { useSettingsStore } from '@/store/settings'
@@ -203,7 +204,11 @@ export function LlmSettingsCard() {
 
           {/* 成功态：单色系统里没有绿色。连接成功是一个"事实陈述"，
               不是需要警觉的事，所以用中性徽章而不是 alert 红 */}
-          {test.status === 'ok' && <span className="badge">✅ 连接成功</span>}
+          {test.status === 'ok' && (
+            <span className="badge">
+              <Icon name="check" size={12} /> 连接成功
+            </span>
+          )}
         </div>
 
         {/* 错误态：这是 alert 红的正当使用场景 */}

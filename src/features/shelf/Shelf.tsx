@@ -13,12 +13,17 @@ import { useTodoStore } from '@/store/todos'
 import type { Id } from '@/types/models'
 
 /** 书与书之间的缝 */
-const GAP = 14
+const GAP = 12
 const PADDING_X = 24
-const BASE_HEIGHT = 196
+/**
+ * 基准尺寸按真实书籍比例定：厚高比约 1:3.7。
+ * 之前是 88×196（约 1:2.2），八本并排看着像一排白柱子而不是书 ——
+ * 这个比例是「像书」与「一排能放下八本」之间的平衡点。
+ */
+const BASE_HEIGHT = 232
 /** 书的厚度会随可用宽度伸缩，但夹在这个区间内 —— 太薄不像书，太厚一排八本就放不下 */
-const MIN_THICKNESS = 44
-const MAX_THICKNESS = 88
+const MIN_THICKNESS = 34
+const MAX_THICKNESS = 62
 /** 默认宽度取标准窗口下一整排 8 本的档位；真实宽度由 ResizeObserver 立刻修正 */
 const DEFAULT_WIDTH = 1200
 
@@ -135,62 +140,65 @@ export function Shelf() {
   }
 
   return (
-    <div ref={containerRef} data-testid="shelf-surface" className="relative px-6 pb-6">
+    <div ref={containerRef} data-testid="shelf-surface" className="flex flex-1 flex-col px-6 pb-6">
+      <div className="flex flex-col gap-1">
+        {layout.rows.map((row) => (
+          // 隔板宽度要跟这一排书一致，所以整排（书 + 板）包在同一个 inline-block 里；
+          // 直接把板拉满整页宽度会变成一条贯穿屏幕的横线，不像书架
+          <div key={row.index} className="flex justify-center">
+            <div className="inline-block">
+              <div className="flex items-end" style={{ gap: GAP, minHeight: MAX_BOOK_HEIGHT }}>
+                {row.slots.map((slot) =>
+                  slot.kind === 'course' ? (
+                    <span key={slot.key} data-shelf-interactive className="flex items-end">
+                      <BookSpine
+                        title={courseById.get(slot.key)?.title ?? ''}
+                        seed={slot.seed}
+                        baseThickness={baseThickness}
+                        baseHeight={BASE_HEIGHT}
+                        selected={selectedId === slot.key}
+                        progress={progressByCourse.get(slot.key) ?? 0}
+                        onClick={(event) => handleBookClick(slot.key, event.currentTarget)}
+                      />
+                    </span>
+                  ) : (
+                    <BlankSpine
+                      key={slot.key}
+                      seed={slot.seed}
+                      baseThickness={baseThickness}
+                      baseHeight={BASE_HEIGHT}
+                    />
+                  ),
+                )}
+              </div>
+
+              {/* 隔板：有了它整排书才"站"在什么东西上，否则像悬空漂浮。
+                  用中性灰而不是木色 —— 单色系统里木色会和书脊争色彩注意力 */}
+              <div
+                className="h-1.5 rounded-sm"
+                style={{
+                  background: 'linear-gradient(to bottom, #b4b4b4 0%, #9a9a9a 100%)',
+                  boxShadow: '0 3px 6px -4px rgba(0, 0, 0, 0.28)',
+                }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 空状态放在书架下方的留白区，而不是浮在书上 ——
+          浮层压住书脊既看不清又像渲染出错，放在下方的空区域反而把"空"变成了设计的一部分 */}
       {courses.length === 0 && (
-        <div className="pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center">
-          <div className="pointer-events-auto rounded-card border border-line-soft bg-raised/95 px-4 py-3 text-center shadow-lift backdrop-blur">
-            <p className="text-body font-bold text-ink">书架还是空的</p>
-            <p className="hint mt-1">建立第一门课程，它就会成为这里的一本书</p>
-            <Link to="/courses" className="btn btn-primary btn-sm mt-2">
+        <div className="grid flex-1 place-items-center pt-10">
+          <div className="text-center">
+            <p className="font-display text-h3 font-bold text-ink">书架还是空的</p>
+            <p className="hint mt-2">建立第一门课程，它就会成为这里的一本书</p>
+            <Link to="/courses" className="btn btn-primary btn-sm mt-4">
               添加课程
             </Link>
           </div>
         </div>
       )}
-
-      <div className="flex flex-col gap-1">
-        {layout.rows.map((row) => (
-          <div key={row.index}>
-            <div
-              className="flex items-end justify-center"
-              style={{ gap: GAP, minHeight: MAX_BOOK_HEIGHT }}
-            >
-              {row.slots.map((slot) =>
-                slot.kind === 'course' ? (
-                  <span key={slot.key} data-shelf-interactive className="flex items-end">
-                    <BookSpine
-                      title={courseById.get(slot.key)?.title ?? ''}
-                      seed={slot.seed}
-                      baseThickness={baseThickness}
-                      baseHeight={BASE_HEIGHT}
-                      selected={selectedId === slot.key}
-                      progress={progressByCourse.get(slot.key) ?? 0}
-                      onClick={(event) => handleBookClick(slot.key, event.currentTarget)}
-                    />
-                  </span>
-                ) : (
-                  <BlankSpine
-                    key={slot.key}
-                    seed={slot.seed}
-                    baseThickness={baseThickness}
-                    baseHeight={BASE_HEIGHT}
-                  />
-                ),
-              )}
-            </div>
-
-            {/* 隔板：有了它整排书才"站"在什么东西上，否则像悬空漂浮。
-                用中性深灰而不是木色 —— 单色系统里木色会和书脊争色彩注意力 */}
-            <div
-              className="h-2.5 rounded-sm"
-              style={{
-                background: 'linear-gradient(to bottom, #a8a8a8 0%, #8c8c8c 60%, #6f6f6f 100%)',
-                boxShadow: '0 6px 10px -6px rgba(0, 0, 0, 0.35)',
-              }}
-            />
-          </div>
-        ))}
-      </div>
 
       {selectedCourse && anchor && (
         <BookDetailPopup course={selectedCourse} plan={plans[selectedCourse.id]} anchor={anchor} />

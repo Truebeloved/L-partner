@@ -61,3 +61,6 @@ Thumbs.db
 
 # ---- local notes ----
 notes-local/
+
+# ---- UI 截图（scripts/capture-ui.cjs 的产物，仅供本地比对） ----
+.ui-shots/

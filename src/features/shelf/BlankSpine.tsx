@@ -43,14 +43,16 @@ export function BlankSpine({ seed, baseThickness, baseHeight }: BlankSpineProps)
       <span
         className="absolute inset-0 rounded-sm transition-[transform,filter] duration-200 ease-out hover:-translate-y-0.5 hover:brightness-[0.97]"
         style={{
-          background: 'linear-gradient(100deg, #e6e6e6 0%, #d4d4d4 55%, #bfbfbf 100%)',
-          boxShadow: 'inset 0 0 0 1px rgba(0, 0, 0, 0.07)',
+          // 比页面底色的 #d0d0d0 稍微亮一点点：读起来是"一格没印内容的位置"，
+          // 而不是一本纯白的书。之前的 #e6e6e6 起手太亮，八本并排像一排白柱子
+          background: 'linear-gradient(100deg, #dcdcdc 0%, #cfcfcf 55%, #bfbfbf 100%)',
+          boxShadow: 'inset 0 0 0 1px rgba(0, 0, 0, 0.05)',
         }}
       >
         {/* 极淡的竖向纹路，避免大片纯色显得像缺图的占位框 */}
         <span
-          className="absolute inset-y-2 left-1/2 w-px opacity-70"
-          style={{ background: 'linear-gradient(to bottom, transparent, #a8a8a8, transparent)' }}
+          className="absolute inset-y-3 left-1/2 w-px opacity-60"
+          style={{ background: 'linear-gradient(to bottom, transparent, #b0b0b0, transparent)' }}
         />
       </span>
     </div>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 
+import { Icon } from '@/components/Icon'
 import { Composer } from '@/features/chat/components/Composer'
 import { MessageBubble } from '@/features/chat/components/MessageBubble'
 import { useActiveConversation, useChatSession } from '@/features/chat/useChatSession'
@@ -71,15 +72,16 @@ export function ChatPage() {
 
   if (!hasLlm) {
     return (
-      <div className="mx-auto max-w-xl px-4 pt-10">
-        <div className="card text-center">
-          <div className="text-display">🔑</div>
-          <h2 className="card-title mt-4">先接入你的大模型 API</h2>
-          <p className="muted mx-auto mt-2 max-w-md leading-relaxed">
-            学伴由你自己的模型驱动，L-partner 不内置密钥、也没有服务端。 填入 API
-            地址与密钥后，对话、教学方案生成和记忆抽取就都能用了。
+      <div className="mx-auto max-w-md px-6 pt-12">
+        <div className="card py-10 text-center">
+          <span className="inline-flex text-ink-soft">
+            <Icon name="sliders" size={28} />
+          </span>
+          <h2 className="card-title mt-5">先接入你的大模型 API</h2>
+          <p className="muted mx-auto mt-3 max-w-sm leading-relaxed">
+            学伴由你自己的模型驱动，L-partner 不内置密钥、也没有服务端。
           </p>
-          <div className="mt-5">
+          <div className="mt-6">
             <Link to="/settings" className="btn btn-primary">
               去设置里填写
             </Link>
@@ -134,7 +136,7 @@ export function ChatPage() {
         <div className="ml-auto flex items-center gap-2">
           {session.usedMemoryCount > 0 && (
             <span className="badge" title="本轮回答注入的记忆条数，可在「记忆」页查看和修改">
-              🧠 引用 {session.usedMemoryCount} 条记忆
+              <Icon name="layers" size={12} /> 引用 {session.usedMemoryCount} 条记忆
             </span>
           )}
           {/* 计数标签做成无边框浅底：它和上面的引用标签不是同级信息，
@@ -178,12 +180,12 @@ export function ChatPage() {
       <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto bg-surface px-4 py-5">
         {messages.length === 0 ? (
           <div className="mx-auto max-w-lg pt-6 text-center">
-            <div className="text-display">{activePersona?.avatar ?? '💬'}</div>
-            <h2 className="card-title mt-3">我是{activePersona?.name ?? '你的学伴'}</h2>
-            <p className="muted mt-1.5 leading-relaxed">
+            <div className="avatar-glyph text-display">{activePersona?.avatar ?? '🙂'}</div>
+            <h2 className="card-title mt-4">我是{activePersona?.name ?? '你的学伴'}</h2>
+            <p className="muted mt-2 leading-relaxed">
               {activePersona?.speakingStyle ?? '有什么想问的，直接说'}
             </p>
-            <div className="mt-5 flex flex-wrap justify-center gap-2">
+            <div className="mt-6 flex flex-wrap justify-center gap-4">
               {(conversation?.courseId ? COURSE_SUGGESTIONS : DEFAULT_SUGGESTIONS).map(
                 (suggestion) => (
                   <button

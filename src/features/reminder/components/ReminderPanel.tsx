@@ -79,12 +79,12 @@ export function ReminderPanel({
       </div>
 
       {/* 这一段原来是琥珀色警示底。按设计约束，红色只能用于逾期 / 错误 / 破坏性操作，
-          而「应用关掉后不会提醒」是一条功能限制说明，不是错误，所以用中性底纹。 */}
-      <p className="mt-4 rounded-sm bg-ink/5 px-3 py-2 text-small leading-relaxed text-ink">
-        关于限制：定时提醒只在
-        <strong className="font-bold">应用运行时</strong>
-        有效。窗口被关掉之后，没有任何代码在运行，到点不会有提醒 ——
-        这一点我们不会假装能做到。应用重新回到前台时，如果错过的提醒在 2 小时以内，会立刻补上。
+          而「应用关掉后不会提醒」是一条功能限制说明，不是错误，所以用中性底纹。
+          限制本身必须写明，但不必写成一段说明文 —— 掐掉解释、只留事实 */}
+      <p className="mt-4 rounded-sm bg-ink/5 px-3 py-2 text-small leading-relaxed text-ink-soft">
+        关于限制：只在
+        <strong className="font-bold text-ink">应用运行时</strong>
+        提醒。窗口关掉后不会有任何提醒；回到前台时，2 小时内错过的会立刻补上。
       </p>
     </section>
   )

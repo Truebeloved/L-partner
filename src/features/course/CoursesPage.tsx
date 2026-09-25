@@ -91,7 +91,7 @@ export function CoursesPage({ onGenerateWithAi }: CoursesPageProps = {}) {
     <div className="px-6 pb-8">
       <PageHeader
         title="课程"
-        description="导入课程或让 AI 帮你生成一份学习方案，再排成每天能执行的待办"
+        description="建立课程，生成学习计划与每日待办"
         actions={
           <>
             <button
@@ -111,35 +111,22 @@ export function CoursesPage({ onGenerateWithAi }: CoursesPageProps = {}) {
       />
 
       {rows.length === 0 ? (
-        <section className="card text-center">
+        <section className="card py-10 text-center">
           <h2 className="card-title">还没有课程</h2>
-          <p className="muted mx-auto mt-2 max-w-lg leading-relaxed">
-            课程是整条主循环的起点：课程 → 学习计划 → 每日待办 → 到点提醒。
-            手头没有材料也没关系，先载入一份示例课程，完整走一遍再换成你自己的目标。
+          <p className="muted mx-auto mt-3 max-w-sm leading-relaxed">
+            先载入一份示例课程走一遍，或者直接建立你自己的目标。
           </p>
 
-          <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
-            <button type="button" className="btn btn-primary px-5 py-2.5" onClick={handleLoadDemo}>
+          {/* 顶部栏已经有「新建课程」和「让 AI 帮我生成方案」，这里不再重复一遍 ——
+              同一个动作在一屏里出现两次，用户反而不知道该点哪个 */}
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-4">
+            <button type="button" className="btn btn-primary" onClick={handleLoadDemo}>
               载入示例课程
             </button>
             <button type="button" className="btn btn-secondary" onClick={openManualForm}>
               手写新建课程
             </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => setAiOpen(true)}
-              disabled={!aiReady}
-              title={aiReady ? undefined : AI_DISABLED_HINT}
-            >
-              让 AI 帮我生成方案
-            </button>
           </div>
-
-          <p className="mt-4 text-small leading-relaxed text-ink-soft">
-            「两个月上手 React」共 3 个阶段 11 个单元，载入后可直接生成学习计划与今日待办。
-            {!aiReady && ' AI 生成方案需要先在「设置」里配置大模型 API。'}
-          </p>
         </section>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">

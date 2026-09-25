@@ -8,7 +8,7 @@ import { ReminderPanel } from '@/features/reminder/components/ReminderPanel'
 import { useReminder } from '@/features/reminder/context'
 import { syncMasteryForCourse } from '@/features/memory/mastery'
 import { TodoItem } from '@/features/today/TodoItem'
-import { formatDateHuman, formatMinutes, formatRelativeDay, isOverdue, todayKey } from '@/lib/date'
+import { formatDateHuman, formatMinutes, isOverdue, todayKey } from '@/lib/date'
 import { useCourseStore } from '@/store/courses'
 import { usePlanStore } from '@/store/plans'
 import { useSettingsStore } from '@/store/settings'
@@ -110,56 +110,57 @@ export function TodayPage() {
 
   return (
     <>
-      <PageHeader
-        title="今日"
-        description={`${formatDateHuman(today)} · ${formatRelativeDay(today)}`}
-      />
+      <PageHeader title="今日" description={formatDateHuman(today)} />
 
-      <section className="card">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="text-body text-ink-soft">今日完成</p>
-            {/* 用 h1(24px) 而不是 display(42px)：这是卡片里的一个统计数字，
-                42px 会把「今日完成」这句话压成配角，层级关系反转 */}
-            <p className="tabular mt-1 font-display text-h1 font-bold text-ink">
-              {doneCount}
-              <span className="text-body text-ink-faint"> / {totalCount} 项</span>
-            </p>
+      {/* 一条待办都没有时不渲染统计卡：0 / 0 配一条全空的进度条没有任何信息量，
+          反而把「今天还没安排」这个真正有用的提示挤到下面去 */}
+      {totalCount > 0 && (
+        <section className="card">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="text-body text-ink-soft">今日完成</p>
+              {/* 用 h1(24px) 而不是 display(42px)：这是卡片里的一个统计数字，
+                  42px 会把「今日完成」这句话压成配角，层级关系反转 */}
+              <p className="tabular mt-1 font-display text-h1 font-bold text-ink">
+                {doneCount}
+                <span className="text-body text-ink-faint"> / {totalCount} 项</span>
+              </p>
+            </div>
+            <p className="text-body text-ink-soft">预计学习 {formatMinutes(plannedMinutes)}</p>
           </div>
-          <p className="text-body text-ink-soft">
-            {totalCount === 0 ? '今天还没有待办' : `预计学习 ${formatMinutes(plannedMinutes)}`}
-          </p>
-        </div>
 
-        <div
-          className="mt-4 h-2 w-full overflow-hidden rounded-pill bg-sunken"
-          role="progressbar"
-          aria-label="今日完成进度"
-          aria-valuenow={percent}
-          aria-valuemin={0}
-          aria-valuemax={100}
-        >
           <div
-            className="h-full rounded-pill bg-ink transition-all duration-200 ease-out"
-            style={{ width: `${percent}%` }}
-          />
-        </div>
+            className="mt-4 h-2 w-full overflow-hidden rounded-pill bg-sunken"
+            role="progressbar"
+            aria-label="今日完成进度"
+            aria-valuenow={percent}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <div
+              className="h-full rounded-pill bg-ink transition-all duration-200 ease-out"
+              style={{ width: `${percent}%` }}
+            />
+          </div>
 
-        {/* 完成反馈不用绿色（单色系没有绿色），靠黑字本身的前后文来表达 */}
-        {allDone && (
-          <p className="mt-4 text-body text-ink">
-            今天安排的 {totalCount} 项都打勾了。
-            {overdueTodos.length > 0 ? '逾期那几项抽空收拾一下就好。' : '剩下的时间留给自己。'}
-          </p>
-        )}
-      </section>
+          {/* 完成反馈不用绿色（单色系没有绿色），靠黑字本身的前后文来表达 */}
+          {allDone && (
+            <p className="mt-4 text-body text-ink">
+              今天安排的 {totalCount} 项都打勾了。
+              {overdueTodos.length > 0 ? '逾期那几项抽空收拾一下就好。' : '剩下的时间留给自己。'}
+            </p>
+          )}
+        </section>
+      )}
 
-      <form className="mt-6 flex gap-2" onSubmit={handleAdd}>
+      {/* 输入行套一层无阴影卡片：直接浮在页面底色上会和上下两张卡片样式不一致，
+          看起来像是忘了包一层容器 */}
+      <form className="card-flat mt-6 flex gap-4" onSubmit={handleAdd}>
         <input
           className="input"
           value={draft}
           aria-label="添加今日待办"
-          placeholder="添加一条今天的待办，回车即可（例如：复习第 3 章）"
+          placeholder="添加一条待办，回车即可"
           onChange={(event) => setDraft(event.target.value)}
         />
         <button type="submit" className="btn btn-primary shrink-0" disabled={draft.trim() === ''}>

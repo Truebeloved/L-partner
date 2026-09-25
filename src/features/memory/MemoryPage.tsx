@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 
 import { PageHeader } from '@/components/PageHeader'
+import { Icon } from '@/components/Icon'
+import type { IconName } from '@/components/Icon'
 import { MasteryHeatmap } from '@/features/memory/components/MasteryHeatmap'
 import { MemoryCard } from '@/features/memory/components/MemoryCard'
 import { useCourseStore } from '@/store/courses'
@@ -106,38 +108,35 @@ export function MemoryPage() {
             用浅底无阴影的卡片把它压成"说明性区块"，与下方功能性卡片拉开层次 */}
         <section className="card-flat bg-ink/5">
           <h2 className="section-title">记忆分四层</h2>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {/* 每一层只留一句最关键的说明。原来的两行版把这一屏变成了说明书 ——
+              需要完整解释时用户会去翻文档，界面上只要够他分辨这四层是什么 */}
+          <div className="mt-4 grid gap-x-8 gap-y-3 sm:grid-cols-2">
+            <LayerNote icon="chat" title="会话记忆" note="当前对话的上下文，过长时自动压缩" />
             <LayerNote
-              icon="💬"
-              title="会话记忆"
-              note="当前这次对话的上下文。太长时会自动压缩成摘要，所以聊很久也不会失忆。"
+              icon="user"
+              title="事实记忆"
+              count={stats.fact}
+              note="专业、目标、学习习惯"
             />
             <LayerNote
-              icon="📌"
-              title={`事实记忆（${stats.fact}）`}
-              note="关于你的稳定信息：专业、目标、学习习惯。换个角色也依然保留。"
+              icon="layers"
+              title="掌握状态"
+              count={stats.mastery}
+              note="每个知识点学到什么程度"
             />
             <LayerNote
-              icon="📈"
-              title={`掌握状态（${stats.mastery}）`}
-              note="每个知识点学到什么程度。这是「进步」唯一能被量化和看见的地方。"
-            />
-            <LayerNote
-              icon="🕘"
-              title={`情景记忆（${stats.episode}）`}
-              note="什么时候问过什么、当时有没有弄懂。让学伴能说「上次你没弄明白这个」。"
+              icon="calendar"
+              title="情景记忆"
+              count={stats.episode}
+              note="问过什么、当时弄懂没有"
             />
           </div>
-          <p className="mt-3 border-t border-line-soft pt-3 text-small leading-relaxed text-ink-soft">
-            记忆不是每句话都抽 —— 那样 token 会失控。默认每积累 8 条消息批量抽取一次，
-            你也可以在对话里点「记住这个」立刻触发，或在设置里关掉自动抽取。
-          </p>
         </section>
 
         <section className="card">
           <h2 className="section-title">知识点掌握情况</h2>
-          <p className="muted mb-4 mt-2">
-            任务完成会让知识点进入「学习中」；只有学伴从对话里判断，或你自己修正，才会变成「已掌握」或「薄弱」。
+          <p className="hint mb-4 mt-2">
+            「已掌握」与「薄弱」由学伴判断或你手动修正，任务完成只会进入「学习中」。
           </p>
 
           {masteryGroups.size === 0 ? (
@@ -262,13 +261,30 @@ export function MemoryPage() {
   )
 }
 
-function LayerNote({ icon, title, note }: { icon: string; title: string; note: string }) {
+function LayerNote({
+  icon,
+  title,
+  note,
+  count,
+}: {
+  icon: IconName
+  title: string
+  note: string
+  /** 有计数时才显示，避免「会话记忆（0）」这种本来就无数量的层出现括号 */
+  count?: number
+}) {
   return (
-    <div className="rounded-sm bg-raised px-3.5 py-3">
-      <div className="text-body font-bold text-ink">
-        {icon} {title}
+    <div className="flex items-start gap-3">
+      <span className="mt-0.5 text-ink-soft">
+        <Icon name={icon} size={16} />
+      </span>
+      <div className="min-w-0">
+        <div className="text-body font-bold text-ink">
+          {title}
+          {count !== undefined && <span className="tabular text-ink-faint"> {count}</span>}
+        </div>
+        <p className="mt-0.5 text-small text-ink-soft">{note}</p>
       </div>
-      <p className="mt-1 text-small leading-relaxed text-ink-soft">{note}</p>
     </div>
   )
 }

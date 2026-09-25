@@ -1,5 +1,7 @@
 import { useState } from 'react'
 
+import { Icon } from '@/components/Icon'
+import type { IconName } from '@/components/Icon'
 import { MASTERY_META } from '@/features/memory/components/mastery-meta'
 import { formatRelativeDay, toDateKey } from '@/lib/date'
 import type { MemoryEntry, MemoryLayer, MasteryLevel } from '@/types/models'
@@ -12,10 +14,10 @@ import type { MemoryEntry, MemoryLayer, MasteryLevel } from '@/types/models'
  * 这样三种层仍然一眼可分，而且完全没有新造样式 —— 它们本来就是设计系统里
  * 已经定义好的三个层次，正好对应这里需要的三级强调。
  */
-const LAYER_META: Record<MemoryLayer, { label: string; badgeClass: string; icon: string }> = {
-  fact: { label: '事实', badgeClass: 'badge', icon: '📌' },
-  mastery: { label: '掌握状态', badgeClass: 'badge-solid', icon: '📈' },
-  episode: { label: '情景', badgeClass: 'badge border-transparent bg-ink/5', icon: '🕘' },
+const LAYER_META: Record<MemoryLayer, { label: string; badgeClass: string; icon: IconName }> = {
+  fact: { label: '事实', badgeClass: 'badge', icon: 'user' },
+  mastery: { label: '掌握状态', badgeClass: 'badge-solid', icon: 'layers' },
+  episode: { label: '情景', badgeClass: 'badge border-transparent bg-ink/5', icon: 'calendar' },
 }
 
 const SOURCE_LABEL: Record<MemoryEntry['source'], string> = {
@@ -60,7 +62,7 @@ export function MemoryCard({
     <div className="rounded-card border border-line-soft bg-raised px-3.5 py-3">
       <div className="flex flex-wrap items-center gap-2">
         <span className={layer.badgeClass}>
-          {layer.icon} {layer.label}
+          <Icon name={layer.icon} size={12} /> {layer.label}
         </span>
         {entry.knowledgePoint && (
           <span className="badge border-transparent bg-ink/5 text-ink-soft">

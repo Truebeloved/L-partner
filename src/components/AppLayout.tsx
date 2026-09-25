@@ -1,12 +1,14 @@
 import { NavLink, Outlet } from 'react-router-dom'
 
+import { Icon } from '@/components/Icon'
+import type { IconName } from '@/components/Icon'
 import { ReminderProvider } from '@/features/reminder/ReminderProvider'
 import { TodaySidebarWidget } from '@/features/today/TodaySidebarWidget'
 
 interface NavItem {
   to: string
   label: string
-  icon: string
+  icon: IconName
   /** 精确匹配：书架是首页，否则任何路径都会点亮它 */
   end?: boolean
 }
@@ -18,12 +20,12 @@ interface NavItem {
  * 「今日」不再是独立页面，已移到侧栏下方常驻显示（TodaySidebarWidget）。
  */
 const NAV_ITEMS: NavItem[] = [
-  { to: '/', label: '书架', icon: '▤', end: true },
-  { to: '/chat', label: '学伴对话', icon: '◌' },
-  { to: '/memory', label: '记忆', icon: '◈' },
-  { to: '/personas', label: '角色', icon: '◇' },
-  { to: '/settings', label: '设置', icon: '◎' },
-  { to: '/courses', label: '添加书籍', icon: '＋' },
+  { to: '/', label: '书架', icon: 'shelf', end: true },
+  { to: '/chat', label: '学伴对话', icon: 'chat' },
+  { to: '/memory', label: '记忆', icon: 'layers' },
+  { to: '/personas', label: '角色', icon: 'user' },
+  { to: '/settings', label: '设置', icon: 'sliders' },
+  { to: '/courses', label: '添加书籍', icon: 'plus' },
 ]
 
 /**
@@ -65,10 +67,10 @@ export function AppLayout() {
             </div>
           </div>
 
-          <nav className="space-y-1 px-3 pb-3">
+          <nav className="space-y-0.5 px-3 pb-4">
             {NAV_ITEMS.map((item) => (
               <NavLink key={item.to} to={item.to} end={item.end} className={navLinkClass}>
-                <span className="w-4 text-center text-body leading-none">{item.icon}</span>
+                <Icon name={item.icon} size={16} />
                 {item.label}
               </NavLink>
             ))}
@@ -101,7 +103,9 @@ export function AppLayout() {
                   ].join(' ')
                 }
               >
-                <span className="text-body leading-none">{item.icon}</span>
+                <span className="text-body leading-none">
+                  <Icon name={item.icon} size={16} />
+                </span>
                 {item.label}
               </NavLink>
             ))}

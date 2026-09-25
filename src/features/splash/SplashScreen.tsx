@@ -26,6 +26,9 @@ interface SplashScreenProps {
  *   所以在低配机器上也是流畅的。用 width/top 之类做动画会掉帧。
  * - 底色是纯黑到深灰：与后面中灰的界面形成一次明确的「开场 → 进入」分界，
  *   而不是彩色渐变 —— 整套设计系统是单色系，开屏不该是唯一的例外。
+ *
+ * 根节点带 `data-testid="splash"`：scripts/capture-ui.cjs 靠它判断开屏是否播完。
+ * 硬等一个时长不可靠 —— dev 模式下 Vite 加载模块与字体都会让它比设定的 4.2 秒更久。
  */
 export function SplashScreen({ name, onDone }: SplashScreenProps) {
   const [phase, setPhase] = useState<Phase>('greeting')
@@ -70,6 +73,7 @@ export function SplashScreen({ name, onDone }: SplashScreenProps) {
         phase === 'leaving' ? 'splash-leaving' : '',
       ].join(' ')}
       role="presentation"
+      data-testid="splash"
     >
       <div className="px-8 text-center">
         {phase === 'greeting' ? (

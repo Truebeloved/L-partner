@@ -116,10 +116,12 @@ export function PersonaPage() {
                       <button
                         key={avatar}
                         type="button"
+                        /* 选择器里同样转灰度：否则用户在这里看到的彩色头像
+                           和卡片上、对话里的灰度头像对不上 */
                         className={
                           draft.avatar === avatar
-                            ? 'rounded-sm border-2 border-ink px-1.5 py-1 text-h2'
-                            : 'rounded-sm border-2 border-transparent px-1.5 py-1 text-h2 hover:bg-ink/5'
+                            ? 'avatar-glyph rounded-sm border-2 border-ink px-1.5 py-1 text-h2'
+                            : 'avatar-glyph rounded-sm border-2 border-transparent px-1.5 py-1 text-h2 hover:bg-ink/5'
                         }
                         onClick={() => setDraft({ ...draft, avatar })}
                       >
@@ -202,25 +204,22 @@ export function PersonaPage() {
                    现在靠边框深浅 —— 而"使用中"本身还有实心标签，双保险 */
                 className={`card flex flex-col ${isActive ? 'border-line' : 'card-hover'}`}
               >
-                <div className="flex items-start gap-3">
-                  <span className="text-display leading-none">{persona.avatar}</span>
+                <div className="flex items-start gap-4">
+                  <span className="avatar-glyph text-display leading-none">{persona.avatar}</span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <h3 className="card-title">{persona.name}</h3>
-                      {persona.builtin && (
-                        <span className="badge border-transparent bg-ink/5 text-ink-soft">
-                          内置
-                        </span>
-                      )}
+                      {/* 「内置」标签原来每张卡都有 —— 四个人全是内置，这个标签
+                          不传达任何信息，只增加噪声，所以去掉 */}
                       {isActive && <span className="badge-solid">使用中</span>}
                     </div>
-                    <p className="mt-1.5 text-small leading-relaxed text-ink-soft">
+                    <p className="mt-2 line-clamp-2 text-small leading-relaxed text-ink-soft">
                       {persona.identity}
                     </p>
                   </div>
                 </div>
 
-                <dl className="mt-3 space-y-1.5 border-t border-line-soft pt-3 text-small">
+                <dl className="mt-4 space-y-2 border-t border-line-soft pt-4 text-small">
                   <Row label="性格" value={persona.personality} />
                   <Row label="风格" value={persona.speakingStyle} />
                   <Row label="教法" value={persona.teachingStrategy} />

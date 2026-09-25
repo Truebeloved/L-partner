@@ -3,7 +3,7 @@ import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 
 import { syncMasteryForCourse } from '@/features/memory/mastery'
-import { formatDateHuman, formatRelativeDay, isOverdue, todayKey } from '@/lib/date'
+import { formatDateHuman, isOverdue, todayKey } from '@/lib/date'
 import { useCourseStore } from '@/store/courses'
 import { usePlanStore } from '@/store/plans'
 import { useTodoStore } from '@/store/todos'
@@ -76,40 +76,37 @@ export function TodaySidebarWidget() {
     <section className="flex min-h-0 flex-1 flex-col border-t border-line-soft px-3 pt-3">
       <div className="flex items-baseline justify-between px-1">
         <h2 className="text-label font-bold tracking-[0.05em] text-ink-soft uppercase">今日</h2>
-        <span className="flex items-baseline gap-2 text-small text-ink-faint">
-          <span>
-            {formatDateHuman(today)} · {formatRelativeDay(today)}
-          </span>
-          {/* 侧栏只放得下紧凑视图；完整版（逾期分区、提醒状态）在 /today */}
-          <Link
-            to="/today"
-            className="transition-all duration-200 hover:text-ink"
-            title="打开完整今日页"
-          >
-            全部 →
-          </Link>
-        </span>
+        {/* 侧栏只放得下紧凑视图；完整版（逾期分区、提醒状态）在 /today */}
+        <Link
+          to="/today"
+          className="text-small text-ink-faint transition-all duration-200 hover:text-ink"
+          title="打开完整今日页"
+        >
+          全部 →
+        </Link>
       </div>
+      {/* 日期单独一行：和「今日」标签、和跳转链接挤在同一行会读成一串 */}
+      <p className="mt-1 px-1 text-small text-ink-faint">{formatDateHuman(today)}</p>
 
-      {/* 进度：细线即可，侧栏里不需要一个大进度环 */}
-      <div className="mt-2 px-1">
-        <div className="flex items-baseline justify-between text-small">
-          <span className="text-ink-soft">
-            {totalCount === 0 ? '还没有安排' : `${doneCount} / ${totalCount} 已完成`}
-          </span>
-          {/* 完成态不用绿色（单色系没有绿色），靠字重加重来表达「达成了」。
-              原来这里还缀了个彩色 emoji，与整套单色约束冲突，已去掉 */}
-          {percent === 100 && totalCount > 0 && (
-            <span className="font-bold text-ink">全部完成</span>
-          )}
+      {/* 没有待办时整块进度都不显示 —— 否则「还没有安排」会和列表空态重复一遍，
+          而重复的提示比没有提示更让人困惑 */}
+      {totalCount > 0 && (
+        <div className="mt-3 px-1">
+          <div className="flex items-baseline justify-between text-small">
+            <span className="text-ink-soft">
+              {doneCount} / {totalCount} 已完成
+            </span>
+            {/* 完成态不用绿色（单色系没有绿色），靠字重加重来表达「达成了」 */}
+            {percent === 100 && <span className="font-bold text-ink">全部完成</span>}
+          </div>
+          <div className="mt-2 h-1 overflow-hidden rounded-pill bg-sunken">
+            <div
+              className="h-full rounded-pill bg-ink transition-[width] duration-200 ease-out"
+              style={{ width: `${percent}%` }}
+            />
+          </div>
         </div>
-        <div className="mt-2 h-1 overflow-hidden rounded-pill bg-sunken">
-          <div
-            className="h-full rounded-pill bg-ink transition-[width] duration-200 ease-out"
-            style={{ width: `${percent}%` }}
-          />
-        </div>
-      </div>
+      )}
 
       {/* 逾期是允许用红色的场景之一 —— 它就是在说「有事情已经晚了」 */}
       {overdue.length > 0 && (
@@ -119,11 +116,9 @@ export function TodaySidebarWidget() {
       )}
 
       {/* 列表自己滚动：侧栏高度必须守恒，不能待办一多就把导航挤出去 */}
-      <ul className="mt-2 min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-0.5">
+      <ul className="mt-3 min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-0.5">
         {todayTodos.length === 0 ? (
-          <li className="px-1 py-3 text-small leading-relaxed text-ink-faint">
-            今天还没有安排。去书架打开一门课程生成学习计划。
-          </li>
+          <li className="px-1 py-2 text-small leading-relaxed text-ink-faint">还没有安排</li>
         ) : (
           todayTodos.map((todo) => (
             <li key={todo.id}>

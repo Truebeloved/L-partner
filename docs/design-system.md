@@ -151,18 +151,50 @@ npm run check:design
 原约束指定 **Josefin Sans**（标题）与 **Lato**（正文）。
 这两个字体**只覆盖拉丁字母与数字，没有任何中文字形**。
 
-也就是说，在一个中文应用里，设计约束的字体身份只对数字和英文生效 ——
-中文会全部落到系统默认字体上。与其假装设计覆盖了中文，
-不如把这个回退写成显式的一部分：
+照做的话，在一个几乎全是中文的界面里，实际效果是**「什么都没变」** ——
+所有文字都回退到系统默认字体，设计约束的字体身份完全落空。
+（第一版就是这么做的，用户反馈「字体没改过」，这个感知是对的。）
+
+**所以这条约束被替换，而不是被"回退兼容"** —— 直接给中文选字体：
 
 ```css
---font-display: 'Josefin Sans', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
---font-sans: 'Lato', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, sans-serif;
+--font-display: 'Noto Serif SC', 'Songti SC', 'SimSun', serif; /* 只给开屏 */
+--font-serif: 'Noto Serif SC', 'Songti SC', 'SimSun', serif; /* 只给页面标题 */
+--font-sans: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 ```
 
-在 Windows 上，中文实际由**微软雅黑**渲染，西文与数字由 Josefin Sans / Lato 渲染。
-这个混排是刻意的：数字用 Josefin Sans 的几何字形很精神，
-中文用系统黑体保证可读性与字重齐全。
+三个角色分得很清：
+
+| 位置     | 字体     | 理由                                             |
+| -------- | -------- | ------------------------------------------------ |
+| 开屏     | 思源宋体 | 衬线 + 大字号 + 纯黑底，是全场唯一讲究排版的地方 |
+| 页面标题 | 思源宋体 | 整页唯一一处衬线锚点，克制但有质感               |
+| 其余全部 | 思源黑体 | 替换微软雅黑，跨机器一致且字形更讲究             |
+
+「内部不浮夸」的执行方式就是：**衬线只出现在「一句话」的位置，不铺满界面**。
+
+### 关于体积
+
+中文字体一个 @fontsource 包按 unicode-range 切成 100+ 个切块，
+三个字重合计约 7.7MB（woff2）。这是中文排版该付的成本，但有一半是白付的：
+
+Fontsource 每个切块都同时写了 `woff2` 与 `woff` 两种格式，而 Vite 无法判断
+运行时用哪个，于是**两种全打进产物**。实测 dist 从 0.5MB 涨到 **18.3MB**。
+
+Electron 是 Chromium 154，woff2 自 Chrome 36 起全面支持 —— woff 回退没有任何意义。
+`vite.config.ts` 里加了一个插件在 `generateBundle` 阶段剥掉它并删除孤儿资源，
+**18.3MB → 8.5MB**。
+
+> 插件必须放在 `generateBundle` 而不是 `transform`：字体 CSS 由入口文件的
+> `@import` 引入，而 Vite 的 CSS 内联发生在用户 transform **之后** ——
+> 在 transform 里根本看不到任何 `@font-face`（第一次就是这么失败的）。
+
+### 备选：霞鹜文楷
+
+如果想要开屏更"手写"一些，**霞鹜文楷**（LXGW WenKai）是更好的选择（楷体骨架）。
+没有采用它是因为：这个包没做 unicode 分块，且 CSS 同时引用 woff2 与 woff，
+实测会让产物多出 **21MB** —— 为两行字不值得。
+如果之后愿意接受约 +8.8MB（只引它的 woff2），可以单独加回来。
 
 **字体文件本地打包**（`@fontsource/*`），不走 CDN ——
 Electron 从 `file://` 加载，离线时外部字体链接会直接丢字体。

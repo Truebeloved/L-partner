@@ -1,0 +1,52 @@
+# ---- dependencies ----
+node_modules/
+.pnp
+.pnp.js
+
+# ---- build output ----
+dist/
+dist-ssr/
+build/
+out/
+*.tsbuildinfo
+
+# ---- local env (never commit real keys) ----
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# ---- logs ----
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ---- test / coverage ----
+coverage/
+.vitest/
+playwright-report/
+test-results/
+
+# ---- caches ----
+.cache/
+.temp/
+tmp/
+.eslintcache
+.vite/
+
+# ---- editors / OS ----
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# ---- local notes ----
+notes-local/

@@ -14,6 +14,7 @@
     "package:dir": "npm run build && electron-builder --win --dir",
     "typecheck": "tsc -b",
     "check:design": "node scripts/check-design-tokens.mjs",
+    "icon": "node scripts/generate-icon.mjs",
     "shots": "node scripts/capture-ui.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -59,14 +60,17 @@
     "appId": "com.lpartner.desktop",
     "productName": "L-partner",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "assets"
     },
     "files": [
       "dist/**/*",
       "electron/**/*",
-      "package.json"
+      "package.json",
+      "assets/icon.ico"
     ],
     "win": {
+      "icon": "assets/icon.ico",
       "target": [
         {
           "target": "nsis",
@@ -82,7 +86,9 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "L-partner"
+      "shortcutName": "L-partner",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico"
     }
   }
 }

@@ -55,10 +55,18 @@ function createWindow() {
     height,
     minWidth,
     minHeight,
+    /*
+     * 应用图标。开发模式下 Electron 用的是 node_modules 里 electron.exe 的图标，
+     * 只有显式设置窗口图标，任务栏与 Alt+Tab 才会显示我们自己的 L。
+     * 打包后 exe 的图标由 electron-builder 按 package.json 的 build.win.icon 写入。
+     */
+    icon: path.join(__dirname, '..', 'assets', 'icon.ico'),
     // 先不显示，等页面渲染好再显示，避免出现「先白屏再出内容」的闪烁
     show: false,
-    // 与开屏底色一致，这样即使是首次启动也不会闪白
-    backgroundColor: '#0b1020',
+    // 与开屏底色一致，首帧才不会闪一下别的颜色。
+    // 这里是开屏径向渐变的中段值 —— 开屏改成纯黑之后它也得跟着改，
+    // 否则会在启动瞬间闪出一层蓝黑（原来是 #0b1020）。
+    backgroundColor: '#141414',
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),

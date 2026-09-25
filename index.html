@@ -7,10 +7,12 @@
       name="description"
       content="L-partner — 把课程变成今天该做的事：AI 生成学习方案与计划、每日待办、到点提醒。"
     />
-    <link
-      rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%98%3C/text%3E%3C/svg%3E"
-    />
+    <!--
+      favicon 指向 public/icon.svg —— 与应用图标、安装包图标同源
+      （由 scripts/generate-icon.mjs 从同一份几何定义生成）。
+      用相对路径：桌面端从 file:// 加载，绝对路径 /icon.svg 会解析到盘符根目录。
+    -->
+    <link rel="icon" type="image/svg+xml" href="./icon.svg" />
     <title>L-partner · 学习助手</title>
   </head>
   <body>

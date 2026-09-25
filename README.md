@@ -197,11 +197,18 @@ npm run dev:desktop   # 桌面端开发（Vite + Electron，带热更新）
 npm run build         # 生产构建（渲染层）
 npm run package       # 打包 NSIS 安装包到 release/
 npm run package:dir   # 只产出免安装目录，快速验证
+npm run icon          # 重新生成应用图标（ICO / PNG / SVG）
+npm run shots         # 逐个页面截图到 .ui-shots/，用于比对 UI 改动
+npm run check:design  # 设计令牌门禁
 npm run test          # 运行测试
 npm run typecheck     # 类型检查
 npm run lint          # 代码检查
 npm run format        # 格式化
 ```
+
+> **图标是代码画出来的**，不是一张现成的图：`scripts/generate-icon.mjs` 里定义一次几何形状，
+> 推导出 `assets/icon.ico`（7 个尺寸）、`assets/icon.png` 与 `public/icon.svg`。
+> 好处是三个产物永远一致，改一个参数就能重新出全套尺寸，不需要美术工具。
 
 ---
 

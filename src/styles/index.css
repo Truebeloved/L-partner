@@ -1,0 +1,105 @@
+@import 'tailwindcss';
+
+/* ---------------------------------------------------------------------------
+   设计令牌
+   整体基调：安静、专注、不喧哗 —— 这是个学习工具，不是营销落地页。
+   主色取 indigo（蓝紫），传达「理性 / 学习」，避免用红色系造成紧张感。
+--------------------------------------------------------------------------- */
+@theme {
+  --font-sans:
+    'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, -apple-system,
+    sans-serif;
+
+  --color-brand-50: #eef2ff;
+  --color-brand-100: #e0e7ff;
+  --color-brand-200: #c7d2fe;
+  --color-brand-300: #a5b4fc;
+  --color-brand-400: #818cf8;
+  --color-brand-500: #6366f1;
+  --color-brand-600: #4f46e5;
+  --color-brand-700: #4338ca;
+  --color-brand-800: #3730a3;
+  --color-brand-900: #312e81;
+
+  /* 掌握状态的语义色，热力图与进度条共用 */
+  --color-mastery-unknown: #cbd5e1;
+  --color-mastery-learning: #60a5fa;
+  --color-mastery-weak: #fbbf24;
+  --color-mastery-mastered: #34d399;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-800 antialiased;
+    font-family: var(--font-sans);
+  }
+
+  /* 键盘可访问性：统一焦点环，别让 focus 样式在不同浏览器里各自为政 */
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-brand-500;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border border-slate-200 bg-white p-5 shadow-sm;
+  }
+
+  .card-hover {
+    @apply transition hover:border-brand-300 hover:shadow-md;
+  }
+
+  /*
+   * 按钮采用「基础类 + 变体类」双类名写法：class="btn btn-primary"。
+   * 注意 Tailwind v4 里 @apply 只能作用于工具类，不能 @apply 自定义组件类
+   * （写 `@apply btn` 会直接构建报错），所以变体不重复引用 .btn。
+   */
+  .btn {
+    @apply inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg px-3.5 py-2
+      text-sm font-medium transition select-none
+      disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800;
+  }
+
+  .btn-ghost {
+    @apply text-slate-600 hover:bg-slate-100 hover:text-slate-900;
+  }
+
+  .btn-outline {
+    @apply border border-slate-300 bg-white text-slate-700 hover:border-brand-300
+      hover:text-brand-700;
+  }
+
+  .btn-danger {
+    @apply text-red-600 hover:bg-red-50;
+  }
+
+  .input {
+    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm
+      placeholder:text-slate-400
+      focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none;
+  }
+
+  .label {
+    @apply mb-1.5 block text-sm font-medium text-slate-700;
+  }
+
+  .badge {
+    @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium;
+  }
+
+  .section-title {
+    @apply text-lg font-semibold text-slate-900;
+  }
+
+  .muted {
+    @apply text-sm text-slate-500;
+  }
+}

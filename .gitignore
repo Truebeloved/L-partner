@@ -10,6 +10,17 @@ build/
 out/
 *.tsbuildinfo
 
+# ---- 桌面端打包产物 ----
+# 安装包不进仓库：几十上百 MB 的二进制会让仓库迅速膨胀，
+# 正确做法是挂到 GitHub Releases 上（见 README）
+release/
+dist-electron/
+*.exe
+*.msi
+*.dmg
+*.AppImage
+*.blockmap
+
 # ---- local env (never commit real keys) ----
 .env
 .env.local

@@ -103,3 +103,37 @@
     @apply text-sm text-slate-500;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   开屏动效
+   开屏是应用唯一「不讲效率」的地方 —— 它的任务是让人感到被迎接，
+   所以用缓慢的缓出曲线和轻微的上浮 + 去模糊，而不是任何弹跳或缩放。
+--------------------------------------------------------------------------- */
+@keyframes splash-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes splash-dim {
+  to {
+    opacity: 0;
+  }
+}
+
+@layer components {
+  .splash-line {
+    animation: splash-rise 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .splash-leaving {
+    animation: splash-dim 650ms ease-in forwards;
+  }
+}

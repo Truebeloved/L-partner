@@ -4,6 +4,7 @@
 > 一个带 AI 学伴的学习辅助工具：课程导入 → 学习计划 → 每日待办 → 到点提醒 → 完成情况回流调整。
 
 <p align="left">
+  <img alt="Electron" src="https://img.shields.io/badge/Electron-44-2b2e3a?logo=electron&logoColor=9feaf9" />
   <img alt="React" src="https://img.shields.io/badge/React-19-087ea4?logo=react&logoColor=white" />
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-6-3178c6?logo=typescript&logoColor=white" />
   <img alt="Vite" src="https://img.shields.io/badge/Vite-8-646cff?logo=vite&logoColor=white" />
@@ -11,7 +12,7 @@
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green" />
 </p>
 
-> OH 社团面试任务作品 · 纯前端 · 无服务端 · 数据全部留在本地
+> OH 社团面试任务作品 · Windows 桌面应用 · 无服务端 · 数据全部留在本地
 
 ---
 
@@ -75,21 +76,34 @@ L-partner 想打通中间那一段：**让 AI 知道你正在学什么、学到�
 
 ## 快速开始
 
-### 在线体验
+### 安装使用（普通用户）
 
-> 部署地址见仓库 About 区域的链接（GitHub Pages）。
->
-> **没有 API Key 也能完整体验**课程、计划、待办、提醒和示例数据；
-> 只有对话与 AI 生成方案需要配置模型。
+下载 `L-partner Setup x.y.z.exe` 后双击安装即可。
 
-### 本地运行
+> ⚠️ 安装包**未做代码签名**，Windows 会弹出「Windows 已保护你的电脑 / 未知发布者」。
+> 这不是病毒警告，而是所有未签名软件的默认提示。
+> 点击 **更多信息 → 仍要运行** 即可继续。
+
+### 从源码运行（开发者）
 
 ```bash
 git clone <repo-url>
 cd L-partner
 npm install
-npm run dev
+
+npm run dev:desktop   # 桌面端开发模式（Vite + Electron，带热更新）
+npm run dev           # 仅浏览器调试（改样式更快，但拿不到计算机名）
 ```
+
+### 打包安装包
+
+```bash
+npm run package       # 产出 NSIS 安装包到 release/
+npm run package:dir   # 只产出免安装目录，用于快速验证
+```
+
+> **没有 API Key 也能完整体验**课程、计划、待办、提醒和示例数据；
+> 只有对话与 AI 生成方案需要配置模型。
 
 ### 配置 AI（可选）
 
@@ -99,25 +113,27 @@ npm run dev
 4. 点「测试连接」
 
 > **关于密钥**：L-partner 不内置任何密钥，也没有服务端。你的 Key 只存在这台设备的
-> 浏览器 IndexedDB 里，请求由浏览器直接发往厂商。
+> 本地数据库里，请求由应用直接发往厂商。
 >
-> **关于跨域**：国内厂商（DeepSeek / Moonshot / 通义）通常允许浏览器直连；
-> OpenAI 官方接口默认不允许，需要改用兼容网关或本地 Ollama。
+> **关于跨域**：桌面端建议优先使用国内厂商（DeepSeek / Moonshot / 通义）；
+> OpenAI 官方接口默认不允许浏览器环境直连，需要改用兼容网关或本地 Ollama。
 
 ---
 
 ## 技术栈
 
-| 层     | 选型                       | 说明                              |
-| ------ | -------------------------- | --------------------------------- |
-| 构建   | Vite 8                     | —                                 |
-| 框架   | React 19 + TypeScript 6    | 全程 `strict`                     |
-| 样式   | Tailwind CSS 4             | 设计令牌集中在 `styles/index.css` |
-| 状态   | Zustand 5                  | 每域一个 store，各自独立持久化    |
-| 持久化 | IndexedDB（idb-keyval）    | 容量不受 localStorage 的 5MB 限制 |
-| 路由   | React Router 7             | 用 `HashRouter` 以适配 Pages      |
-| 测试   | Vitest 5 + Testing Library | 只给纯逻辑写单测                  |
-| 规范   | ESLint 10 + Prettier 3     | —                                 |
+| 层     | 选型                       | 说明                                   |
+| ------ | -------------------------- | -------------------------------------- |
+| 桌面壳 | Electron 44                | 主进程 + 沙箱化预加载，能力经 IPC 暴露 |
+| 打包   | electron-builder 26        | NSIS 安装包                            |
+| 构建   | Vite 8                     | —                                      |
+| 框架   | React 19 + TypeScript 6    | 全程 `strict`                          |
+| 样式   | Tailwind CSS 4             | 设计令牌集中在 `styles/index.css`      |
+| 状态   | Zustand 5                  | 每域一个 store，各自独立持久化         |
+| 持久化 | IndexedDB（idb-keyval）    | 容量不受 localStorage 的 5MB 限制      |
+| 路由   | React Router 7             | 用 `HashRouter` 以适配 `file://`       |
+| 测试   | Vitest 5 + Testing Library | 只给纯逻辑与关键链路写测试             |
+| 规范   | ESLint 10 + Prettier 3     | —                                      |
 
 **零运行时第三方 SDK**：模型调用直接用 `fetch` 实现，没有引入任何厂商 SDK。
 
@@ -126,16 +142,22 @@ npm run dev
 ## 项目结构
 
 ```
+electron/
+├── main.cjs             主进程：窗口创建、IPC、外部链接交给系统浏览器
+└── preload.cjs          预加载：只暴露具体能力，不交出 ipcRenderer
+scripts/
+└── electron-dev.mjs     桌面开发启动器（Vite JS API + Electron）
 src/
-├── types/models.ts    全部数据模型
-├── store/             状态与持久化
+├── types/models.ts      全部数据模型
+├── store/               状态与持久化
 ├── lib/
-│   ├── llm/           模型适配层（协议、错误翻译、提示词）
-│   └── storage/       IndexedDB 后端
-├── features/          按功能域组织
-│   ├── course/  plan/  today/  reminder/
+│   ├── llm/             模型适配层（协议、错误翻译、提示词）
+│   ├── storage/         IndexedDB 后端
+│   └── platform.ts      桌面能力探测（浏览器下自动降级）
+├── features/            按功能域组织
+│   ├── splash/  course/  plan/  today/  reminder/
 │   └── chat/  persona/  memory/  settings/
-└── components/        通用组件
+└── components/          通用组件
 ```
 
 详见 [`docs/architecture.md`](docs/architecture.md)。
@@ -148,6 +170,7 @@ src/
 | ------------------------------------------------------ | ---------------------------- |
 | [`docs/architecture.md`](docs/architecture.md)         | 模块划分、数据流转、取舍     |
 | [`docs/design-decisions.md`](docs/design-decisions.md) | 每项选型的原因与被放弃的方案 |
+| [`docs/ui-spec.md`](docs/ui-spec.md)                   | 界面规格（描述整理中）       |
 | [`docs/roadmap.md`](docs/roadmap.md)                   | 开发阶段与进度               |
 
 ---
@@ -156,24 +179,27 @@ src/
 
 这些是**有意的取舍**，不是没做完：
 
-1. **网页关闭后无法主动提醒** —— 浏览器沙箱限制。页面内弹窗是主路径。
-2. **数据不跨设备** —— 没有服务端就没有同步；设置页提供 JSON 导出备份。
-3. **API Key 存在浏览器里** —— 纯前端方案的固有属性，UI 中已明确提示。
-4. **资料导入暂只支持 txt / md** —— epub 解析留待后续（见 roadmap）。
-5. **记忆检索用关键词而非向量** —— 在几千条量级内足够，且打分过程可解释。
+1. **窗口关闭后不再提醒** —— 提醒依赖应用在运行。做成「最小化到托盘继续提醒」是可行的下一步。
+2. **安装包未签名** —— 会触发 SmartScreen 提示，需手动选择「仍要运行」（见上方安装说明）。
+3. **数据不跨设备** —— 没有服务端就没有同步；设置页提供 JSON 导出备份。
+4. **API Key 存在本地数据库里** —— 无服务端方案的固有属性，UI 中已明确提示。
+5. **资料文件导入未实现** —— 目前课程靠手动创建或 AI 口述生成（见 roadmap）。
+6. **记忆检索用关键词而非向量** —— 在几千条量级内足够，且打分过程可解释。
 
 ---
 
 ## 开发
 
 ```bash
-npm run dev         # 本地开发
-npm run build       # 生产构建
-npm run preview     # 预览构建产物
-npm run test        # 运行单测
-npm run typecheck   # 类型检查
-npm run lint        # 代码检查
-npm run format      # 格式化
+npm run dev           # 浏览器开发（改样式最快）
+npm run dev:desktop   # 桌面端开发（Vite + Electron，带热更新）
+npm run build         # 生产构建（渲染层）
+npm run package       # 打包 NSIS 安装包到 release/
+npm run package:dir   # 只产出免安装目录，快速验证
+npm run test          # 运行测试
+npm run typecheck     # 类型检查
+npm run lint          # 代码检查
+npm run format        # 格式化
 ```
 
 ---

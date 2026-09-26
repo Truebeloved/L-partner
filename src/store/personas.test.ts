@@ -23,11 +23,12 @@ describe('mergePersonas', () => {
   })
 
   /*
-   * 这条是真实需求：内置角色的说话风格（一次说多少）改过一版，
-   * 但老用户本地存着的是旧副本，读本地那份等于改动白做。
-   * 内置角色受保护、用户改不了，所以本地那份没有任何用户数据，应当以 seed 为准。
+   * 这一组守的是两条会互相打架的诉求：
+   * - 应用侧改了角色卡（比如把林知夏重写成另一个人）→ 必须能落到老用户身上；
+   * - 用户自己改了角色卡 → 不能被下一次版本更新悄悄改回去。
+   * 判据就是 `edited` 这一个标记。
    */
-  it('本地存着旧版内置角色时，以 seed 为准刷新', () => {
+  it('本地存着旧版、且用户没改过时，以 seed 为准刷新', () => {
     const outdated: Persona = {
       ...BUILTIN_PERSONAS[0]!,
       speakingStyle: '这是老版本的一句话',
@@ -36,6 +37,32 @@ describe('mergePersonas', () => {
 
     expect(merged[0]?.speakingStyle).toBe(BUILTIN_PERSONAS[0]?.speakingStyle)
     expect(merged[0]?.speakingStyle).not.toBe('这是老版本的一句话')
+  })
+
+  it('用户亲手改过的内置角色以**本地**为准 —— 不能被代码覆盖回去', () => {
+    const mine: Persona = {
+      ...BUILTIN_PERSONAS[0]!,
+      name: '老陈（我自己调的）',
+      speakingStyle: '我说的那句才算数',
+      edited: true,
+    }
+    const merged = mergePersonas([mine])
+    const builtin = merged.find((persona) => persona.id === BUILTIN_PERSONAS[0]?.id)
+
+    expect(builtin?.name).toBe('老陈（我自己调的）')
+    expect(builtin?.speakingStyle).toBe('我说的那句才算数')
+    // 仍然是内置角色（不可删除），只是内容归用户
+    expect(builtin?.builtin).toBe(true)
+  })
+
+  it('改过的角色缺了 seed 后来新增的字段时，用 seed 补上', () => {
+    const mine = { ...BUILTIN_PERSONAS[0]!, edited: true } as Record<string, unknown>
+    delete mine.taboos
+
+    const merged = mergePersonas([mine as unknown as Persona])
+    const builtin = merged.find((persona) => persona.id === BUILTIN_PERSONAS[0]?.id)
+
+    expect(builtin?.taboos).toBe(BUILTIN_PERSONAS[0]?.taboos)
   })
 
   it('自定义角色原样保留，并且排在内置角色之后', () => {

@@ -215,6 +215,14 @@ export interface Persona {
   taboos: string
   /** 内置模板不可删除，但可以「复制后修改」 */
   builtin: boolean
+  /**
+   * 内置角色**被用户亲手改过**。
+   *
+   * 它决定启动时那场合并用哪一边：改过的以本地为准，没改过的以代码里的模板为准。
+   * 缺了这个标记就只有两种坏结果 —— 要么用户的修改每次启动都被悄悄改回去，
+   * 要么应用侧对角色卡的改进永远落不到老用户身上。
+   */
+  edited?: boolean
   createdAt: IsoDateTime
 }
 

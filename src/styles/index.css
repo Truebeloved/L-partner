@@ -342,6 +342,28 @@
   animation-timing-function: var(--ease-glide);
 }
 
+/*
+ * 只保留"透明度交叉淡入"，**不要快照盒子的补间**。
+ *
+ * 这是上一版没做对的地方：我以为删掉 @keyframes 里的 translateY 就完事了，
+ * 但浏览器默认还会给每个 view-transition-group 播一段 UA 动画
+ * （-ua-view-transition-group-anim-*，动的是 transform / width / height）。
+ * 两个页面的内容盒子不一样高时，那段补间看起来就是"整页从下往上拉" ——
+ * 和我自己写的 keyframes 毫无关系。
+ *
+ * 用 document.getAnimations() 把每个伪元素的动画属性打出来才看清：
+ *   ::view-transition-group(page)     属性=height,transform,width  ← 就是它在动
+ *   ::view-transition-old/new(page)   属性=opacity                 ← 这才是淡入淡出
+ * 所以把 group 的动画关掉即可；old/new 的淡入淡出是另一组动画，不受影响。
+ *
+ * assistant-bar 不在这一组里：一级 ↔ 二级之间的"生长"正是靠它的 group 动画，
+ * 而进出对话页那一侧已经改成**不给名字**（见 AssistantDockHost），从源头不参与。
+ */
+::view-transition-group(root),
+::view-transition-group(page),
+::view-transition-group(sidebar) {
+  animation: none;
+}
 
 /* ---------------------------------------------------------------------------
    输入条的换页动画

@@ -152,6 +152,30 @@ describe('回答气泡的展开逻辑', () => {
     await vi.advanceTimersByTimeAsync(1000)
     expect(collapsedHeight()).toBe('1.5em')
   })
+
+  it('换页回来不会把上一条旧回答重新撑开', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    stubScrollWidth = 800
+    renderBar()
+
+    // 第一轮：长回答展开，随后自己收回
+    await userEvent.type(screen.getByLabelText('问学伴'), '讲个长问题{Enter}')
+    await waitFor(() => expect(collapsedHeight()).not.toBe('1.5em'))
+    await vi.advanceTimersByTimeAsync(3600)
+    await waitFor(() => expect(collapsedHeight()).toBe('1.5em'))
+
+    /*
+     * 模拟换页：输入条是常驻单例，换页时它会重新测量一次。
+     * 只有"刚刚提交的那一轮"允许自动展开，所以这次重新测量不该再把它撑开 ——
+     * 用户报的正是"发起一轮对话后，去别的界面再回来它又展开了"。
+     */
+    const bubble = document.querySelector('[data-assistant-answer]') as HTMLElement
+    await userEvent.click(bubble) // 触发一次重渲染
+    await userEvent.click(bubble)
+    await vi.advanceTimersByTimeAsync(500)
+
+    expect(collapsedHeight()).toBe('1.5em')
+  })
 })
 
 describe('回车键的语义', () => {

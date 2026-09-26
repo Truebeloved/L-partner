@@ -5,7 +5,9 @@ import {
   isWeeklyTodo,
   matchTodoToCourse,
   normalizeForMatch,
+  parseOrdinal,
   resolveWhen,
+  stageIdOfUnit,
   weekStartOf,
 } from '@/features/today/autoTodo'
 import type { Course, Plan, Todo } from '@/types/models'
@@ -189,5 +191,148 @@ describe('doneUnitIds', () => {
       todo({ unitId: 'u1', done: true, weekStart: '2026-09-21' }),
     ])
     expect(done.has('u1')).toBe(false)
+  })
+})
+
+describe('序号解析', () => {
+  it('中文与阿拉伯数字都认，且是**从 1 开始**的序号', () => {
+    expect(parseOrdinal('一')).toBe(1)
+    expect(parseOrdinal('二')).toBe(2)
+    expect(parseOrdinal('十')).toBe(10)
+    expect(parseOrdinal('十一')).toBe(11)
+    expect(parseOrdinal('二十一')).toBe(21)
+    expect(parseOrdinal('3')).toBe(3)
+  })
+})
+
+/** 一门三段、共六节的课：用来验证"说阶段一就动阶段一" */
+function makeCourse(): Course {
+  return {
+    id: 'c1',
+    title: 'C语言程序设计',
+    source: 'manual',
+    stages: [
+      {
+        id: 's1',
+        title: '第 1 章',
+        order: 0,
+        units: [
+          {
+            id: 's1u1',
+            title: '1.1 什么是程序',
+            knowledgePoints: [],
+            estimatedMinutes: 60,
+            order: 0,
+          },
+          {
+            id: 's1u2',
+            title: '1.2 变量与类型',
+            knowledgePoints: [],
+            estimatedMinutes: 60,
+            order: 1,
+          },
+          {
+            id: 's1u3',
+            title: '1.3 第一个程序',
+            knowledgePoints: [],
+            estimatedMinutes: 60,
+            order: 2,
+          },
+        ],
+      },
+      {
+        id: 's2',
+        title: '第 2 章',
+        order: 1,
+        units: [
+          { id: 's2u1', title: '2.1 分支', knowledgePoints: [], estimatedMinutes: 60, order: 0 },
+          { id: 's2u2', title: '2.2 循环', knowledgePoints: [], estimatedMinutes: 60, order: 1 },
+        ],
+      },
+      {
+        id: 's3',
+        title: '第 3 章',
+        order: 2,
+        units: [
+          { id: 's3u1', title: '3.1 数组', knowledgePoints: [], estimatedMinutes: 60, order: 0 },
+        ],
+      },
+    ],
+    createdAt: '2026-09-01T00:00:00.000Z',
+    updatedAt: '2026-09-01T00:00:00.000Z',
+  }
+}
+
+const NO_PLANS: Record<string, Plan> = {}
+
+describe('待办 → 课程：说"阶段一"就该落到第一阶段', () => {
+  it('「学完阶段一」命中第一阶段（不是第二个）', () => {
+    const link = matchTodoToCourse('我要学完C语言程序设计阶段一', [makeCourse()], NO_PLANS)
+    expect(link?.courseId).toBe('c1')
+    expect(link?.stageId).toBe('s1')
+    expect(link?.unitId).toBeUndefined()
+  })
+
+  it('「第二章」命中第二阶段', () => {
+    const link = matchTodoToCourse('把第二章过一遍', [makeCourse()], NO_PLANS)
+    expect(link?.stageId).toBe('s2')
+  })
+
+  it('序号超出范围时不硬套：说"第九章"而只有三章 → 不匹配', () => {
+    expect(matchTodoToCourse('学完第九章', [makeCourse()], NO_PLANS)).toBeNull()
+  })
+
+  it('直接写阶段名（足够长）也能命中', () => {
+    const course = makeCourse()
+    course.stages[1]!.title = '分支与循环'
+    const link = matchTodoToCourse('把分支与循环看完', [course], NO_PLANS)
+    expect(link?.stageId).toBe('s2')
+  })
+
+  it('点名了阶段里的**某一节**时，以那一节为准', () => {
+    const link = matchTodoToCourse('学完第 1 章的 1.2 变量与类型', [makeCourse()], NO_PLANS)
+    expect(link?.stageId).toBeUndefined()
+    expect(link?.unitId).toBe('s1u2')
+  })
+})
+
+describe('完成整段待办 → 这一段每一节都算完成', () => {
+  const todo = (overrides: Partial<Todo>): Todo => ({
+    id: 't1',
+    title: '学完阶段一',
+    date: '2026-09-25',
+    done: false,
+    createdAt: '2026-09-25T00:00:00.000Z',
+    ...overrides,
+  })
+
+  it('勾掉"阶段一"的待办，第一阶段全部划掉，第二阶段不受影响', () => {
+    const course = makeCourse()
+    const done = doneUnitIds(course, undefined, [
+      todo({ stageId: 's1', courseId: 'c1', done: true }),
+    ])
+
+    expect([...done].sort()).toEqual(['s1u1', 's1u2', 's1u3'])
+    expect(done.has('s2u1')).toBe(false)
+  })
+
+  it('没勾掉就不算完成', () => {
+    const done = doneUnitIds(makeCourse(), undefined, [
+      todo({ stageId: 's1', courseId: 'c1', done: false }),
+    ])
+    expect(done.size).toBe(0)
+  })
+
+  it('周目标不参与：它是"这周想做的事"，颗粒度不对', () => {
+    const done = doneUnitIds(makeCourse(), undefined, [
+      todo({ stageId: 's1', courseId: 'c1', done: true, weekStart: '2026-09-21' }),
+    ])
+    expect(done.size).toBe(0)
+  })
+
+  it('stageIdOfUnit 能定位某一节属于哪一段', () => {
+    const course = makeCourse()
+    expect(stageIdOfUnit(course, 's2u1')).toBe('s2')
+    expect(stageIdOfUnit(course, '不存在')).toBeUndefined()
   })
 })

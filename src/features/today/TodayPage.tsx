@@ -69,6 +69,12 @@ export function TodayPage() {
     [courses],
   )
 
+  /** 阶段 id → 阶段名：整段待办显示成「课程 · 阶段」 */
+  const stageTitles = useMemo(
+    () => new Map(courses.flatMap((course) => course.stages.map((stage) => [stage.id, stage.title]))),
+    [courses],
+  )
+
   // 逾期区：这是最容易被忽略、但用户最需要的部分 —— 漏掉的安排在页面上方主动暴露出来。
   // 周目标不算逾期：它整周都"还没到点"，把它算进去会让这一区整整一周都挂着红色
   const overdueTodos = useMemo(
@@ -101,8 +107,14 @@ export function TodayPage() {
   const plannedMinutes = todayTodos.reduce((sum, todo) => sum + (todo.minutes ?? 0), 0)
   const allDone = totalCount > 0 && doneCount === totalCount
 
-  const courseTitleOf = (todo: Todo) =>
-    todo.courseId ? courseTitles.get(todo.courseId) : undefined
+  const courseTitleOf = (todo: Todo) => {
+    if (!todo.courseId) return undefined
+    const course = courseTitles.get(todo.courseId)
+    if (!course) return undefined
+    // 整段待办把阶段名也带上：勾掉它会让这一段的每一节都划掉，用户得看得出是哪一段
+    const stage = todo.stageId ? stageTitles.get(todo.stageId) : undefined
+    return stage ? `${course} · ${stage}` : course
+  }
 
   const handleToggle = (todo: Todo) => {
     toggleTodo(todo.id)

@@ -15,8 +15,55 @@ export interface CourseMatch {
  *
  * 3 个中文字已经足够具体：「宾语前置」能认出《文言文》，而「学」「做」「今天」
  * 这类 2 字以下的碎片不会误伤 —— 下限取 2 会让几乎每句话都命中某门课。
+ *
+ * 但课程里的**单元标题与知识点**要求更严（4 个字）：它们是精确术语，
+ * 3 个字的偶然重合太多。课程名与主题词放宽到 3 个字 —— 那是课程的名字，
+ * 用户本来就会拿简称叫它（说"文言文"指的就是《文言文阅读 · 中高考贯通》）。
  */
 const MIN_OVERLAP = 3
+const MIN_CONTENT_OVERLAP = 4
+
+/**
+ * 与上一轮有关的说法。
+ *
+ * 用来区分"这句是接着聊"还是"这句另起一个话题"：
+ * 认不出课程时，追问（"再讲一遍""为什么"）必须留在原地，
+ * 而"说说你的经历"这种自成一体的闲话该回主对话。
+ */
+const FOLLOW_UP = new RegExp(
+  [
+    '继续',
+    '接着',
+    '再讲',
+    '再说',
+    '再来',
+    '还有',
+    '上面',
+    '刚才',
+    '刚刚',
+    '这个',
+    '那个',
+    '这条',
+    '那条',
+    '它',
+    '为什么',
+    '没懂',
+    '不懂',
+    '听不懂',
+    '详细',
+    '举个例子',
+    '展开',
+    '重说',
+    '换一个',
+  ].join('|'),
+)
+/** 「第二讲」「第三章」「第 3 节」——提到课程的结构位置，说明在聊当前这门课 */
+const COURSE_POSITION = /第\s*[一二三四五六七八九十百\d]+\s*(讲|课|章|节|单元|阶段|部分)/
+
+/** 这句话是不是在接着上一轮说 */
+export function looksLikeFollowUp(text: string): boolean {
+  return FOLLOW_UP.test(text) || COURSE_POSITION.test(text)
+}
 
 /**
  * 把一句话归类到某门课程。
@@ -24,13 +71,9 @@ const MIN_OVERLAP = 3
  * 为什么用本地规则而不是让模型判断：这是**每一句话**都要跑的分类，
  * 让模型来做等于把每条消息的成本翻倍、还多一次等待；而分类依据本身是确定的 ——
  * 课程里已经存在的那套"标准说法"（单元标题、知识点、课程名）就是词表。
- * 用户确认过的口径是：
  *
- * - 与课程内容有关 → 归到那门课的对话；
- * - 与课程无关 → 留在主对话（主对话只有一场，上下文因此是连续的）。
- *
- * 所以这个函数只回答"命中哪门课"，**认不出来时返回 null**，
- * "认不出来该去哪"交给调用方（见 useChatSession：留在当前所在的那一场）。
+ * 所以这个函数只回答"命中哪门课"，**认不出来时返回 null**；
+ * "认不出来该去哪"由调用方决定（见 useChatSession 与 looksLikeFollowUp）。
  */
 export function matchCourseForMessage(text: string, courses: Course[]): CourseMatch | null {
   const target = normalizeForMatch(text)
@@ -39,8 +82,8 @@ export function matchCourseForMessage(text: string, courses: Course[]): CourseMa
   let best: CourseMatch | null = null
 
   for (const course of courses) {
-    for (const alias of aliasesOf(course)) {
-      const candidate = normalizeForMatch(alias)
+    for (const alias of courseAliases(course)) {
+      const candidate = normalizeForMatch(alias.text)
       if (candidate.length < MIN_OVERLAP) continue
 
       /*
@@ -52,10 +95,11 @@ export function matchCourseForMessage(text: string, courses: Course[]): CourseMa
        */
       const contained = target.includes(candidate) || candidate.includes(target)
       const overlap = contained ? candidate.length : longestCommonSubstring(target, candidate)
-      if (!contained && overlap < MIN_OVERLAP) continue
+      const needed = alias.kind === 'title' ? MIN_OVERLAP : MIN_CONTENT_OVERLAP
+      if (!contained && overlap < needed) continue
 
       if (!best || overlap > best.score) {
-        best = { courseId: course.id, matched: alias, score: overlap }
+        best = { courseId: course.id, matched: alias.text, score: overlap }
       }
     }
   }
@@ -63,22 +107,35 @@ export function matchCourseForMessage(text: string, courses: Course[]): CourseMa
   return best
 }
 
+/** 词条来自哪里：课程名（判定宽一点）还是课程内容里的术语（严一点） */
+interface CourseAlias {
+  text: string
+  kind: 'title' | 'content'
+}
+
 /**
- * 一门课的"词表"：单元的**知识点**与**单元标题**（这门课真正在讲什么），
- * 加上**课程名**切出来的片段 —— 用户说"文言文怎么学"，
- * 而课程叫「文言文阅读 · 中高考贯通」，整串是匹配不上的，切开才有「文言文」这一段。
+ * 一门课的"词表"：**课程名**（含切开的分段 —— 用户说"文言文怎么学"，
+ * 而课程叫「文言文阅读 · 中高考贯通」，整串是匹配不上的）与**课程内容**
+ * （单元的标题与知识点，这门课真正在讲什么）。
  */
 export function aliasesOf(course: Course): string[] {
-  const aliases: string[] = [course.title]
+  return courseAliases(course).map((alias) => alias.text)
+}
+
+function courseAliases(course: Course): CourseAlias[] {
+  const aliases: CourseAlias[] = [{ text: course.title, kind: 'title' }]
 
   for (const segment of course.title.split(/[\s·、：:，,。!！?？\-—_/|（）()[\]]+/)) {
-    if (segment.trim()) aliases.push(segment.trim())
+    if (segment.trim()) aliases.push({ text: segment.trim(), kind: 'title' })
   }
 
   for (const stage of course.stages) {
+    aliases.push({ text: stage.title, kind: 'content' })
     for (const unit of stage.units) {
-      aliases.push(unit.title)
-      aliases.push(...unit.knowledgePoints)
+      aliases.push({ text: unit.title, kind: 'content' })
+      for (const point of unit.knowledgePoints) {
+        aliases.push({ text: point, kind: 'content' })
+      }
     }
   }
 

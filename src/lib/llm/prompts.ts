@@ -201,12 +201,24 @@ function buildMemorySection(memories: MemoryEntry[]): string {
   const episodes = memories.filter((memory) => memory.layer === 'episode')
 
   const blocks: string[] = [
-    '## 你记得关于他的事',
-    '（这些是过去对话里积累的印象，请自然地运用，不要生硬复述。）',
+    '## 你已经认识这个人了',
+    '（下面是你过去和他相处时记下的东西。这是"你早就认识他"，不是"你刚拿到一份资料"：',
+    '自然地运用即可 —— 该叫名字就叫，该接着上次的话题接就接；',
+    '但不要逐条复述，也不要让他觉得你在念档案。）',
   ]
 
   if (facts.length > 0) {
-    blocks.push('【他的情况】', ...facts.map((memory) => `- ${memory.content}`))
+    // 这一层是"认识他"的主体：身份、性格、经历、在意的事，所以要放在最前面、给最完整的篇幅
+    blocks.push('【他是谁】', ...facts.map((memory) => `- ${memory.content}`))
+  }
+
+  if (episodes.length > 0) {
+    // 经历与近况比"掌握情况"更接近"认识一个人"，所以排在知识点之前
+    blocks.push(
+      '【你们最近聊过】',
+      ...episodes.map((memory) => `- ${memory.content}`),
+      '（接他的话时可以自然提到"上次你说…"，让他感到被记得。）',
+    )
   }
 
   if (mastery.length > 0) {
@@ -217,7 +229,7 @@ function buildMemorySection(memories: MemoryEntry[]): string {
       unknown: '未接触',
     }
     blocks.push(
-      '【知识掌握情况】',
+      '【他的学习情况】',
       ...mastery.map(
         (memory) =>
           `- ${memory.knowledgePoint ?? memory.content}：${label[memory.level ?? 'unknown']}${
@@ -227,10 +239,6 @@ function buildMemorySection(memories: MemoryEntry[]): string {
     )
   }
 
-  if (episodes.length > 0) {
-    blocks.push('【最近聊过的】', ...episodes.map((memory) => `- ${memory.content}`))
-  }
-
   return blocks.join('\n')
 }
 
@@ -238,22 +246,27 @@ function buildMemorySection(memories: MemoryEntry[]): string {
 // 记忆抽取
 // ---------------------------------------------------------------------------
 
-export const MEMORY_EXTRACTION_SYSTEM_PROMPT = `你是一个记忆抽取器。你的任务是从一段学习对话中，抽取值得长期记住的**新**信息，以及他明确说过要做的事。
+export const MEMORY_EXTRACTION_SYSTEM_PROMPT = `你是一个长期记忆抽取器。唯一目标是：让学伴**下次见面时还认得这个人**。
+
+所以重点不是"他学过哪些知识点"，而是"他是谁"：身份、性格、在意的事、经历、习惯。
+知识点只在与"他这个人"有关时才值得记（他哪里薄弱、他反复卡在哪）。
 
 只输出 JSON，不要任何解释文字。格式：
 {
-  "facts": ["关于这个学生的稳定事实，如专业、年级、目标、学习习惯偏好"],
+  "facts": ["关于这个人的稳定事实：身份、专业/职业、城市、性格、在意的事、重大经历、习惯与偏好、长期目标"],
   "mastery": [{"knowledgePoint": "知识点名称", "level": "learning|weak|mastered", "reason": "判断依据，一句话"}],
   "episodes": ["这次聊了什么、卡在哪里、有没有讲通，一句话"],
   "todos": [{"title": "要做的事，动词开头，20 字以内", "when": "今天|明天|后天|周三|下周三|这周|3月5日|2026-03-05"}],
   "weekly": ["这一周想做到的、比较笼统的目标，如「把第一章过一遍」"],
-  "todoLinks": [{"todo": "待办标题（原样照抄）", "unit": "课程单元标题（原样照抄）"}]
+  "todoLinks": [{"todo": "待办标题（原样照抄）", "unit": "课程单元标题（指某一节时填）", "stage": "阶段名或「阶段一」（指整段/整章时填）"}]
 }
 严格规则：
-- 只记录**新的、稳定的、未来还有用**的信息。寒暄、一次性提问、情绪波动都不要记。
-- 已经在「已知记忆」里的内容不要重复输出。
-- facts 用第三人称陈述句，如「他是计算机专业大三学生，目标是转前端」。
-- 每条都要简短。宁可少记，也不要记废话。
+- **记人优先**。身份、性格、重大经历、在意的事、长期目标 —— 这些才是"不像陌生人"的来源。
+- facts 用第三人称陈述句，一条只说一件事，20 字以内，如「他是计算机专业大三学生，目标是转前端」。
+- 只记录**新的、稳定的、未来还有用**的信息。寒暄、一次性的提问、当天的情绪波动都不要记。
+- 已经在「已知记忆」里的内容不要重复输出，也不要写"他又问了一次 X"这种流水账。
+- **重大经历值得记**：换专业、复读、家里出事、比赛获奖、生病、失恋、搬家、换工作……
+  但只在他自己说出来时记，用他的口径，不要替他解释或下判断。
 - **todos 只收他明确表达了"我要做/我打算做/得做"的具体事情**，而且必须是可执行的动作，
   不要把他问的问题、想了解的知识点当成待办。「我想学 Rust」属于兴趣，进 facts 而不是 todos。
 - **一句话里说了几件事就拆成几条 todos**。"今天想把第一章看完，再把作业交了" 是两条，
@@ -310,11 +323,11 @@ export function buildMemoryExtractionMessages(
   const courseUnits = options.courseUnits ?? []
   const linking =
     pendingTodos.length > 0 && courseUnits.length > 0
-      ? `\n\n## 待关联的待办（判断它属于哪个单元）\n${pendingTodos
+      ? `\n\n## 待关联的待办（判断它属于课程里的哪一段）\n${pendingTodos
           .map((title) => `- ${title}`)
-          .join('\n')}\n\n## 课程单元（只能从这里挑，标题要原样照抄）\n${courseUnits
+          .join('\n')}\n\n## 课程内容（只能从这里挑，标题要原样照抄）\n${courseUnits
           .map((item) => `- ${item.course} ／ ${item.unit}`)
-          .join('\n')}\n\n请额外输出 todoLinks：把确实对应某个单元的待办写进去，格式 [{ "todo": "待办标题原样", "unit": "单元标题原样" }]。拿不准就不要写 —— 宁可让它留在待办里，也不要挂错课程。`
+          .join('\n')}\n\n请额外输出 todoLinks：格式 [{ "todo": "待办标题原样", "unit": "单元标题原样" }]。\n**如果这条待办指的是整章/整段**（"学完阶段一""第一章过一遍"），把 title 写进 "stage" 而不是 "unit" —— 系统会把那一段整体标记为完成；只填一个即可。拿不准就不要写 —— 宁可让它留在待办里，也不要挂错课程。`
       : ''
 
   return [
@@ -345,8 +358,12 @@ export function buildSummaryMessages(
     {
       role: 'system',
       content:
-        '把这段学习对话压缩成摘要，供后续对话当上下文使用。保留：学生问了什么、卡在哪里、' +
-        '已经讲通了什么、用了什么有效的例子。去掉寒暄和重复。用中文，200 字以内，直接给摘要正文。',
+        '把这段对话压缩成摘要，供后续对话当上下文使用。\n' +
+        '**这是"他"的记忆，不是会议纪要**，所以要优先保留关于这个人的东西：' +
+        '他说过自己的身份、性格、经历、在意的事、目标与期限，以及你们之间还没了结的事' +
+        '（答应了要做什么、说到哪没说完）。其次才是：他问了什么、卡在哪里、什么例子讲通了。\n' +
+        '去掉寒暄与重复。用中文，250 字以内，直接给摘要正文；' +
+        '如果已有摘要，把它和新增内容合并成一份，不要写成两段。',
     },
     {
       role: 'user',

@@ -189,24 +189,32 @@ export function applyTodoLinks(parsed: RawExtraction): number {
 
   for (const link of links) {
     const todoTitle = typeof link.todo === 'string' ? link.todo.trim() : ''
-    const unitTitle = typeof link.unit === 'string' ? link.unit.trim() : ''
+    // 模型可以给"某一节"，也可以给"某一段/某一章"（整段一起划掉）
+    const unitTitle =
+      typeof link.unit === 'string' && link.unit.trim()
+        ? link.unit.trim()
+        : typeof link.stage === 'string'
+          ? link.stage.trim()
+          : ''
     if (!todoTitle || !unitTitle) continue
 
     const target = todos.find(
       (todo) =>
         !todo.unitId &&
+        !todo.stageId &&
         !todo.weekStart &&
         normalizeForMatch(todo.title) === normalizeForMatch(todoTitle),
     )
     if (!target) continue
 
-    // 用单元标题再走一遍规则匹配：模型给的标题能不能落到某个真单元上，由本地说了算
+    // 用标题再走一遍规则匹配：模型给的说法能不能落到真的阶段/单元上，由本地说了算
     const resolved = matchTodoToCourse(unitTitle, courses, plans)
     if (!resolved) continue
 
     useTodoStore.getState().update(target.id, {
       courseId: resolved.courseId,
       unitId: resolved.unitId,
+      stageId: resolved.stageId,
       planItemId: resolved.planItemId,
     })
     applied += 1
@@ -300,6 +308,7 @@ export function applyExtractedTodos(
       date: item.date,
       courseId: link?.courseId ?? options.courseId,
       unitId: link?.unitId,
+      stageId: link?.stageId,
       planItemId: link?.planItemId,
       ...(item.weekStart ? { weekStart: item.weekStart } : {}),
       source: 'ai-extract',

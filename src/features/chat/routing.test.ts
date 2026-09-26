@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { matchCourseForMessage } from '@/features/chat/routing'
+import { looksLikeFollowUp, matchCourseForMessage } from '@/features/chat/routing'
 import type { Course } from '@/types/models'
+
+/**
+ * 分类器的行为分两层：
+ * - 认出某门课 → 归到那门课（由 matchCourseForMessage 决定）；
+ * - 认不出 → 由路由决定去主对话还是留在原地（由 looksLikeFollowUp 决定）。
+ * 这一组用例把两层都钉住。
+ */
 
 function makeCourse(id: string, title: string, units: { title: string; points: string[] }[]): Course {
   return {
@@ -76,5 +83,29 @@ describe('对话自动分类', () => {
 
   it('没有课程时返回 null', () => {
     expect(matchCourseForMessage('随便聊聊', [])).toBeNull()
+  })
+
+  it('与课程无关的闲话不归类 —— 哪怕当前就在某门课的对话里', () => {
+    // 这几句是用户实际踩到的：「说说你的经历」被归进了文言文课程
+    expect(matchCourseForMessage('说说你的经历', COURSES)).toBeNull()
+    expect(matchCourseForMessage('你叫什么名字', COURSES)).toBeNull()
+    expect(matchCourseForMessage('我今天有点累', COURSES)).toBeNull()
+  })
+})
+
+describe('认不出课程时：追问留下、闲话回主对话', () => {
+  it('追问留在原地', () => {
+    expect(looksLikeFollowUp('再讲一遍')).toBe(true)
+    expect(looksLikeFollowUp('为什么')).toBe(true)
+    expect(looksLikeFollowUp('这里没懂')).toBe(true)
+    expect(looksLikeFollowUp('第二讲讲了什么')).toBe(true)
+    expect(looksLikeFollowUp('第 3 章难吗')).toBe(true)
+  })
+
+  it('自成一体的闲话不算追问 —— 它该回主对话', () => {
+    expect(looksLikeFollowUp('说说你的经历')).toBe(false)
+    expect(looksLikeFollowUp('你叫什么名字')).toBe(false)
+    expect(looksLikeFollowUp('我今天有点累')).toBe(false)
+    expect(looksLikeFollowUp('帮我看看今天该学什么')).toBe(false)
   })
 })

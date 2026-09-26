@@ -120,19 +120,65 @@ export function resolveWhen(when: string | undefined | null, now: Date = new Dat
 
 export interface CourseLink {
   courseId: Id
-  unitId: Id
+  /**
+   * 命中的**整个阶段**（"我要学完阶段一"这类）。
+   *
+   * 为什么要单独一个字段而不是退化成"阶段里的第一节"：用户说"学完阶段一"，
+   * 他要的是那一章全部划掉。上一版只能落到某一个单元上，于是勾完之后
+   * 被划掉的是别的某一节 —— 用户报的"它给我划掉的是阶段二中的第一个课程"就是这个。
+   */
+  stageId?: Id
+  /** 命中的**具体某一节**（比阶段更精确时才用） */
+  unitId?: Id
   /** 该单元在计划里的排期项（有的话）。完成待办时回流更新它 */
   planItemId?: Id
   /** 匹配得分：命中的字越多越具体 */
   score: number
 }
 
+/** 中文数字 → 阿拉伯数字（只处理 1~99，「阶段一」「第十章」够用了） */
+const CHINESE_DIGITS: Record<string, number> = {
+  一: 1,
+  二: 2,
+  三: 3,
+  四: 4,
+  五: 5,
+  六: 6,
+  七: 7,
+  八: 8,
+  九: 9,
+  十: 10,
+}
+
 /**
- * 把一段自由文本匹配到课程单元上。
+ * 把「一」「十」「十一」「二十一」「3」解析成序号。
  *
- * 依据是单元标题与知识点（它们就是这门课里已经存在的"标准说法"）。
- * 命中要求整段包含或整体被包含，且长度至少 2 个字 ——
- * 单字匹配（"学""做"）几乎必然误伤，宁可不匹配。
+ * ⚠️ 返回的是**从 1 开始的序号**，不是数组下标 —— 调用方取 stages[n - 1]。
+ * 这类"第 N 段"的解析最容易犯的错就是把它当 0 基下标用，
+ * 症状是"说阶段一，动的却是阶段二"，而且看起来像随机错位、极难查。
+ */
+export function parseOrdinal(raw: string): number | null {
+  const text = raw.trim()
+  if (/^\d+$/.test(text)) return Number(text)
+
+  const tensMatch = /^([一二三四五六七八九])?十([一二三四五六七八九])?$/.exec(text)
+  if (tensMatch) {
+    const tens = tensMatch[1] ? (CHINESE_DIGITS[tensMatch[1]] ?? 1) : 1
+    const ones = tensMatch[2] ? (CHINESE_DIGITS[tensMatch[2]] ?? 0) : 0
+    return tens * 10 + ones
+  }
+
+  return CHINESE_DIGITS[text] ?? null
+}
+
+/**
+ * 把一段自由文本匹配到课程内容上。
+ *
+ * 两条依据，优先级不同：
+ * 1. **明说了第几阶段/第几章** → 整个阶段（"我要学完阶段一"）。
+ *    除非同一句话里还精确点名了某一节，那时以那一节为准。
+ * 2. 否则按**单元标题与知识点**匹配：整段包含或整体被包含，且至少 2 个字 ——
+ *    单字匹配（"学""做"）几乎必然误伤，宁可不匹配。
  */
 export function matchTodoToCourse(
   title: string,
@@ -145,31 +191,101 @@ export function matchTodoToCourse(
   let best: CourseLink | null = null
 
   for (const course of courses) {
-    for (const stage of course.stages) {
-      for (const unit of stage.units) {
-        for (const alias of [unit.title, ...unit.knowledgePoints]) {
-          const candidate = normalizeForMatch(alias)
-          if (candidate.length < 2) continue
-          if (!target.includes(candidate) && !candidate.includes(target)) continue
+    const unitMatch = matchUnit(course, target)
+    const namedStage = namedStageOf(course, target)
 
-          // 命中的字数越多越具体；同分时保留先遇到的（阶段/单元顺序即课程自身的顺序）
-          if (!best || candidate.length > best.score) {
-            best = {
-              courseId: course.id,
-              unitId: unit.id,
-              score: candidate.length,
-            }
-          }
-        }
-      }
-    }
+    /*
+     * 同一句话里既点了阶段、又点了阶段内的某一节 → 以那一节为准（更精确）。
+     * 点了阶段但没点到节 → 整个阶段。
+     */
+    const unitInsideNamedStage =
+      unitMatch && namedStage && course.stages.some((stage) =>
+        stage.id === namedStage.id && stage.units.some((unit) => unit.id === unitMatch.unitId),
+      )
+
+    const candidate: CourseLink | null =
+      unitMatch && (!namedStage || unitInsideNamedStage)
+        ? unitMatch
+        : namedStage
+          ? { courseId: course.id, stageId: namedStage.id, score: namedStage.score }
+          : unitMatch
+
+    if (candidate && (!best || candidate.score > best.score)) best = candidate
   }
 
   if (!best) return null
 
   const plan = plans[best.courseId]
+  if (!best.unitId) return best
   const item = plan?.items.find((candidate) => candidate.unitId === best?.unitId)
   return item ? { ...best, planItemId: item.id } : best
+}
+
+/** 逐单元比对标题与知识点 */
+function matchUnit(course: Course, target: string): CourseLink | null {
+  let best: CourseLink | null = null
+
+  for (const stage of course.stages) {
+    for (const unit of stage.units) {
+      for (const alias of [unit.title, ...unit.knowledgePoints]) {
+        const candidate = normalizeForMatch(alias)
+        if (candidate.length < 2) continue
+        if (!target.includes(candidate) && !candidate.includes(target)) continue
+
+        // 命中的字数越多越具体；同分时保留先遇到的（阶段/单元顺序即课程自身的顺序）
+        if (!best || candidate.length > best.score) {
+          best = { courseId: course.id, unitId: unit.id, score: candidate.length }
+        }
+      }
+    }
+  }
+
+  return best
+}
+
+/**
+ * 这句话点名的阶段。
+ *
+ * 两种说法都要认：
+ * - **序号**：「阶段一」「第 2 章」「第三部分」—— 序号从 1 开始，取 stages[n - 1]；
+ * - **标题**：用户直接把阶段名写出来（「先把字词句读通」）。
+ *   标题匹配要求至少 4 个字：阶段名常常是「起步」这种两字词，两字全课程撞车的概率太高。
+ */
+function namedStageOf(course: Course, target: string): { id: Id; score: number } | null {
+  /*
+   * 两种语序都要认：
+   * - 序号在前：「第一阶段」「第 2 章」「第三部分」
+   * - 序号在后：「阶段一」「章三」（口语里更常说"学完阶段一"）
+   * 只认前一种的话，"我要学完阶段一"会被判成没点名任何阶段。
+   */
+  const ordinal =
+    /第\s*([一二三四五六七八九十\d]+)\s*个?\s*(?:阶段|章|部分|单元组)/.exec(target) ??
+    /(?:阶段|单元组|章|部分)\s*([一二三四五六七八九十\d]+)/.exec(target)
+
+  if (ordinal) {
+    const index = parseOrdinal(ordinal[1] ?? '')
+    // 序号越界就当没点名（说"第九阶段"而课程只有三段时，不该硬套到某一段上）
+    if (index !== null && index >= 1 && index <= course.stages.length) {
+      const stage = course.stages[index - 1]!
+      // 得分加上序号本身的长度：明说"阶段一"比撞上一个长标题更可信
+      return { id: stage.id, score: (ordinal[1] ?? '').length + 4 }
+    }
+  }
+
+  let best: { id: Id; score: number } | null = null
+  for (const stage of course.stages) {
+    const candidate = normalizeForMatch(stage.title)
+    if (candidate.length < 4) continue
+    if (!target.includes(candidate)) continue
+    if (!best || candidate.length > best.score) best = { id: stage.id, score: candidate.length }
+  }
+
+  return best
+}
+
+/** 某个单元属于哪个阶段（完成判定要用） */
+export function stageIdOfUnit(course: Course, unitId: Id): Id | undefined {
+  return course.stages.find((stage) => stage.units.some((unit) => unit.id === unitId))?.id
 }
 
 /** 归一化：去掉空白与标点、统一小写，只留下用来比对的字 */
@@ -192,13 +308,31 @@ export function normalizeForMatch(text: string): string {
 export function doneUnitIds(course: Course, plan: Plan | undefined, todos: Todo[]): Set<Id> {
   const done = new Set<Id>()
 
+  /*
+   * 先收一遍"整段完成"：说"我要学完阶段一"的那种待办挂在阶段上，
+   * 勾掉它就该把这一段里**每一节**都划掉（用户明确要求的行为）。
+   */
+  const doneStages = new Set(
+    todos
+      .filter((todo) => todo.done && !todo.weekStart && todo.stageId)
+      .map((todo) => todo.stageId as Id),
+  )
+
   for (const stage of course.stages) {
+    const stageFinished = doneStages.has(stage.id)
+
     for (const unit of stage.units) {
+      if (stageFinished) {
+        done.add(unit.id)
+        continue
+      }
+
       const items = plan?.items.filter((item) => item.unitId === unit.id) ?? []
       const linked = todos.filter((todo) => todo.unitId === unit.id && !todo.weekStart)
 
       const planDone =
-        items.length > 0 && items.every((item) => planItemState(item, todos) === 'done')
+        items.length > 0 &&
+        items.every((item) => planItemState(item, todos, course) === 'done')
       const linkedDone = linked.length > 0 && linked.every((todo) => todo.done)
 
       if (planDone || linkedDone) done.add(unit.id)

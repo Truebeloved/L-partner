@@ -40,6 +40,12 @@ export function TodaySidebarWidget() {
     [courses],
   )
 
+  /** 阶段 id → 阶段名：整段待办要显示成「课程 · 阶段」而不是只给课程名 */
+  const stageTitles = useMemo(
+    () => new Map(courses.flatMap((course) => course.stages.map((stage) => [stage.id, stage.title]))),
+    [courses],
+  )
+
   const todayTodos = useMemo(
     () =>
       todos
@@ -107,6 +113,7 @@ export function TodaySidebarWidget() {
       date: today,
       courseId: link?.courseId,
       unitId: link?.unitId,
+      stageId: link?.stageId,
       planItemId: link?.planItemId,
       source: 'manual',
     })
@@ -219,6 +226,10 @@ export function TodaySidebarWidget() {
                   {todo.courseId && courseTitles.get(todo.courseId) && (
                     <span className="mt-0.5 block truncate text-micro text-ink-faint">
                       {courseTitles.get(todo.courseId)}
+                      {/* 挂在整段上的待办要说清是"哪一段"：勾掉它会让这一段的每一节都划掉 */}
+                      {todo.stageId && stageTitles.get(todo.stageId)
+                        ? ` · ${stageTitles.get(todo.stageId)}`
+                        : ''}
                     </span>
                   )}
                 </span>

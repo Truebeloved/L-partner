@@ -7,7 +7,7 @@ import {
   summarizeConversation,
 } from '@/features/memory/extract'
 import { detectIntent } from '@/features/today/intent'
-import { matchCourseForMessage } from '@/features/chat/routing'
+import { looksLikeFollowUp, matchCourseForMessage } from '@/features/chat/routing'
 import { retrieveMemories } from '@/features/memory/retrieve'
 import { createProvider } from '@/lib/llm'
 import { assembleMessages, clampText, estimateMessagesTokens } from '@/lib/llm/context'
@@ -79,15 +79,20 @@ export function useChatSession(): ChatSession {
       /*
        * ---- 自动分类 ----
        *
-       * 用户定的口径：与课程内容有关 → 进那门课的对话；无关 → 留在主对话。
-       * 实现上只有一条规则：**认出某门课才切换**，认不出来就留在当前这一场。
+       * 用户定的口径：与课程内容有关 → 进那门课的对话；无关 → 进主对话。
        *
-       * 「认不出就留下」而不是「认不出就丢回主对话」是有意的：课程对话里的
-       * 追问（"再讲一遍""为什么"）本来就不会重复课名，按内容判它一定认不出，
-       * 此时把它挪回主对话，等于把一段连贯的讨论拆成两半 —— 那正是这次要修的问题。
+       * 三种落点：
+       * 1. 认出某门课 → 那门课的对话；
+       * 2. 认不出，但这句话明显是在**接着上一轮说**（"再讲一遍""为什么"）→ 留在原地，
+       *    否则一段连贯的课程讨论会被拆成两半；
+       * 3. 其余（"说说你的经历""我今天很累"这种自成一体的闲话）→ 主对话。
+       *
+       * 第 3 条是这一版的修正：原来一律"认不出就留在当前这一场"，
+       * 于是用户在课程对话里问一句"说说你的经历"，这句无关的话却被归进了那门课。
        */
       const match = matchCourseForMessage(trimmed, courses)
-      const targetCourseId = match?.courseId ?? active?.courseId
+      const staysInPlace = !match && active?.courseId && looksLikeFollowUp(trimmed)
+      const targetCourseId = match?.courseId ?? (staysInPlace ? active?.courseId : undefined)
       const targetCourse = targetCourseId
         ? courses.find((course) => course.id === targetCourseId)
         : undefined

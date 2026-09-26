@@ -6,10 +6,8 @@ import {
   generatePlanForCourse,
   generateUnitLesson,
   materializeTodos,
-  rescheduleCourse,
   summarizePlan,
 } from '@/features/course/courseActions'
-import { ConfirmDialog } from '@/features/course/components/ConfirmDialog'
 import { CourseStructure } from '@/features/course/components/CourseStructure'
 import { PlanTimeline } from '@/features/course/components/PlanTimeline'
 import { courseTotals, unitTitleMap } from '@/features/course/drafts'
@@ -38,7 +36,6 @@ export function CourseDetailPage() {
   const todos = useTodoStore((state) => state.todos)
 
   const [feedback, setFeedback] = useState<string | null>(null)
-  const [askReschedule, setAskReschedule] = useState(false)
   const settings = useSettingsStore((state) => state.settings)
 
   /**
@@ -97,18 +94,6 @@ export function CourseDetailPage() {
     )
   }
 
-  function handleReschedule() {
-    if (!courseId) return
-    const result = rescheduleCourse(courseId)
-    setAskReschedule(false)
-    if (!result) return
-    setFeedback(
-      result.summary.remainingMinutes > 0
-        ? `已重新排期：已完成的部分原样保留，剩下的 ${formatMinutes(result.summary.remainingMinutes)} 按当前的每周投入重新安排。`
-        : '已重新排期：这门课已经全部完成，没有需要重排的内容。',
-    )
-  }
-
   return (
     <>
       <PageHeader
@@ -119,18 +104,18 @@ export function CourseDetailPage() {
             <button type="button" className="btn btn-ghost" onClick={() => navigate('/')}>
               返回书架
             </button>
-            {plan && (
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setAskReschedule(true)}
-              >
-                重新排期
+            {/*
+              只有"还没有计划"时才给这个按钮。
+              「重新排期」与「重新生成计划」都删掉了：前者是把剩下的内容按当前每周投入重排，
+              后者是整门课重排一次，两者对用户来说是同一件事的两种说法，
+              而真正需要重排的时刻（改了每周投入、落下几天进度）系统自己心里有数，
+              让用户去猜该点哪个只会把计划搞乱。
+            */}
+            {!plan && (
+              <button type="button" className="btn btn-primary" onClick={handleGenerate}>
+                生成学习计划
               </button>
             )}
-            <button type="button" className="btn btn-primary" onClick={handleGenerate}>
-              {plan ? '重新生成计划' : '生成学习计划'}
-            </button>
           </>
         }
       />
@@ -255,15 +240,7 @@ export function CourseDetailPage() {
         </div>
       </details>
 
-      {askReschedule && (
-        <ConfirmDialog
-          title="重新排期？"
-          message="已完成的部分会原样保留；还没学的部分会被清掉重排，对应的未完成待办也会一起重建。"
-          confirmText="重新排期"
-          onConfirm={handleReschedule}
-          onCancel={() => setAskReschedule(false)}
-        />
-      )}
+
     </>
   )
 }

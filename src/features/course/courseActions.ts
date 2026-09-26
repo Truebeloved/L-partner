@@ -10,6 +10,8 @@ import { usePlanStore } from '@/store/plans'
 import { useTodoStore } from '@/store/todos'
 import type { Course, CourseSource, DateKey, Id, Plan, PlanItem, Todo, Unit } from '@/types/models'
 
+import { stageIdOfUnit } from '@/features/today/autoTodo'
+
 import { buildStages, flattenUnits, unitTitleMap } from './drafts'
 import type { CoursePlanDraft } from './drafts'
 
@@ -160,7 +162,9 @@ export function generatePlanForCourse(
   })
 
   // 历史（已完成 / 已跳过）继续留在计划里：重新排期不能把学习记录抹掉
-  const history = (previous?.items ?? []).filter((item) => planItemState(item, todos) !== 'open')
+  const history = (previous?.items ?? []).filter(
+    (item) => planItemState(item, todos, course) !== 'open',
+  )
 
   const items: PlanItem[] = [
     ...history,
@@ -270,7 +274,7 @@ export function summarizePlan(
 
   for (const item of items) {
     totalMinutes += item.minutes
-    const state = planItemState(item, todos)
+    const state = planItemState(item, todos, course)
     if (state === 'done') doneMinutes += item.minutes
     if (state === 'open') remainingMinutes += item.minutes
     minutesByDate.set(item.date, (minutesByDate.get(item.date) ?? 0) + item.minutes)
@@ -300,18 +304,36 @@ export function summarizePlan(
  * 「完成待办 → 回流更新排期项」那条链路可能还没跑完（甚至没写），
  * 所以展示与统计必须走同一个判定，否则会出现「概览说完成了 60 分钟，日历上却还是未完成」。
  */
-export function planItemState(item: PlanItem, todos: Todo[]): 'open' | 'done' | 'dropped' {
+export function planItemState(
+  item: PlanItem,
+  todos: Todo[],
+  course?: Course,
+): 'open' | 'done' | 'dropped' {
   if (item.status === 'done') return 'done'
   if (item.status === 'skipped') return 'dropped'
   // 待办先打了勾、回流还没写回排期项状态时，也要按已完成处理
-  return todos.some((todo) => todo.planItemId === item.id && todo.done) ? 'done' : 'open'
+  if (todos.some((todo) => todo.planItemId === item.id && todo.done)) return 'done'
+
+  /*
+   * 挂在**整个阶段**上的待办（"我要学完阶段一"）勾掉之后，这一段的每一节都算完成。
+   * 这里必须认这条链路：课程页会用 doneUnitIds 把整段划掉，而进度统计走的是本函数 ——
+   * 不认的话就会出现"结构里划掉了，进度还是 0%"这种自相矛盾。
+   */
+  if (course) {
+    const stageId = stageIdOfUnit(course, item.unitId)
+    if (stageId && todos.some((todo) => todo.done && !todo.weekStart && todo.stageId === stageId)) {
+      return 'done'
+    }
+  }
+
+  return 'open'
 }
 
 /** 课程总时长减去已完成/已放弃的部分，得到还需要排期的单元 */
 function remainingUnits(course: Course, plan: Plan | undefined, todos: Todo[]): SchedulableUnit[] {
   const finishedMinutes = new Map<Id, number>()
   for (const item of plan?.items ?? []) {
-    if (planItemState(item, todos) === 'open') continue
+    if (planItemState(item, todos, course) === 'open') continue
     finishedMinutes.set(item.unitId, (finishedMinutes.get(item.unitId) ?? 0) + item.minutes)
   }
 

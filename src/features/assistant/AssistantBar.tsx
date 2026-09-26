@@ -90,6 +90,8 @@ export function AssistantBar({ placement }: AssistantBarProps) {
   const [answerOverflows, setAnswerOverflows] = useState(false)
   /** 用户自己收起过这一次回答：此时不要再自动展开，那是跟他抢控制权 */
   const userCollapsedRef = useRef(false)
+  /** 这一次提交还允不允许自动展开（见 handleAnswerOverflow 的说明） */
+  const autoExpandRef = useRef(false)
   /** 输入框的 ref：「按回车问下一个」之后要把光标放进去 */
   const inputRef = useRef<HTMLInputElement>(null)
   /** 递增计数：每一次变化都表示"请把焦点给输入框" */
@@ -137,6 +139,7 @@ export function AssistantBar({ placement }: AssistantBarProps) {
       })
       // 同上：默认不展开，放不下时由 AnswerBubble 报告、再展开
       userCollapsedRef.current = false
+      autoExpandRef.current = true
       setAnswerOpen(false)
       setMorphing(true)
       window.setTimeout(() => setMorphing(false), 16)
@@ -152,6 +155,7 @@ export function AssistantBar({ placement }: AssistantBarProps) {
      * 用户的原话是"模型对话总是换行"。短回答就该一直待在那条缩略的一行里。
      */
     userCollapsedRef.current = false
+    autoExpandRef.current = true
     setAnswerOpen(false)
     setMorphing(true)
     setAutoSettle(false)
@@ -163,13 +167,18 @@ export function AssistantBar({ placement }: AssistantBarProps) {
   /**
    * 回答被截断时（一行放不下）才展开，并且只展开"一会儿"。
    *
-   * 为什么由 AnswerBubble 报告而不是在这里按字数猜：一行能放多少字取决于
-   * 输入条的实际宽度（窗口尺寸、有没有侧栏都会变），按字数猜迟早会在某个宽度上猜错。
+   * 为什么需要 autoExpandRef 这道闸：这个回调会在**每次重新测量**时被调用，
+   * 而重新测量的时机不止"回答变长了"——换页、改窗口宽度、停靠位变化都会触发。
+   * 只按"被截断"判断的话，用户答完一轮、去对话页转一圈再回来，那条旧回答会被
+   * 重新撑开一次（用户报的正是这个）。所以只有**刚刚提交的那一轮**才允许自动展开，
+   * 展开过一次就把闸关掉。
    */
   const handleAnswerOverflow = useCallback(
     (overflowing: boolean) => {
       setAnswerOverflows(overflowing)
       if (!overflowing || userCollapsedRef.current) return
+      if (!autoExpandRef.current) return
+      autoExpandRef.current = false
       setAnswerOpen(true)
       // 展开只给一小会儿：看完这 3 秒它会自己收回缩略态
       setAutoSettle(!inputOnly)

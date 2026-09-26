@@ -79,7 +79,6 @@ export function BookDetailPopup({ course, plan, anchor, onOpen, onDelete }: Book
         <h3 className="min-w-0 flex-1 font-display text-h3 leading-snug font-bold text-ink">
           {course.title}
         </h3>
-        <span className="badge shrink-0">{SOURCE_LABEL[course.source]}</span>
       </div>
 
       {course.goal && (
@@ -137,11 +136,11 @@ export function BookDetailPopup({ course, plan, anchor, onOpen, onDelete }: Book
   )
 }
 
-const SOURCE_LABEL: Record<Course['source'], string> = {
-  manual: '手动创建',
-  prompt: 'AI 生成',
-  file: '文件导入',
-}
+/*
+ * 这里原来还有一个「手动创建 / AI 生成 / 文件导入」的来源徽章，和课程页里那个一起删掉了：
+ * 课程现在一律由 AI 设计，"来源"既说不准也没人关心，而"手动创建"摆在 AI 设计的课程上
+ * 更是错的信息。课程页那边先删的，用户看到这里还有一个，一并去掉。
+ */
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (

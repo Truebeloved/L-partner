@@ -10,7 +10,7 @@
     "dev:desktop": "node scripts/electron-dev.mjs",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "package": "npm run build && electron-builder --win",
+    "package": "node scripts/package-app.mjs",
     "package:dir": "npm run build && electron-builder --win --dir",
     "typecheck": "tsc -b",
     "check:design": "node scripts/check-design-tokens.mjs",

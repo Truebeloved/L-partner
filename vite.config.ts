@@ -68,4 +68,19 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     css: false,
   },
+  server: {
+    /*
+     * 关掉对"构建产物目录"的文件监听，否则 `npm run package` 会随机失败。
+     *
+     * 踩过的坑：electron-builder 先把应用打进 `release/win-unpacked.tmp`，再改名成
+     * `release/win-unpacked`。而 Vite 的监听器盯着整个项目目录 —— 开发服务器一开着，
+     * 它就把刚写出来的文件握在手里，改名于是必然报
+     * `EPERM: operation not permitted, rename ...`，
+     * 而且手工 Rename-Item 也会被拒（看起来像杀毒软件，其实是自己人）。
+     * 这些目录本来就没有热更的必要：它们只在构建时出现。
+     */
+    watch: {
+      ignored: ['**/release/**', '**/dist/**', '**/.ui-shots/**', '**/coverage/**'],
+    },
+  },
 })

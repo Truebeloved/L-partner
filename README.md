@@ -102,6 +102,17 @@ npm run package       # 产出 NSIS 安装包到 release/
 npm run package:dir   # 只产出免安装目录，用于快速验证
 ```
 
+打包脚本（`scripts/package-app.mjs`）已经把两个平台坑固化下来了，正常情况下**一条命令即可**，
+结束时会打印安装包路径与体积：
+
+- **不要让构建产物目录被文件监听器盯着**。electron-builder 先把应用写进
+  `release/win-unpacked.tmp` 再改名，而开发服务器的监听器一握着那些新文件，改名就会报
+  `EPERM: operation not permitted, rename …`（看起来像杀毒软件，其实是自己人）。
+  仓库里已经把 `release/`、`dist/`、`.ui-shots/` 加进 Vite 的 `server.watch.ignored`，
+  所以打包时开着开发服务器也不会再失败；万一仍报这个错，关掉所有 L-partner 窗口重试。
+- **首次打包要从 GitHub 取 NSIS 与 winCodeSign**。如果网络需要镜像或存在 TLS 中间人，
+  脚本默认放行证书校验并指向国内镜像；想恢复严格校验就设 `LPARTNER_STRICT_TLS=1`。
+
 > **没有 API Key 也能完整体验**课程、计划、待办、提醒和示例数据；
 > 只有对话与 AI 生成方案需要配置模型。
 

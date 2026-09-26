@@ -130,6 +130,19 @@ describe('isAgentCommand', () => {
     }
   })
 
+  it('动词直接起手的祈使句也算 —— 「删掉取快递那条」不带任何前置词', () => {
+    for (const text of [
+      '删掉取快递那条',
+      '删除今天那条待办',
+      '改一下周三那个',
+      '标记第一章为已完成',
+      '重排一下 React 的计划',
+    ]) {
+      expect(isAgentCommand(text), text).toBe(true)
+      expect(detectIntent(text), text).toBe(true)
+    }
+  })
+
   it('**提问**不算 —— 这是这套判定里唯一真正的护栏', () => {
     // 与「把周三那条挪到周五」词面几乎同构，区别只在"是不是在问我"
     for (const text of [

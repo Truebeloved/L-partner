@@ -40,7 +40,6 @@ export interface ChatSession {
   receipts: string[]
   /** 不可撤销、等用户点头的动作。它们**不会**被自动执行 */
   pendingActions: PendingAction[]
-  dismissReceipts: () => void
   /** 确认并执行一条待确认动作；执行后的回执会补进 receipts */
   confirmPendingAction: (id: string) => void
   dismissPendingAction: (id: string) => void
@@ -79,18 +78,18 @@ export function useChatSession(): ChatSession {
 
   const scheduleReceiptClear = useCallback(() => {
     if (noticeTimerRef.current !== null) window.clearTimeout(noticeTimerRef.current)
-    // 8 秒够看清几句话，又不至于在页面上留一块永久的小告示。
-    // ⚠️ 待确认的动作**不**跟着一起消失：它是一句问话，得等用户回答
+    /*
+     * 回执**只**靠这个计时器退场，界面上没有"知道了"按钮 ——
+     * 用户要的是"看一眼就知道它办了事"，而不是每次都被要求点一下。
+     * 6 秒够读完两三行，也不至于在页面上留一块永久的小告示。
+     *
+     * ⚠️ 待确认的动作（删课程/删计划）**不**跟着一起消失：那是一句问话，
+     * 得等用户回答，自动消失等于默默替他做了决定。
+     */
     noticeTimerRef.current = window.setTimeout(() => {
       noticeTimerRef.current = null
       setReceipts([])
-    }, 8000)
-  }, [])
-
-  const dismissReceipts = useCallback(() => {
-    if (noticeTimerRef.current !== null) window.clearTimeout(noticeTimerRef.current)
-    noticeTimerRef.current = null
-    setReceipts([])
+    }, 6000)
   }, [])
 
   const dismissPendingAction = useCallback((id: string) => {
@@ -332,6 +331,13 @@ export function useChatSession(): ChatSession {
           messages: after.messages,
           courseId: after.courseId,
           conversationId: after.id,
+          /*
+           * 告诉他"这一轮是用户在指挥我办事"。抽取层据此在**没产出任何动作**时
+           * 打一条诊断日志（含模型原始输出）—— 这一条是踩过坑才加的：
+           * 当时的表现是"我说了删那条待办，它毫无反应"，而根因在提示词里
+           * （清单只给最旧的 20 条 + "抄不出来就别发"），从界面上完全看不出来。
+           */
+          expectAction: explicit,
         }).then((outcome) => {
           // 新增待办先合成一条自己的回执，再拼上动作的回执 ——
           // 界面上看到的是"它办了哪些事"的一份完整清单
@@ -413,7 +419,6 @@ export function useChatSession(): ChatSession {
       contextTokens,
       receipts,
       pendingActions,
-      dismissReceipts,
       confirmPendingAction,
       dismissPendingAction,
       send,
@@ -427,7 +432,6 @@ export function useChatSession(): ChatSession {
       contextTokens,
       receipts,
       pendingActions,
-      dismissReceipts,
       confirmPendingAction,
       dismissPendingAction,
       send,

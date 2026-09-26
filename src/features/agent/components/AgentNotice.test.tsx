@@ -32,7 +32,6 @@ function renderNotice(props: Partial<Parameters<typeof AgentNotice>[0]> = {}) {
             <AgentNotice
               receipts={[]}
               pending={[]}
-              onDismissReceipts={vi.fn()}
               onConfirm={onConfirm}
               onDismissPending={onDismissPending}
               {...props}
@@ -60,14 +59,12 @@ describe('AgentNotice', () => {
     expect(screen.getByText('已把「取快递」改到 9月27日')).toBeInTheDocument()
   })
 
-  it('点「知道了」把回执收掉', async () => {
-    const user = userEvent.setup()
-    const onDismissReceipts = vi.fn()
-    renderNotice({ receipts: ['已加入待办：写实验报告'], onDismissReceipts })
+  it('回执没有"知道了"按钮 —— 它自己会走，不该要求用户点一下', () => {
+    renderNotice({ receipts: ['已加入待办：写实验报告'] })
 
-    await user.click(screen.getByRole('button', { name: '关闭提示' }))
-
-    expect(onDismissReceipts).toHaveBeenCalled()
+    expect(screen.getByText('已加入待办：写实验报告')).toBeInTheDocument()
+    // 退场完全交给 useChatSession 的计时器；界面上不该出现任何关闭按钮
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 
   it('不可撤销的动作只显示一句问话，点确认才交给外面执行', async () => {

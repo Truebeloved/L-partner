@@ -12,7 +12,7 @@ import { splitIntent } from '@/features/today/intent'
 import { extractJson } from '@/lib/llm'
 import { buildMemoryExtractionMessages, buildSummaryMessages } from '@/lib/llm/prompts'
 import type { LlmProvider } from '@/lib/llm/types'
-import { toDateKey } from '@/lib/date'
+import { dayjs, toDateKey, todayKey } from '@/lib/date'
 import { longestCommonSubstring } from '@/lib/text'
 import { useCourseStore } from '@/store/courses'
 import { useMemoryStore } from '@/store/memory'
@@ -90,8 +90,16 @@ export async function extractMemories(input: {
   messages: ChatMessage[]
   courseId?: Id
   conversationId?: Id
+  /**
+   * 这一轮用户是不是在**指挥我办事**。
+   *
+   * 只用来决定要不要打诊断日志：指挥类的话如果一条动作都没产出，
+   * 那就是"我说了它没反应"，而这件事在界面上完全看不出来 ——
+   * 必须留下模型原始输出，否则只能靠猜。
+   */
+  expectAction?: boolean
 }): Promise<ExtractionOutcome> {
-  const { provider, messages, courseId, conversationId } = input
+  const { provider, messages, courseId, conversationId, expectAction = false } = input
   if (messages.length === 0) return { memories: 0, todos: [], receipts: [], pending: [] }
 
   /*
@@ -127,23 +135,32 @@ export async function extractMemories(input: {
    * 动作能引用的对象清单：课程标题 + 未完成的待办。
    *
    * 只给**标题**（不给内容、大纲）—— 模型在这些动作里只需要"照抄一个标题回来"，
-   * 而它抄得准不准，取决于清单里有没有这一条。待办按日期取最近的一批并封顶：
-   * 攒到几百条时全列出来，光这一项就能把每次抽取都变贵。
+   * 而它抄得准不准，取决于清单里有没有这一条。
+   *
+   * ⚠️ 排序是这里最容易写错、也最要命的一处：原来按日期**升序**取前 20 条，
+   * 于是列出来的永远是最早的那一批 —— 用户书架上有一百条待办（一门 100 讲的课
+   * 材料化出来的）时，今天该做的那几条一条都不在清单里，模型找不到目标就什么动作都发不出来，
+   * 表现就是"我说了删那条，它毫无反应"。所以按**离今天多近**排：
+   * 今天与逾期的先出来，然后才是未来与很久以前的。
    */
   const courses = useCourseStore.getState().courses.map((course) => course.title)
+  const today = todayKey()
   const openTodos = useTodoStore
     .getState()
     .todos.filter((todo) => !todo.done)
-    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((todo) => ({ todo, distance: Math.abs(dayjs(todo.date).diff(dayjs(today), 'day')) }))
+    .sort((a, b) => a.distance - b.distance)
     .slice(0, OPEN_TODO_LIMIT)
-    .map((todo) => ({
+    .map(({ todo }) => ({
       title: todo.title,
       note: [todo.date, courseTitleOf(todo.courseId)].filter(Boolean).join(' · '),
     }))
 
   let parsed: RawExtraction
+  // 原始输出留一份：出问题时它是唯一能看出"模型到底说了什么"的东西
+  let rawText: string
   try {
-    const raw = await provider.chat(
+    rawText = await provider.chat(
       buildMemoryExtractionMessages(recent, existing, {
         pendingTodos,
         courseUnits,
@@ -158,10 +175,22 @@ export async function extractMemories(input: {
         maxTokens: 1536,
       },
     )
-    parsed = extractJson<RawExtraction>(raw)
+    parsed = extractJson<RawExtraction>(rawText)
   } catch (error) {
     console.warn('[L-partner] 记忆抽取失败，已跳过本次：', error)
     return { memories: 0, todos: [], receipts: [], pending: [] }
+  }
+
+  /*
+   * 指挥类的话一条动作都没有 → 这就是"我说了它没反应"。把模型的原始输出留下来：
+   * 这类问题从界面上完全看不出来（没有报错、没有回执），只能靠这段日志定位。
+   * 只在这一种情况下打，不会把正常抽取刷屏。
+   */
+  if (expectAction && asActionList(parsed.actions).length === 0) {
+    console.warn(
+      '[L-partner] 这句像是在指挥我办事，但模型没有返回任何 actions。原始输出：',
+      rawText,
+    )
   }
 
   const drafts: MemoryDraft[] = []
@@ -265,10 +294,10 @@ export const PENDING_LINK_LIMIT = 5
 /**
  * 动作清单里最多列多少条未完成待办。
  *
- * 20 条是"够用"与"别把每次抽取都变贵"的平衡点：用户真正会开口去改的，
- * 几乎都是最近这几天的那几条，而不是三个月前的一条。
+ * 与 `buildActionPrompt` 里告诉模型的那个数字必须一致 —— 否则模型会以为
+ * "清单是全的"，找不到目标就放弃这个动作。
  */
-export const OPEN_TODO_LIMIT = 20
+export const OPEN_TODO_LIMIT = 40
 
 /** courseId → 课程标题，只为了给待办标注归属，让模型分得清同名待办 */
 function courseTitleOf(courseId?: Id): string | undefined {
@@ -505,6 +534,13 @@ function asStringArray(value: unknown): string[] {
     .filter((item): item is string => typeof item === 'string')
     .map((item) => item.trim())
     .filter((item) => item.length > 0)
+}
+
+/** 模型给的 actions 可能是数组，也可能只是一个对象（只有一个动作时省掉了方括号） */
+function asActionList(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value
+  if (typeof value === 'object' && value !== null) return [value]
+  return []
 }
 
 function asObjectArray(value: unknown): Record<string, unknown>[] {

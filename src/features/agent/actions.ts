@@ -122,6 +122,9 @@ export function isKnownActionType(value: unknown): value is AgentActionType {
  * 代码支持的动作模型永远不知道）。这类"两边各写一份"的地方，
  * 少一份就少一个坑。
  */
+/** 清单里最多列多少条未完成待办（与 features/memory/extract.ts 的取值保持一致） */
+const LISTED_TODOS = 40
+
 export function buildActionPrompt(): string {
   const lines = Object.values(AGENT_ACTIONS).map((spec) => {
     const params = Object.entries(spec.params)
@@ -132,15 +135,28 @@ export function buildActionPrompt(): string {
 
   return [
     '## 你可以替他做的事（actions）',
+    '',
     '除"新增待办"之外的动作都写进 actions 数组。**只有他明确要求时才写**，',
-    '不要因为"顺手"就替他改数据；拿不准就放进 facts 或什么都不写，让他自己说。',
+    '不要因为"顺手"就替他改数据；他只是在聊学习、问问题、发感慨时，actions 一律留空数组。',
+    '',
     ...lines,
     '',
-    '规则：',
-    '- `todo` 字段必须是**上面「他的未完成待办」里原样照抄**的一条标题；抄不出来就不要发这个动作。',
-    '- `course` 字段优先用课程标题原文；省略时按"当前这门课"理解。',
+    '### 怎么选对动作（选错了他会以为你没听懂）',
+    '- **一条待办** → `delete_todo` / `update_todo` / `complete_todo`。',
+    '  这是最常见的一类：「把取快递那条删了」「周三那个挪到周五」「第一章我看完了」。',
+    '  ⚠️ **不要**因为清单里没找到就用 delete_plan 或 delete_course 代替 —— 那删掉的东西完全不同。',
+    '- **整门课的计划**（"计划不要了""重新排一下"）→ `delete_plan` / `reschedule_course`。',
+    '- **整门课**（"这门课不学了""删掉这门课"）→ `delete_course`。',
+    '- 数量词是判据："那条""这个"是一条待办；"这门课""整门课"才涉及课程。',
+    '',
+    '### 字段怎么写',
+    `- \`todo\`：优先从上面「他的未完成待办」里**原样照抄**（那里最多列了最近 ${LISTED_TODOS} 条）。`,
+    '  **清单里没有的那条也要照他的原话写下来**，不要因为没找到就放弃这个动作 ——',
+    '  系统会自己按标题去找，找到了就执行、找不到会如实告诉他。放弃才是真正的问题：',
+    '  他会看到"我说了它毫无反应"。',
+    '- `course`：优先用课程标题原文；省略时按"当前这门课"理解。',
     '- 时间词（when / deadline）用**他的原话**，系统自己解析，不要换算成日期。',
-    '- 删除类动作（delete_course / delete_plan）系统会先问一句才执行，你照常写进去即可。',
-    '- create_course 只要他说想学什么新东西就写，系统会带他去核对课程方案。',
+    '- `create_course` 只要他说想学什么新东西就写，系统会带他去核对课程方案，不会直接建课。',
+    '- 删除课程与删除计划由系统先问一句再执行；**删除一条待办是直接执行的**，写进去即可。',
   ].join('\n')
 }

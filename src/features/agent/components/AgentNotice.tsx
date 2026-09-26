@@ -8,7 +8,6 @@ export interface AgentNoticeProps {
   receipts: string[]
   /** 不可撤销、等你点头的动作 */
   pending: PendingAction[]
-  onDismissReceipts: () => void
   onConfirm: (id: string) => void
   onDismissPending: (id: string) => void
 }
@@ -21,16 +20,18 @@ export interface AgentNoticeProps {
  * "它没听懂"和"它压根没动手" —— 这三件事的体验差别极大，看起来却完全一样。
  * 用户报过的问题正是这个："它只会分析出待办任务但不会给我添加到待办区域"。
  *
- * 不可撤销的动作（删课程、删计划）在这里变成一句问话加一个按钮：
- * 它们**不会**被自动执行。这是"在规则内"的另一半 —— 能动手，但删东西前先问一句。
+ * 两条界面口径（都是用户明确要求的）：
+ * 1. **回执自己会走，不需要用户点"知道了"**。它是一句回话，不是待办事项 ——
+ *    要用户为"看一眼"付一次点击，等于每次都打扰他一下。所以这里没有关闭按钮，
+ *    退场完全交给计时器（见 useChatSession 的 scheduleReceiptClear）。
+ * 2. **不可撤销的动作不跟着一起走**：那是一句问话（"要删掉这门课吗"），
+ *    必须等人回答，所以它保留按钮、也不自动消失。
  *
  * 样式刻意克制（与桌面小窗同一套口径）：无图标、无重阴影、字重不加重、一行一条。
- * 它是"我办好了"的一句回话，不是需要用户处理的通知中心。
  */
 export function AgentNotice({
   receipts,
   pending,
-  onDismissReceipts,
   onConfirm,
   onDismissPending,
 }: AgentNoticeProps) {
@@ -43,21 +44,11 @@ export function AgentNotice({
     <div data-agent-notice className="space-y-2">
       {receipts.length > 0 && (
         <div className="rounded-card border border-line-soft bg-raised px-3 py-2">
-          <div className="flex items-start gap-3">
-            <ul className="min-w-0 flex-1 space-y-0.5 text-small leading-relaxed text-ink">
-              {receipts.map((line) => (
-                <li key={line}>{line}</li>
-              ))}
-            </ul>
-            <button
-              type="button"
-              className="shrink-0 text-micro text-ink-faint hover:text-ink"
-              onClick={onDismissReceipts}
-              aria-label="关闭提示"
-            >
-              知道了
-            </button>
-          </div>
+          <ul className="space-y-0.5 text-small leading-relaxed text-ink">
+            {receipts.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
         </div>
       )}
 

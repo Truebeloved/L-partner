@@ -411,11 +411,22 @@ function setReminder(action: RawAction): Outcome {
 // 取值助手：模型给的字段什么都可能是
 // ---------------------------------------------------------------------------
 
+/**
+ * 取出动作列表。
+ *
+ * 兼容"只返回一个对象"这种写法（`"actions": {"type": "delete_todo", …}`）：
+ * 有些模型在只有一个动作时会去掉方括号，而严格要求数组的后果是**整个动作静默消失** ——
+ * 用户看到的就是"我说了它毫无反应"，且没有任何报错可查。
+ * 这一段多写的几行，换的是"再也不会因为一个方括号而什么都不发生"。
+ */
 function asObjectArray(value: unknown): RawAction[] {
-  if (!Array.isArray(value)) return []
-  return value.filter(
-    (item): item is RawAction => typeof item === 'object' && item !== null && !Array.isArray(item),
-  )
+  if (Array.isArray(value)) {
+    return value.filter(
+      (item): item is RawAction => typeof item === 'object' && item !== null && !Array.isArray(item),
+    )
+  }
+  if (typeof value === 'object' && value !== null) return [value as RawAction]
+  return []
 }
 
 function asText(value: unknown): string {

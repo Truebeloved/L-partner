@@ -371,6 +371,15 @@ describe('提醒与非法输入', () => {
     expect(applyAgentActions('delete_course').applied).toHaveLength(0)
     expect(applyAgentActions([null, 'x', 3]).applied).toHaveLength(0)
   })
+
+  it('单个动作写成对象（少了方括号）也要执行 —— 否则它静默消失', () => {
+    useTodoStore.setState({ todos: [makeTodo({ id: 't1', title: '取快递' })] })
+
+    const result = applyAgentActions({ type: 'delete_todo', todo: '取快递' })
+
+    expect(useTodoStore.getState().todos).toHaveLength(0)
+    expect(result.applied).toHaveLength(1)
+  })
 })
 
 describe('同一轮里的执行顺序', () => {

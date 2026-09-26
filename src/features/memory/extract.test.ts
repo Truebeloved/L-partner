@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { applyExtractedTodos, applyTodoLinks, extractMemories } from '@/features/memory/extract'
-import { dayjs, toDateKey } from '@/lib/date'
+import { dayjs, toDateKey, todayKey } from '@/lib/date'
 import type { LlmProvider } from '@/lib/llm/types'
 import { useCourseStore } from '@/store/courses'
 import { usePlanStore } from '@/store/plans'
@@ -368,5 +368,77 @@ describe('extractMemories：模糊指令也要落成待办', () => {
 
     expect(outcome.receipts).toHaveLength(1)
     expect(outcome.receipts[0]).toContain('没找到')
+  })
+
+  it('单条动作没写方括号（返回对象而不是数组）也要认 —— 否则整个动作静默消失', async () => {
+    useTodoStore.setState({
+      todos: [
+        {
+          id: 't1',
+          title: '取快递',
+          date: '2026-09-23',
+          done: false,
+          createdAt: '2026-09-23T00:00:00.000Z',
+          source: 'manual',
+        },
+      ],
+    })
+
+    const outcome = await extractMemories({
+      provider: stubProvider({ actions: { type: 'delete_todo', todo: '取快递' } }),
+      messages: [message('取快递不用了')],
+    })
+
+    expect(useTodoStore.getState().todos).toHaveLength(0)
+    expect(outcome.receipts[0]).toContain('取快递')
+  })
+
+  /*
+   * 这一条是照着实测踩出来的坑：清单原来按日期**升序**取前 20 条，
+   * 于是列出来的永远是最早的那一批。用户书架上有一百条待办（一门 100 讲的课
+   * 材料化出来的），想删的那条今天该做的根本不在清单里 ——
+   * 而提示词当时写着"抄不出来就别发这个动作"，模型于是什么都不发，
+   * 用户看到的就是"我说了删那条，它毫无反应"。
+   */
+  it('动作清单给的是离今天最近的待办，不是最早的那一批', async () => {
+    let captured = ''
+    const provider: LlmProvider = {
+      endpoint: 'stub://',
+      chat: async (messages) => {
+        captured = messages.map((item) => item.content).join('\n')
+        return '{}'
+      },
+      testConnection: async () => ({ ok: true }),
+    }
+
+    const old = Array.from({ length: 60 }, (_, index) => ({
+      id: `old-${index}`,
+      title: `很久以前的第 ${index} 件事`,
+      date: '2026-01-01',
+      done: false,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      source: 'manual' as const,
+    }))
+    useTodoStore.setState({
+      todos: [
+        ...old,
+        {
+          id: 'today-1',
+          title: '今天要交的实验报告',
+          date: todayKey(),
+          done: false,
+          createdAt: '2026-09-23T00:00:00.000Z',
+          source: 'manual',
+        },
+      ],
+    })
+
+    await extractMemories({
+      provider,
+      messages: [message('把今天要交的实验报告删了')],
+      expectAction: true,
+    })
+
+    expect(captured).toContain('今天要交的实验报告')
   })
 })

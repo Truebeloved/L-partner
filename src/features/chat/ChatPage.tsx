@@ -213,7 +213,6 @@ export function ChatPage() {
               <AgentNotice
                 receipts={session.receipts}
                 pending={session.pendingActions}
-                onDismissReceipts={session.dismissReceipts}
                 onConfirm={session.confirmPendingAction}
                 onDismissPending={session.dismissPendingAction}
               />

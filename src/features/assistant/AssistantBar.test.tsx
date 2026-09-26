@@ -69,7 +69,6 @@ function renderBar(messages: ChatMessage[] = []) {
     contextTokens: 0,
     receipts: [],
     pendingActions: [],
-    dismissReceipts: vi.fn(),
     confirmPendingAction: vi.fn(),
     dismissPendingAction: vi.fn(),
     send,

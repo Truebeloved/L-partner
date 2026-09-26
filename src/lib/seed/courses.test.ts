@@ -44,8 +44,11 @@ describe('示例课程库', () => {
 
       for (const unit of units) {
         expect(unit.title.trim()).not.toBe('')
-        expect(unit.knowledgePoints.length).toBeGreaterThan(0)
-        expect(unit.estimatedMinutes).toBeGreaterThanOrEqual(30)
+        // 视频课程按约定不带知识点（标签须看过内容再总结）；自带讲义的课程才要求有
+        if (!unit.resourceUrl) expect(unit.knowledgePoints.length).toBeGreaterThan(0)
+        // 30 分钟是**手写课程**的估算下限；视频课程用的是真实单集时长，十几分钟很常见
+        expect(unit.estimatedMinutes).toBeGreaterThan(0)
+        if (!unit.resourceUrl) expect(unit.estimatedMinutes).toBeGreaterThanOrEqual(30)
         // 知识点是掌握状态的挂载点，空白或重复都会让它变成两条互相矛盾的记录
         for (const point of unit.knowledgePoints) expect(point.trim()).not.toBe('')
         expect(new Set(unit.knowledgePoints).size).toBe(unit.knowledgePoints.length)

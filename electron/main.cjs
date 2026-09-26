@@ -22,6 +22,16 @@ const ROOT = path.join(__dirname, '..')
 
 app.setName('L-partner')
 
+/*
+ * Windows 任务栏上的名字与图标不是从 app.setName 来的：
+ * 名字取的是**进程的 AppUserModelID**，图标取的是窗口图标。
+ * 不设 AppUserModelID 时，开发模式下任务栏就显示 "Electron" + electron 的图标 ——
+ * 打包后虽然由 electron-builder 写进 exe，但这里的 ID 必须与 build.appId 一致，
+ * 否则任务栏会把开发版与安装版当成两个不同的应用（图标分组、固定到任务栏都会错）。
+ */
+const APP_USER_MODEL_ID = 'com.lpartner.desktop'
+if (process.platform === 'win32') app.setAppUserModelId(APP_USER_MODEL_ID)
+
 /* ---------------------------------------------------------------------------
    单实例锁
    没有它的话，用户双击桌面图标会再开一个完整实例：两份进程、两个托盘图标、

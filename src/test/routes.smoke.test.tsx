@@ -50,7 +50,7 @@ describe('路由冒烟', () => {
   it('学伴设定可渲染，默认落在角色标签，且内置角色存在', async () => {
     renderAt('#/companion')
     expect(await screen.findByRole('heading', { name: '学伴设定' })).toBeInTheDocument()
-    expect(await screen.findByText('耐心学长')).toBeInTheDocument()
+    expect(await screen.findByText('耐心学姐')).toBeInTheDocument()
   })
 
   it('切到记忆标签后能看到四层说明', async () => {

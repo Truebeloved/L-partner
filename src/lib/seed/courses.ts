@@ -1,5 +1,6 @@
 import type { CoursePlanDraft } from '@/features/course/drafts'
 
+import { buildCLanguageCourseDraft } from './cLanguage'
 import { buildDemoCourseDraft } from './demoCourse'
 import { buildWenyanwenCourseDraft } from './wenyanwen'
 
@@ -33,5 +34,12 @@ export const SEED_COURSES: SeedCourse[] = [
     summary:
       '文科类示例：按「篇目—考点—解析」三层组织，自带篇目原文、考点解析与「追问—质疑—再论证」设问链，打开就能读。',
     build: buildWenyanwenCourseDraft,
+  },
+  {
+    id: 'c-language-100',
+    title: 'C语言基础入门（100 讲）',
+    summary:
+      '工科类示例：按 B 站公开课的真实分集整理成 12 章 100 讲，每一讲的标题都能点开原视频；讲义交给学伴按需生成。',
+    build: buildCLanguageCourseDraft,
   },
 ]

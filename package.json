@@ -19,6 +19,7 @@
     "shots:assistant": "node scripts/capture-assistant.mjs",
     "shots:global-ai": "node scripts/capture-global-ai.mjs",
     "inspect:storage": "node scripts/inspect-storage.mjs",
+    "import:lessons": "node scripts/import-lessons.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",

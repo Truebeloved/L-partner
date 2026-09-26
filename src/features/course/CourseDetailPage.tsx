@@ -181,66 +181,79 @@ export function CourseDetailPage() {
         </dl>
       </section>
 
+      {/*
+        教材在前，学习计划在后 —— 这是这一页的主次关系。
+        用户点进一门课，第一件事是"开始学"，不是"看排期"：
+        排期是给内容服务的，把它放在内容前面，等于每次进来都先看一遍日历。
+      */}
       <section className="card mb-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="section-title">学习计划</h2>
-          {plan && (
-            <span className="text-small text-ink-soft">
-              {plan.generatedBy === 'ai' ? 'AI 排期' : '规则排期'} · {summary.studyDays} 个学习日
-            </span>
-          )}
+          <h2 className="section-title">课程结构</h2>
+          <span className="text-small text-ink-soft">
+            {totals.stageCount} 个阶段 · {totals.unitCount} 节
+          </span>
         </div>
-
-        {!plan ? (
-          <p className="muted mt-3 leading-relaxed">
-            还没有排期。点右上角「生成学习计划」，会按课程的每周可投入把
-            {totals.unitCount} 个单元铺到日历上，并同步生成今日待办。
-          </p>
-        ) : (
-          <>
-            <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Stat label="计划总时长" value={formatMinutes(summary.totalMinutes)} />
-              <Stat label="还没学" value={formatMinutes(summary.remainingMinutes)} />
-              <Stat label="最忙的一天" value={formatMinutes(summary.dailyMinutes)} />
-              <Stat
-                label="预计完成"
-                value={summary.finishDate ? formatDateHuman(summary.finishDate) : '—'}
-              />
-            </dl>
-
-            {/* 「按当前投入排不完」是一个需要用户行动的问题，属于警示场景 ——
-                这是红色在这套系统里合法的三个用途之一（逾期 / 错误 / 破坏性）之外的
-                「警告」，按令牌映射表统一到 alert */}
-            {summary.exceedsDeadline && course.deadline && summary.finishDate && (
-              <div className="mt-4 rounded-sm border border-alert bg-alert-soft px-4 py-3 text-body text-alert">
-                <p className="font-bold">按当前每周投入排不完</p>
-                <p className="mt-1 leading-relaxed">
-                  以现在的节奏，预计{' '}
-                  <strong className="font-bold">{formatDateHuman(summary.finishDate)}</strong>{' '}
-                  才能学完， 晚于 deadline（{formatDateHuman(course.deadline)}）。 可以二选一：把
-                  deadline 放到 {formatDateHuman(summary.finishDate)} 之后，
-                  或在课程设置里提高每周可投入时长。
-                </p>
-                <p className="mt-1 text-small">
-                  我们没有硬把内容塞进 deadline ——
-                  一天学五小时的计划执行不下去，不如如实告诉你差多少。
-                </p>
-              </div>
-            )}
-
-            <div className="mt-4">
-              <PlanTimeline items={plan.items} unitTitleById={titleById} todos={todos} />
-            </div>
-          </>
-        )}
-      </section>
-
-      <section className="card">
-        <h2 className="section-title">课程结构</h2>
+        <p className="muted mt-2 leading-relaxed">
+          按阶段分章，点「读这一节」就能看正文。没有正文的节可以让学伴写出来，
+          写完存在本地，下次直接读。
+        </p>
         <div className="mt-3">
           <CourseStructure course={course} onWriteLesson={handleWriteLesson} />
         </div>
       </section>
+
+      <details className="card mb-5" open={!plan}>
+        <summary className="section-title cursor-pointer">学习计划</summary>
+        <div className="mt-3">
+          {!plan ? (
+            <p className="muted leading-relaxed">
+              还没有排期。点右上角「生成学习计划」，会按课程的每周可投入把
+              {totals.unitCount} 节铺到日历上，并同步生成今日待办。
+            </p>
+          ) : (
+            <>
+              <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <span className="text-small text-ink-soft">
+                  {plan.generatedBy === 'ai' ? 'AI 排期' : '规则排期'} · {summary.studyDays} 个学习日
+                </span>
+              </div>
+              <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <Stat label="计划总时长" value={formatMinutes(summary.totalMinutes)} />
+                <Stat label="还没学" value={formatMinutes(summary.remainingMinutes)} />
+                <Stat label="最忙的一天" value={formatMinutes(summary.dailyMinutes)} />
+                <Stat
+                  label="预计完成"
+                  value={summary.finishDate ? formatDateHuman(summary.finishDate) : '—'}
+                />
+              </dl>
+
+              {/* 「按当前投入排不完」是一个需要用户行动的问题，属于警示场景 ——
+                  这是红色在这套系统里合法的三个用途之一（逾期 / 错误 / 破坏性）之外的
+                  「警告」，按令牌映射表统一到 alert */}
+              {summary.exceedsDeadline && course.deadline && summary.finishDate && (
+                <div className="mt-4 rounded-sm border border-alert bg-alert-soft px-4 py-3 text-body text-alert">
+                  <p className="font-bold">按当前每周投入排不完</p>
+                  <p className="mt-1 leading-relaxed">
+                    以现在的节奏，预计{' '}
+                    <strong className="font-bold">{formatDateHuman(summary.finishDate)}</strong>{' '}
+                    才能学完， 晚于 deadline（{formatDateHuman(course.deadline)}）。 可以二选一：把
+                    deadline 放到 {formatDateHuman(summary.finishDate)} 之后，
+                    或在课程设置里提高每周可投入时长。
+                  </p>
+                  <p className="mt-1 text-small">
+                    我们没有硬把内容塞进 deadline ——
+                    一天学五小时的计划执行不下去，不如如实告诉你差多少。
+                  </p>
+                </div>
+              )}
+
+              <div className="mt-4">
+                <PlanTimeline items={plan.items} unitTitleById={titleById} todos={todos} />
+              </div>
+            </>
+          )}
+        </div>
+      </details>
 
       {askReschedule && (
         <ConfirmDialog

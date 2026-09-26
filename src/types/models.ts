@@ -67,6 +67,16 @@ export interface Unit {
   content?: string
   /** 正文是什么时候生成的，UI 上用来提示"可能已过时" */
   contentGeneratedAt?: IsoDateTime
+  /**
+   * 这一节对应的外部教学资源（通常是视频合集中的**那一讲**）。
+   *
+   * ⚠️ 地址由模型给出，**没有经过校验**：模型可能记错、视频可能被删。
+   * 所以界面上必须让用户看得出"这是 AI 给的"，并且能自己改 ——
+   * 一个打不开的链接比没有链接更让人烦躁。
+   */
+  resourceUrl?: string
+  /** 链接的显示名，如「翁恺 C 语言 · 第 3 讲」；没有就用域名兜底 */
+  resourceLabel?: string
 }
 
 /** 一门课程 / 一份学习方案 */

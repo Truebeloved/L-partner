@@ -64,3 +64,6 @@ notes-local/
 
 # ---- UI 截图（scripts/capture-ui.cjs 的产物，仅供本地比对） ----
 .ui-shots/
+
+# 教材正文（导入用户应用数据用的一次性产物）
+.lessons/

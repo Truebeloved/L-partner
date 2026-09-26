@@ -102,7 +102,14 @@ function UnitRow({
 
   return (
     <li>
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
+      {/* 双击整行 = 打开这一讲的视频：链接是给人看的，双击是给人顺手用的 */}
+      <div
+        className="flex flex-wrap items-baseline justify-between gap-2"
+        onDoubleClick={() => {
+          if (unit.resourceUrl) window.open(unit.resourceUrl, '_blank', 'noopener')
+        }}
+        title={unit.resourceUrl ? '双击打开这一讲的视频' : undefined}
+      >
         <span className={done ? 'text-body text-ink-faint line-through' : 'text-body text-ink'}>
           {unit.title}
         </span>
@@ -119,6 +126,26 @@ function UnitRow({
             </span>
           ))}
         </div>
+      )}
+
+      {/*
+        外部视频：整行的**双击**、或点这个链接，都会用系统默认浏览器打开。
+        链接交给主进程的 setWindowOpenHandler（target=_blank）去开外链，
+        渲染进程不需要、也不该拿到 shell 能力。
+      */}
+      {unit.resourceUrl && (
+        <p className="mt-2">
+          <a
+            href={unit.resourceUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-small text-ink-soft underline decoration-line-soft underline-offset-2 transition-colors duration-200 hover:text-ink"
+            title="用默认浏览器打开这一讲（AI 给出的地址，打不开就换一个）"
+          >
+            ▶ {unit.resourceLabel ?? '看这一讲的视频'}
+            <span className="text-micro text-ink-faint">AI 提供</span>
+          </a>
+        </p>
       )}
 
       {/*

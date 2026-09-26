@@ -17,6 +17,9 @@ export interface UnitDraft {
   knowledgePoints: string[]
   /** 用户没填（undefined 或 0）时由 estimateUnitMinutes 估算 */
   estimatedMinutes?: number
+  /** 这一节对应的公开课视频（AI 给的一讲，不是合集首页）；没有就留空 */
+  resourceUrl?: string
+  resourceLabel?: string
 }
 
 export interface StageDraft {
@@ -89,6 +92,10 @@ export function buildStages(drafts: StageDraft[]): Stage[] {
           estimatedMinutes: unit.estimatedMinutes,
         }),
         order: unitIndex,
+        // 只在真给了地址时才写字段：空字符串会让"有没有资源"这件事变得含糊
+        ...(unit.resourceUrl?.trim()
+          ? { resourceUrl: unit.resourceUrl.trim(), resourceLabel: unit.resourceLabel?.trim() }
+          : {}),
       }
     }),
   }))

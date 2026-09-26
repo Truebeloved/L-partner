@@ -21,22 +21,26 @@ interface BookDetailPopupProps {
   plan: Plan | undefined
   /** 被点击那本书在视口中的位置，小窗贴着它显示 */
   anchor: AnchorRect
+  /** 左键本来是直接进课程，小窗里再给一个明确的入口，省得用户去猜手势 */
+  onOpen: () => void
+  /** 删除这门课程（会连带计划、待办与记忆，由调用方弹二次确认） */
+  onDelete: () => void
 }
 
 /**
- * 书籍详情小窗。
+ * 书籍详情小窗（右键唤出）。
  *
  * 两个刻意的设计：
  * - **贴着书显示而不是居中弹窗**：居中会有遮罩感，像"被拦住"；
  *   贴着实体的书浮出信息，才像从书架上抽出来看了一眼。
- * - **小窗本身不响应任何点击**：按约定，进入课程要再点那本书。
- *   如果小窗也能点进去，就变成两个入口抢同一个动作，单击/双击的语义会再次打架。
- *   关闭方式是点击别处或按 Esc（在 Shelf 里处理）。
+ * - **这里放的是"关于这门课的操作"**：进入课程、删除。左键的主操作是直接进课程，
+ *   所以小窗不再承担"唯一入口"的角色 —— 它是右键菜单的展开形态，
+ *   按约定点在它上面不会关掉它（Shelf 的「点空白处关闭」会跳过它）。
  *
  * 定位只做算术、不测量：宽度固定，垂直方向夹进视口即可。
  * 避免"先渲染再测量再挪位"带来的闪烁。
  */
-export function BookDetailPopup({ course, plan, anchor }: BookDetailPopupProps) {
+export function BookDetailPopup({ course, plan, anchor, onOpen, onDelete }: BookDetailPopupProps) {
   const todos = useTodoStore((state) => state.todos)
 
   const stats = useMemo(() => {
@@ -114,9 +118,20 @@ export function BookDetailPopup({ course, plan, anchor }: BookDetailPopupProps) 
         </ul>
       )}
 
-      {/* 交互提示：用黑底白字的实心标签，而不是彩色提示块 —— 单色系统里没有"信息色" */}
-      <p className="mt-4 rounded-sm bg-ink/5 px-3 py-2 text-small leading-relaxed text-ink">
-        再次单击这本书，进入课程开始学习
+      {/* 小窗底部是"关于这门课的操作"：主操作（进入课程）在前，破坏性的删除退到最后。
+          原本这里只有一句"再次单击这本书…"的提示 —— 那是手势还需要教学时的产物，
+          现在左键直接进课程，提示语改成说明右键，动作则给出按钮。 */}
+      <div className="mt-4 flex items-center gap-2 border-t border-line-soft pt-3">
+        <button type="button" className="btn btn-primary btn-sm" onClick={onOpen}>
+          进入课程
+        </button>
+        <button type="button" className="btn btn-danger btn-sm ml-auto" onClick={onDelete}>
+          删除这门课
+        </button>
+      </div>
+
+      <p className="mt-2 text-micro leading-relaxed text-ink-faint">
+        Esc 或点击空白处关闭 · 左键单击书脊直接进入课程
       </p>
     </div>
   )

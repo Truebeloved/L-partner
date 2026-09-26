@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { draftFromCollection } from '@/features/course/bilibili'
 import type { AiPlanRequest, CoursePlanDraft } from '@/features/course/drafts'
 import { fetchBilibiliCollection } from '@/lib/platform'
+import { useEscapeKey } from '@/lib/useEscapeKey'
 
 interface AiPlanDialogProps {
   /**
@@ -24,6 +25,14 @@ export function AiPlanDialog({ generate, onCancel, onGenerated }: AiPlanDialogPr
   const [deadline, setDeadline] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Esc = 取消（捕获阶段）。生成中不响应：那会把一次已经发出去的请求变成"点了没反应"
+  useEscapeKey(
+    () => {
+      if (!busy) onCancel()
+    },
+    { capture: true },
+  )
 
   async function handleGenerate() {
     if (!goal.trim() && !collectionUrl.trim()) {

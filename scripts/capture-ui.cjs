@@ -46,6 +46,17 @@ const SPLASH_SHOTS = [
 
 /** 可选：CAPTURE_SEED_COURSES=8 会先塞入 8 门课程再截图，用于验证书架排版规则 */
 const SEED_COURSES = Number(process.env.CAPTURE_SEED_COURSES || 0)
+/**
+ * 可选：CAPTURE_SEED_CHAT=1 / CAPTURE_SEED_LLM=1
+ *
+ * 为什么需要：对话页与设置页的"配置好之后"长什么样，空数据截不出来 ——
+ * 对话页没有会话就只剩一张接入引导，设置页没有密钥就永远停在输入态。
+ * 这里塞的是**假的**密钥（一眼看得出是示例），只写进截图专用的 profile。
+ */
+const SEED_CHAT = process.env.CAPTURE_SEED_CHAT === '1'
+const SEED_LLM = process.env.CAPTURE_SEED_LLM === '1'
+/** 截图用的假密钥：故意写成明显的假值，避免被误当成真 key */
+const DEMO_KEY = 'sk-demo-not-a-real-key'
 
 // 必须在 app ready 之前设置：强制 1:1 像素，否则高分屏上会拿到 2 倍图
 app.commandLine.appendSwitch('force-device-scale-factor', '1')
@@ -138,6 +149,99 @@ async function seedCourses(window, count) {
   `)
 }
 
+/** 往 store 的持久化 key 里写一份数据（结构与 zustand persist 一致） */
+async function seedKey(window, key, state, version = 1) {
+  const payload = JSON.stringify({ state, version })
+  await window.webContents.executeJavaScript(`
+    new Promise((resolve, reject) => {
+      const request = indexedDB.open('keyval-store')
+      request.onupgradeneeded = () => { request.result.createObjectStore('keyval') }
+      request.onsuccess = () => {
+        const db = request.result
+        const tx = db.transaction('keyval', 'readwrite')
+        tx.objectStore('keyval').put(${JSON.stringify(payload)}, ${JSON.stringify(key)})
+        tx.oncomplete = () => { db.close(); resolve(true) }
+        tx.onerror = () => reject(tx.error)
+      }
+      request.onerror = () => reject(request.error)
+    })
+  `)
+}
+
+/** 几场有内容的对话：对话列表要显示标题、最后一句和时间，空数据看不出排版 */
+async function seedConversations(window) {
+  const now = Date.now()
+  const at = (minutesAgo) => new Date(now - minutesAgo * 60_000).toISOString()
+  const message = (id, role, content, minutesAgo) => ({
+    id,
+    role,
+    content,
+    createdAt: at(minutesAgo),
+  })
+
+  const conversations = [
+    {
+      id: 'seed-conv-1',
+      personaId: 'builtin-senior',
+      title: '今天该学什么',
+      messages: [
+        message('m1', 'user', '帮我看看今天该学什么', 12),
+        message(
+          'm2',
+          'assistant',
+          '按你现在的进度，今天适合先复习「状态与事件」，再做两道变式题。',
+          11,
+        ),
+      ],
+      createdAt: at(12),
+      updatedAt: at(11),
+    },
+    {
+      id: 'seed-conv-2',
+      personaId: 'builtin-senior',
+      title: '为什么我总是学了就忘',
+      messages: [
+        message('m3', 'user', '为什么我总是学了就忘', 300),
+        message('m4', 'assistant', '因为你只在输入。回忆一次比再读一遍有用得多。', 298),
+      ],
+      createdAt: at(300),
+      updatedAt: at(298),
+    },
+    {
+      id: 'seed-conv-3',
+      personaId: 'builtin-senior',
+      title: '《劝学》里的比喻论证',
+      messages: [message('m5', 'user', '《劝学》为什么要连用六个比喻？', 2900)],
+      createdAt: at(2900),
+      updatedAt: at(2900),
+    },
+  ]
+
+  // 版本号必须和 store 里声明的一致：persist 发现版本对不上会尝试 migrate，
+  // 而 chat store 没有 migrate —— 数据会被整份丢弃（表现为"塞了却还是空的"）
+  await seedKey(window, 'lpartner.chat', { conversations }, 1)
+}
+
+/** 假的模型配置：让对话页与设置页进入"已配置"状态 */
+async function seedLlmSettings(window) {
+  await seedKey(
+    window,
+    'lpartner.settings',
+    {
+      settings: {
+        llm: {
+          baseUrl: 'https://api.deepseek.com/v1',
+          apiKey: DEMO_KEY,
+          model: 'deepseek-chat',
+          temperature: 0.7,
+          maxTokens: 2048,
+        },
+      },
+    },
+    2,
+  )
+}
+
 /**
  * 把鼠标真的移到某个元素上再截图。
  *
@@ -224,8 +328,10 @@ app.whenReady().then(async () => {
   }
 
   // 需要真实课程数据时：先塞数据、重载、再等一轮开屏 —— 之后才开始逐页截图
-  if (SEED_COURSES > 0) {
-    await seedCourses(window, SEED_COURSES)
+  if (SEED_COURSES > 0 || SEED_CHAT || SEED_LLM) {
+    if (SEED_COURSES > 0) await seedCourses(window, SEED_COURSES)
+    if (SEED_CHAT) await seedConversations(window)
+    if (SEED_LLM) await seedLlmSettings(window)
     await window.webContents.reload()
     const seededSplash = await poll(
       window,
@@ -237,13 +343,37 @@ app.whenReady().then(async () => {
     }
     await sleep(400)
 
-    console.log(`  （已塞入 ${SEED_COURSES} 门课程）`)
-    await capture(window, `1-shelf-${SEED_COURSES}books`)
-    // 把鼠标真的移到第一本书上，验证「抽出」动效
-    await captureHover(window, '1-shelf-hover', '[data-shelf-interactive] button')
-    // 移开鼠标，免得影响后面的页面截图
-    window.webContents.sendInputEvent({ type: 'mouseMove', x: 4, y: 4 })
-    await sleep(300)
+    console.log(
+      `  （已塞入 ${SEED_COURSES} 门课程${SEED_CHAT ? '、3 场对话' : ''}${SEED_LLM ? '、假模型配置' : ''}）`,
+    )
+    if (SEED_COURSES > 0) {
+      await capture(window, `1-shelf-${SEED_COURSES}books`)
+      // 把鼠标真的移到第一本书上，验证「抽出」动效
+      await captureHover(window, '1-shelf-hover', '[data-shelf-interactive] button')
+      // 移开鼠标，免得影响后面的页面截图
+      window.webContents.sendInputEvent({ type: 'mouseMove', x: 4, y: 4 })
+      await sleep(300)
+
+      // 右键唤出详情小窗（这一版交互改成了右键）
+      await window.webContents.executeJavaScript(`
+        (() => {
+          const book = document.querySelector('[data-shelf-interactive] button')
+          if (!book) return false
+          const rect = book.getBoundingClientRect()
+          book.dispatchEvent(
+            new MouseEvent('contextmenu', {
+              bubbles: true,
+              cancelable: true,
+              clientX: Math.round(rect.left + rect.width / 2),
+              clientY: Math.round(rect.top + rect.height / 2),
+            }),
+          )
+          return true
+        })()
+      `)
+      await sleep(500)
+      await capture(window, '1-shelf-contextmenu')
+    }
   }
 
   for (const [name, route] of ROUTES) {

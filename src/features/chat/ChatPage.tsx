@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { Icon } from '@/components/Icon'
 import { PersonaAvatar } from '@/components/PersonaAvatar'
 import { useAssistantDock } from '@/features/assistant/dock'
+import { ConversationList } from '@/features/chat/components/ConversationList'
 import { MessageBubble } from '@/features/chat/components/MessageBubble'
 import { useChatSessionContext } from '@/features/chat/context'
 import { useActiveConversation } from '@/features/chat/useChatSession'
@@ -67,6 +68,20 @@ export function ChatPage() {
     element.scrollTop = element.scrollHeight
   }, [messages.length, lastContentLength])
 
+  /**
+   * 没有选中会话但有历史时，自动接上最近聊过的那一场。
+   *
+   * activeId 不参与持久化，所以刷新后它一定是空的。原来的表现是：
+   * 左边列着一堆历史，右边却是一张"我是耐心学长"的空欢迎页 ——
+   * 此时输入一句话，handleSend 会**新建**一场对话，等于把原本那场悄悄留在背后。
+   * 微信/豆包打开就是最近一场，这里对齐同一个预期。
+   */
+  useEffect(() => {
+    if (conversation || conversations.length === 0) return
+    const latest = [...conversations].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]
+    if (latest) setActive(latest.id)
+  }, [conversation, conversations, setActive])
+
   function handleSend(text: string) {
     if (!conversation) {
       createConversation(settings.activePersonaId)
@@ -119,100 +134,89 @@ export function ChatPage() {
   return (
     /* 这一页占据整个内容区，是一块"铺满"的面板而不是浮起来的卡片 ——
        所以不给圆角：圆角会让它看起来是一张浮在页面上的卡片，而它其实是页面本身。
-       外壳已改为「主区域自己滚动」，所以这里用 h-full 填满可用高度 */
-    <div className="flex h-full flex-col overflow-hidden border border-line-soft bg-raised">
-      {/* 顶栏：角色、课程、记忆状态 */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-line-soft px-3 py-2.5">
-        <select
-          className="input w-auto py-1.5"
-          value={settings.activePersonaId}
-          onChange={(event) => {
-            update({ activePersonaId: event.target.value })
-            if (conversation) setConversationPersona(conversation.id, event.target.value)
-          }}
-          title="切换角色 —— 记忆是跨角色共享的，换了老师它依然了解你"
-        >
-          {personas.map((persona) => (
-            // 原生 <option> 里放不了 SVG，所以只给名字。
-            // 头像在各处已经有了，这里不缺那一个字形
-            <option key={persona.id} value={persona.id}>
-              {persona.name}
-            </option>
-          ))}
-        </select>
+       外壳已改为「主区域自己滚动」，所以这里用 h-full 填满可用高度。
+       左边常驻历史对话列表（微信/豆包的那种布局），右边是当前这场对话 */
+    <div className="flex h-full overflow-hidden border border-line-soft bg-raised">
+      <ConversationList
+        conversations={conversations}
+        activeId={conversation?.id ?? null}
+        onSelect={setActive}
+        onCreate={() => createConversation(settings.activePersonaId, conversation?.courseId)}
+      />
 
-        <select
-          className="input w-auto py-1.5"
-          value={conversation?.courseId ?? ''}
-          onChange={(event) => {
-            const courseId = event.target.value || undefined
-            if (conversation) setCourse(conversation.id, courseId)
-          }}
-          title="绑定一门课程，回答时会带上这门课的进度与今日任务"
-        >
-          <option value="">不绑定课程</option>
-          {courses.map((course) => (
-            <option key={course.id} value={course.id}>
-              {course.title}
-            </option>
-          ))}
-        </select>
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        {/* 顶栏：角色、课程、记忆状态。会话切换已经在左侧列表里，这里不再放下拉框 */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-line-soft px-3 py-2.5">
+          <select
+            className="input w-auto py-1.5"
+            value={settings.activePersonaId}
+            onChange={(event) => {
+              update({ activePersonaId: event.target.value })
+              if (conversation) setConversationPersona(conversation.id, event.target.value)
+            }}
+            title="切换角色 —— 记忆是跨角色共享的，换了老师它依然了解你"
+          >
+            {personas.map((persona) => (
+              // 原生 <option> 里放不了 SVG，所以只给名字。
+              // 头像在各处已经有了，这里不缺那一个字形
+              <option key={persona.id} value={persona.id}>
+                {persona.name}
+              </option>
+            ))}
+          </select>
 
-        <div className="ml-auto flex items-center gap-2">
-          {session.usedMemoryCount > 0 && (
-            <span className="badge" title="本轮回答注入的记忆条数，可在「记忆」页查看和修改">
-              <Icon name="layers" size={12} /> 引用 {session.usedMemoryCount} 条记忆
-            </span>
-          )}
-          {/* 上下文规模明码标价：API 费用是用户自己付的，"花了多少"不该等到月底看账单才知道 */}
-          {session.contextTokens > 0 && (
-            <span
-              className="badge hidden border-transparent bg-ink/5 text-ink-soft tabular sm:inline-flex"
-              title={
-                settings.efficientMode
-                  ? '本轮请求的上下文估算值（省流模式已开启）'
-                  : '本轮请求的上下文估算值（省流模式已关闭）'
-              }
-            >
-              约 {formatTokens(session.contextTokens)} tokens
-            </span>
-          )}
-          {/* 计数标签做成无边框浅底：它和上面的引用标签不是同级信息，
-              用同一套外框会让两个标签抢注意力 */}
-          <span className="badge hidden border-transparent bg-ink/5 text-ink-soft sm:inline-flex">
-            共 {memoryCount} 条记忆
-          </span>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={handleRemember}
-            disabled={messages.length === 0}
-            title="不等自动抽取，立刻让学伴把这次对话记下来"
+          <select
+            className="input w-auto py-1.5"
+            value={conversation?.courseId ?? ''}
+            onChange={(event) => {
+              const courseId = event.target.value || undefined
+              if (conversation) setCourse(conversation.id, courseId)
+            }}
+            title="绑定一门课程，回答时会带上这门课的进度与今日任务"
           >
-            记住这个
-          </button>
-          {conversations.length > 0 && (
-            <select
-              className="input w-auto py-1.5 text-small"
-              value={conversation?.id ?? ''}
-              onChange={(event) => setActive(event.target.value || null)}
+            <option value="">不绑定课程</option>
+            {courses.map((course) => (
+              <option key={course.id} value={course.id}>
+                {course.title}
+              </option>
+            ))}
+          </select>
+
+          <div className="ml-auto flex items-center gap-2">
+            {session.usedMemoryCount > 0 && (
+              <span className="badge" title="本轮回答注入的记忆条数，可在「记忆」页查看和修改">
+                <Icon name="layers" size={12} /> 引用 {session.usedMemoryCount} 条记忆
+              </span>
+            )}
+            {/* 上下文规模明码标价：API 费用是用户自己付的，"花了多少"不该等到月底看账单才知道 */}
+            {session.contextTokens > 0 && (
+              <span
+                className="badge hidden border-transparent bg-ink/5 text-ink-soft tabular sm:inline-flex"
+                title={
+                  settings.efficientMode
+                    ? '本轮请求的上下文估算值（省流模式已开启）'
+                    : '本轮请求的上下文估算值（省流模式已关闭）'
+                }
+              >
+                约 {formatTokens(session.contextTokens)} tokens
+              </span>
+            )}
+            {/* 计数标签做成无边框浅底：它和上面的引用标签不是同级信息，
+                用同一套外框会让两个标签抢注意力 */}
+            <span className="badge hidden border-transparent bg-ink/5 text-ink-soft sm:inline-flex">
+              共 {memoryCount} 条记忆
+            </span>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handleRemember}
+              disabled={messages.length === 0}
+              title="不等自动抽取，立刻让学伴把这次对话记下来"
             >
-              {conversations.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.title}
-                </option>
-              ))}
-            </select>
-          )}
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() => createConversation(settings.activePersonaId, conversation?.courseId)}
-          >
-            新对话
-          </button>
+              记住这个
+            </button>
+          </div>
         </div>
-      </div>
 
       {/* 消息区 */}
       <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto bg-surface px-4 py-5">
@@ -270,8 +274,9 @@ export function ChatPage() {
         整页就是对话区（消息列表 + 底部长条），而不是"页面里再嵌一个聊天框"。
         没有配置大模型时也照旧：上面的接入卡片照显示，输入条照样滑到底部。
       */}
-      <div className="shrink-0 border-t border-line-soft px-4 py-3">
-        <div ref={dockRef} className="h-12" />
+        <div className="shrink-0 border-t border-line-soft px-4 py-3">
+          <div ref={dockRef} className="h-12" />
+        </div>
       </div>
     </div>
   )

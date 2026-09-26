@@ -1,3 +1,5 @@
+import { useEscapeKey } from '@/lib/useEscapeKey'
+
 interface ConfirmDialogProps {
   title: string
   message: string
@@ -20,6 +22,10 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  // Esc = 取消。用捕获阶段，这样它先于页面层的「Esc 返回」拿到按键，
+  // 不会出现"关了确认框又顺手退出了页面"
+  useEscapeKey(onCancel, { capture: true })
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/40 p-4">
       <div

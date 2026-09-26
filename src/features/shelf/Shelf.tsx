@@ -1,16 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
-import { planItemState } from '@/features/course/courseActions'
+import { deleteCourseCompletely, planItemState } from '@/features/course/courseActions'
+import { ConfirmDialog } from '@/features/course/components/ConfirmDialog'
 import { BlankSpine } from '@/features/shelf/BlankSpine'
 import { BookDetailPopup } from '@/features/shelf/BookDetailPopup'
 import type { AnchorRect } from '@/features/shelf/BookDetailPopup'
 import { BookSpine } from '@/features/shelf/BookSpine'
 import { buildShelfLayout, HEIGHT_SCALE_BY_TIER } from '@/features/shelf/shelfLayout'
+import { useEscapeKey } from '@/lib/useEscapeKey'
 import { useCourseStore } from '@/store/courses'
 import { usePlanStore } from '@/store/plans'
 import { useTodoStore } from '@/store/todos'
-import type { Id } from '@/types/models'
+import type { Course, Id } from '@/types/models'
 
 /** 书与书之间的缝 */
 const GAP = 12
@@ -35,17 +37,17 @@ const MAX_BOOK_HEIGHT = BASE_HEIGHT * Math.max(...HEIGHT_SCALE_BY_TIER)
 /**
  * 书架。
  *
- * 交互状态机（用户定的规则：单击开小窗，再点同一本进课程）：
+ * 交互规则（用户定的）：
  *
- * | 当前状态        | 点击某本书           |
- * | --------------- | -------------------- |
- * | 该书未选中      | 选中它并弹出小窗     |
- * | 该书已选中      | 进入二级界面         |
+ * | 手势           | 结果                                     |
+ * | -------------- | ---------------------------------------- |
+ * | 左键点书        | 直接进入课程（主操作，零延迟）             |
+ * | 右键点书        | 弹出详情小窗（看进度、进课程、删除这门课）  |
+ * | Esc / 点空白    | 关掉小窗                                  |
  *
- * 注意这里**不需要任何延时或双击判定**。经典的单双击冲突是因为"单击"和"双击"
- * 是两个独立手势、必须靠计时器区分；而这里的规则天然是有状态的 ——
- * 第二次点击时书已经是选中态。所以双击自然等价于"选中 → 再点 → 进课程"，
- * 语义完全一致，而单击响应是零延迟的。
+ * 前一版是「单击开小窗、再点同一本才进课程」，代价是主操作要按两下，
+ * 而"我就是要开始学"才是这里 99% 的意图；小窗该是**辅助**，所以挪到右键 ——
+ * 和文件管理器、IDE 一样，右键是"关于这个东西的操作"，左键是"打开它"。
  */
 export function Shelf() {
   const courses = useCourseStore((state) => state.courses)
@@ -57,6 +59,10 @@ export function Shelf() {
   const [width, setWidth] = useState(DEFAULT_WIDTH)
   const [selectedId, setSelectedId] = useState<Id | null>(null)
   const [anchor, setAnchor] = useState<AnchorRect | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<Course | null>(null)
+
+  // 引用保持稳定：Esc 的监听依赖它，每次渲染换一个新函数会让监听反复重挂
+  const closeDetail = useCallback(() => setSelectedId(null), [])
 
   // 监听容器宽度，实现"窗口拉动时重排、空书脊优先消失"
   useEffect(() => {
@@ -75,15 +81,8 @@ export function Shelf() {
     return () => observer.disconnect()
   }, [])
 
-  // Esc 关闭小窗
-  useEffect(() => {
-    if (!selectedId) return
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setSelectedId(null)
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [selectedId])
+  // Esc 关闭小窗（和确认框叠加时，确认框在捕获阶段先吃掉 Esc）
+  useEscapeKey(closeDetail, { enabled: Boolean(selectedId) })
 
   /**
    * 点击别处关闭小窗。
@@ -134,13 +133,8 @@ export function Shelf() {
 
   const selectedCourse = selectedId ? courseById.get(selectedId) : undefined
 
-  function handleBookClick(courseId: Id, element: HTMLElement) {
-    // 已选中 → 再点同一本 → 进课程
-    if (selectedId === courseId) {
-      setSelectedId(null)
-      navigate(`/courses/${courseId}`)
-      return
-    }
+  /** 小窗贴在书上弹出，所以要先量出这本书在视口里的位置 */
+  function openDetail(courseId: Id, element: HTMLElement) {
     const rect = element.getBoundingClientRect()
     setAnchor({ left: rect.left, top: rect.top, width: rect.width, height: rect.height })
     setSelectedId(courseId)
@@ -173,7 +167,13 @@ export function Shelf() {
                         baseHeight={BASE_HEIGHT}
                         selected={selectedId === slot.key}
                         progress={progressByCourse.get(slot.key) ?? 0}
-                        onClick={(event) => handleBookClick(slot.key, event.currentTarget)}
+                        onClick={() => navigate(`/courses/${slot.key}`)}
+                        onContextMenu={(event) => {
+                          // 右键在 Electron 里默认会弹出系统菜单（或什么都不弹），
+                          // 这里要的是自己的详情小窗，所以必须阻止默认行为
+                          event.preventDefault()
+                          openDetail(slot.key, event.currentTarget)
+                        }}
                       />
                     </span>
                   ) : (
@@ -216,7 +216,28 @@ export function Shelf() {
       )}
 
       {selectedCourse && anchor && (
-        <BookDetailPopup course={selectedCourse} plan={plans[selectedCourse.id]} anchor={anchor} />
+        <BookDetailPopup
+          course={selectedCourse}
+          plan={plans[selectedCourse.id]}
+          anchor={anchor}
+          onOpen={() => navigate(`/courses/${selectedCourse.id}`)}
+          onDelete={() => setPendingDelete(selectedCourse)}
+        />
+      )}
+
+      {pendingDelete && (
+        <ConfirmDialog
+          title={`删除「${pendingDelete.title}」？`}
+          message="这门课程的学习计划、每日待办与相关记忆会一起删除，无法撤销。"
+          confirmText="删除课程"
+          danger
+          onConfirm={() => {
+            deleteCourseCompletely(pendingDelete.id)
+            setPendingDelete(null)
+            closeDetail()
+          }}
+          onCancel={() => setPendingDelete(null)}
+        />
       )}
     </div>
   )

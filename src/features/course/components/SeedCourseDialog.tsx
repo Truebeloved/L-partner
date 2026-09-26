@@ -1,6 +1,7 @@
 import { SEED_COURSES, type SeedCourse } from '@/lib/seed/courses'
 import { estimateUnitMinutes } from '@/features/course/drafts'
 import { formatMinutes } from '@/lib/date'
+import { useEscapeKey } from '@/lib/useEscapeKey'
 
 interface SeedCourseDialogProps {
   onPick: (seed: SeedCourse) => void
@@ -19,6 +20,9 @@ interface SeedCourseDialogProps {
  * 而这份课程恰恰是用来给评审看的，数字对不上比不写更糟。
  */
 export function SeedCourseDialog({ onPick, onCancel }: SeedCourseDialogProps) {
+  // Esc = 取消（捕获阶段，先于页面层的「Esc 返回」）
+  useEscapeKey(onCancel, { capture: true })
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/40 p-4">
       <div

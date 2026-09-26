@@ -43,8 +43,10 @@ interface BookSpineProps {
   selected: boolean
   /** 完成进度 0~1，画成书脊底部的一条细线 */
   progress: number
-  /** 需要拿到元素本身来测量位置，小窗要贴着这本书弹出来 */
+  /** 左键：直接进入课程 */
   onClick: (event: MouseEvent<HTMLButtonElement>) => void
+  /** 右键：打开详情小窗（在里面可以看详情、进课程、删除这门课） */
+  onContextMenu: (event: MouseEvent<HTMLButtonElement>) => void
 }
 
 /**
@@ -65,6 +67,7 @@ export function BookSpine({
   selected,
   progress,
   onClick,
+  onContextMenu,
 }: BookSpineProps) {
   const metrics = useMemo(() => bookMetrics(seed), [seed])
   const palette = useMemo(() => paletteFor(seed), [seed])
@@ -78,6 +81,7 @@ export function BookSpine({
     <button
       type="button"
       onClick={onClick}
+      onContextMenu={onContextMenu}
       title={title}
       aria-pressed={selected}
       className="group relative shrink-0 cursor-pointer outline-none"

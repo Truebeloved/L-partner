@@ -45,9 +45,12 @@ export function LlmSettingsCard() {
   const settings = useSettingsStore((state) => state.settings)
   const updateLlm = useSettingsStore((state) => state.updateLlm)
   const [test, setTest] = useState<TestState>({ status: 'idle' })
-  const [showKey, setShowKey] = useState(false)
+  /** 正在输入的**新**密钥。它不是已保存的那把 —— 见下方密钥字段的说明 */
+  const [keyDraft, setKeyDraft] = useState('')
+  const [editingKey, setEditingKey] = useState(false)
 
   const { llm } = settings
+  const hasKey = llm.apiKey.trim().length > 0
 
   async function handleTest() {
     setTest({ status: 'testing' })
@@ -123,27 +126,90 @@ export function LlmSettingsCard() {
         </div>
 
         <div>
-          <label className="label" htmlFor="llm-api-key">
-            API Key
-          </label>
-          <div className="flex gap-2">
-            <input
-              id="llm-api-key"
-              className="input"
-              type={showKey ? 'text' : 'password'}
-              value={llm.apiKey}
-              placeholder="sk-..."
-              autoComplete="off"
-              onChange={(event) => updateLlm({ apiKey: event.target.value })}
-            />
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => setShowKey((value) => !value)}
-            >
-              {showKey ? '隐藏' : '显示'}
-            </button>
-          </div>
+          {/*
+            密钥保存之后就不再回显 —— 输入框里绑的是**草稿**而不是 store 里的密钥，
+            所以配置好以后 DOM 里根本不出现那串字符（原来的实现把密钥一直绑在
+            value 上，再加一个「显示」按钮，等于只要打开设置页就能看到明文）。
+            要改就只能重新输入一遍：这是这类界面唯一安全的做法。
+          */}
+          {hasKey && !editingKey ? (
+            <>
+              {/* 没有输入框时用 span 而不是 label：dangling 的 for 会让读屏软件念一个不存在的控件 */}
+              <span className="label">API Key</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="badge">
+                  <Icon name="check" size={12} /> 已配置
+                </span>
+                <span className="text-small text-ink-faint">密钥已保存，不再显示</span>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm ml-auto"
+                  onClick={() => {
+                    setEditingKey(true)
+                    setKeyDraft('')
+                    setTest({ status: 'idle' })
+                  }}
+                >
+                  更换密钥
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger btn-sm"
+                  onClick={() => {
+                    updateLlm({ apiKey: '' })
+                    setKeyDraft('')
+                    setEditingKey(false)
+                    setTest({ status: 'idle' })
+                  }}
+                >
+                  清除
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <label className="label" htmlFor="llm-api-key">
+                API Key
+              </label>
+              <div className="flex gap-2">
+                <input
+                  id="llm-api-key"
+                  className="input"
+                  type="password"
+                  value={keyDraft}
+                  placeholder="sk-..."
+                  autoComplete="off"
+                  autoFocus={editingKey}
+                  onChange={(event) => setKeyDraft(event.target.value)}
+                />
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={!keyDraft.trim()}
+                  onClick={() => {
+                    updateLlm({ apiKey: keyDraft.trim() })
+                    setKeyDraft('')
+                    setEditingKey(false)
+                    setTest({ status: 'idle' })
+                  }}
+                >
+                  保存
+                </button>
+                {editingKey && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      setKeyDraft('')
+                      setEditingKey(false)
+                    }}
+                  >
+                    取消
+                  </button>
+                )}
+              </div>
+            </>
+          )}
         </div>
 
         <details className="rounded-sm bg-ink/5 px-4 py-3">

@@ -40,71 +40,88 @@ function renderShelf() {
   )
 }
 
-const CLICK_HINT = '再次单击这本书，进入课程开始学习'
+const POPUP_HINT = 'Esc 或点击空白处关闭 · 左键单击书脊直接进入课程'
 
-describe('Shelf 交互状态机', () => {
-  it('单击一本书弹出详情小窗', async () => {
+describe('Shelf 交互', () => {
+  it('左键单击一本书直接进入课程', async () => {
+    const user = userEvent.setup()
+    useCourseStore.setState({ courses: [makeCourse('c1', '两个月上手 React')] })
+    renderShelf()
+
+    await user.click(screen.getByRole('button', { name: '两个月上手 React' }))
+
+    expect(await screen.findByText('课程学习页（二级界面）')).toBeInTheDocument()
+  })
+
+  it('右键一本书弹出详情小窗', async () => {
     const user = userEvent.setup()
     useCourseStore.setState({ courses: [makeCourse('c1', '两个月上手 React')] })
     renderShelf()
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: '两个月上手 React' }))
+    await user.pointer({
+      target: screen.getByRole('button', { name: '两个月上手 React' }),
+      keys: '[MouseRight]',
+    })
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
-    expect(screen.getByText(CLICK_HINT)).toBeInTheDocument()
+    expect(screen.getByText(POPUP_HINT)).toBeInTheDocument()
+    // 右键是"看信息"，不该顺带把用户送进课程
+    expect(screen.queryByText('课程学习页（二级界面）')).not.toBeInTheDocument()
   })
 
-  it('再点同一本书进入二级界面', async () => {
+  it('小窗里能进入课程', async () => {
     const user = userEvent.setup()
     useCourseStore.setState({ courses: [makeCourse('c1', '两个月上手 React')] })
     renderShelf()
 
-    const book = screen.getByRole('button', { name: '两个月上手 React' })
-    await user.click(book)
-    await user.click(book)
+    await user.pointer({
+      target: screen.getByRole('button', { name: '两个月上手 React' }),
+      keys: '[MouseRight]',
+    })
+    await user.click(await screen.findByRole('button', { name: '进入课程' }))
 
     expect(await screen.findByText('课程学习页（二级界面）')).toBeInTheDocument()
   })
 
-  it('双击等价于「选中 → 再点」，同样进入二级界面', async () => {
+  it('小窗里能删除课程，且要先确认', async () => {
     const user = userEvent.setup()
-    useCourseStore.setState({ courses: [makeCourse('c1', 'React')] })
+    useCourseStore.setState({ courses: [makeCourse('c1', 'React'), makeCourse('c2', '线性代数')] })
     renderShelf()
 
-    // 这条正是「双击也能进二级」的保证：不需要任何双击判定逻辑，
-    // 两次 click 自然走完选中与进入两步
-    await user.dblClick(screen.getByRole('button', { name: 'React' }))
+    await user.pointer({
+      target: screen.getByRole('button', { name: 'React' }),
+      keys: '[MouseRight]',
+    })
+    await user.click(await screen.findByRole('button', { name: '删除这门课' }))
 
-    expect(await screen.findByText('课程学习页（二级界面）')).toBeInTheDocument()
+    // 二次确认：删除不可撤销，不该点一下就没了
+    expect(await screen.findByText('删除「React」？')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '删除课程' }))
+
+    expect(screen.queryByRole('button', { name: 'React' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '线性代数' })).toBeInTheDocument()
   })
 
-  it('点另一本书只是换选中对象，不会误进二级界面', async () => {
+  it('右键另一本书只是换小窗内容，不会改动任何课程', async () => {
     const user = userEvent.setup()
     useCourseStore.setState({
       courses: [makeCourse('c1', 'React'), makeCourse('c2', '线性代数')],
     })
     renderShelf()
 
-    await user.click(screen.getByRole('button', { name: 'React' }))
-    await user.click(screen.getByRole('button', { name: '线性代数' }))
+    await user.pointer({
+      target: screen.getByRole('button', { name: 'React' }),
+      keys: '[MouseRight]',
+    })
+    await user.pointer({
+      target: screen.getByRole('button', { name: '线性代数' }),
+      keys: '[MouseRight]',
+    })
 
     expect(screen.queryByText('课程学习页（二级界面）')).not.toBeInTheDocument()
-    // 小窗内容换成第二本书
     expect(screen.getByRole('dialog')).toHaveAccessibleName('线性代数 详情')
-  })
-
-  it('小窗本身不响应点击（按约定进入课程只能靠再点那本书）', async () => {
-    const user = userEvent.setup()
-    useCourseStore.setState({ courses: [makeCourse('c1', 'React')] })
-    renderShelf()
-
-    await user.click(screen.getByRole('button', { name: 'React' }))
-    await user.click(screen.getByRole('dialog'))
-
-    expect(screen.queryByText('课程学习页（二级界面）')).not.toBeInTheDocument()
-    expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 
   it('按 Esc 关闭小窗', async () => {
@@ -112,7 +129,10 @@ describe('Shelf 交互状态机', () => {
     useCourseStore.setState({ courses: [makeCourse('c1', 'React')] })
     renderShelf()
 
-    await user.click(screen.getByRole('button', { name: 'React' }))
+    await user.pointer({
+      target: screen.getByRole('button', { name: 'React' }),
+      keys: '[MouseRight]',
+    })
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
 
     await user.keyboard('{Escape}')
@@ -124,7 +144,10 @@ describe('Shelf 交互状态机', () => {
     useCourseStore.setState({ courses: [makeCourse('c1', 'React')] })
     renderShelf()
 
-    await user.click(screen.getByRole('button', { name: 'React' }))
+    await user.pointer({
+      target: screen.getByRole('button', { name: 'React' }),
+      keys: '[MouseRight]',
+    })
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
 
     // 点书架容器本身（非任何书籍、非小窗）。

@@ -8,6 +8,7 @@ import {
 } from '@/features/course/drafts'
 import type { CoursePlanDraft } from '@/features/course/drafts'
 import { formatMinutes } from '@/lib/date'
+import { useEscapeKey } from '@/lib/useEscapeKey'
 
 /**
  * 表单内部所有字段都用字符串存。
@@ -71,6 +72,11 @@ export function CourseFormDialog({
 }: CourseFormDialogProps) {
   const [form, setForm] = useState<FormState>(() => toForm(initialDraft))
   const [error, setError] = useState<string | null>(null)
+
+  // Esc = 取消（捕获阶段，先于页面层的「Esc 返回」）。
+  // 表单里可能有没保存的编辑，这里不做二次确认：Esc 与「取消」是同一个动作，
+  // 两个入口给两种结果是更糟的设计。
+  useEscapeKey(onCancel, { capture: true })
 
   function patch(changes: Partial<FormState>) {
     setForm((previous) => ({ ...previous, ...changes }))

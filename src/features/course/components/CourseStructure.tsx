@@ -152,25 +152,11 @@ function UnitRow({
       )}
 
       {/*
-        外部视频：标题本身已经是链接了，这里只留一个更明确的入口。
+        外部视频只有**标题**这一个入口：标题已经是链接，再在下面挂一条
+        「▶ B 站原视频 · … AI 提供」就是同一件事说两遍，用户明确要求去掉。
         链接交给主进程的 setWindowOpenHandler（target=_blank）去开外链，
         渲染进程不需要、也不该拿到 shell 能力。
       */}
-      {unit.resourceUrl && (
-        <p className="mt-2">
-          <a
-            href={unit.resourceUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1 text-small text-ink-soft underline decoration-line-soft underline-offset-2 transition-colors duration-200 hover:text-ink"
-            title="用默认浏览器打开这一讲（AI 给出的地址，打不开就换一个）"
-          >
-            ▶ {unit.resourceLabel ?? '看这一讲的视频'}
-            <span className="text-micro text-ink-faint">AI 提供</span>
-          </a>
-        </p>
-      )}
-
       {/*
         正文：这是"课程不是空壳"的地方。
         但**已经有视频链接的节不提供定制教材** —— 那门课本身讲得比模型现写的更好，

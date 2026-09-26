@@ -83,7 +83,7 @@ export function MemoryCard({
               setEditing((value) => !value)
             }}
           >
-            {editing ? '取消' : '修正'}
+            {editing ? '取消' : '编辑'}
           </button>
           <button
             type="button"

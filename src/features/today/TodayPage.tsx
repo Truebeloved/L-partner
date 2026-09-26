@@ -69,10 +69,30 @@ export function TodayPage() {
     [courses],
   )
 
-  // 逾期区：这是最容易被忽略、但用户最需要的部分 —— 漏掉的安排在页面上方主动暴露出来
+  // 逾期区：这是最容易被忽略、但用户最需要的部分 —— 漏掉的安排在页面上方主动暴露出来。
+  // 周目标不算逾期：它整周都"还没到点"，把它算进去会让这一区整整一周都挂着红色
   const overdueTodos = useMemo(
-    () => allTodos.filter((todo) => !todo.done && isOverdue(todo.date)).sort(byDateAsc),
+    () =>
+      allTodos
+        .filter((todo) => !todo.done && !todo.weekStart && isOverdue(todo.date))
+        .sort(byDateAsc),
     [allTodos],
+  )
+
+  /**
+   * 「接下来」：今天之后的事。
+   *
+   * 侧栏的今日待办**只显示今天** —— 未来那些事不该挤在今天这一屏里。
+   * 但"下周三要交作业"总得有个地方能提前看到、提前改，否则用户会以为它没被记住，
+   * 于是又去别处记一遍。所以完整版（这一页）给一个预览分区，侧栏保持干净。
+   * 带周标记的不在这里 —— 它有自己的「本周」块，颗粒度不同。
+   */
+  const upcomingTodos = useMemo(
+    () =>
+      allTodos
+        .filter((todo) => todo.date > today && !todo.weekStart && !todo.done)
+        .sort(byDateAsc),
+    [allTodos, today],
   )
 
   const doneCount = todayTodos.filter((todo) => todo.done).length
@@ -217,6 +237,27 @@ export function TodayPage() {
           </p>
           <ul className="card mt-3 divide-y divide-line-soft p-0">
             {overdueTodos.map((todo) => (
+              <TodoItem
+                key={todo.id}
+                todo={todo}
+                courseTitle={courseTitleOf(todo)}
+                showDate
+                onToggle={handleToggle}
+                onRemove={handleRemove}
+              />
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {upcomingTodos.length > 0 && (
+        <section className="mt-8">
+          <h2 className="section-title">接下来</h2>
+          <p className="muted mt-1">
+            今天之后的事。侧栏只显示当天，所以它们先在这里待着 —— 到那天自己会出现在今日清单里。
+          </p>
+          <ul className="card mt-3 divide-y divide-line-soft p-0">
+            {upcomingTodos.map((todo) => (
               <TodoItem
                 key={todo.id}
                 todo={todo}

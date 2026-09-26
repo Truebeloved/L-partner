@@ -238,21 +238,29 @@ function buildMemorySection(memories: MemoryEntry[]): string {
 // 记忆抽取
 // ---------------------------------------------------------------------------
 
-export const MEMORY_EXTRACTION_SYSTEM_PROMPT = `你是一个记忆抽取器。你的任务是从一段学习对话中，抽取值得长期记住的**新**信息。
+export const MEMORY_EXTRACTION_SYSTEM_PROMPT = `你是一个记忆抽取器。你的任务是从一段学习对话中，抽取值得长期记住的**新**信息，以及他明确说过要做的事。
 
 只输出 JSON，不要任何解释文字。格式：
 {
   "facts": ["关于这个学生的稳定事实，如专业、年级、目标、学习习惯偏好"],
   "mastery": [{"knowledgePoint": "知识点名称", "level": "learning|weak|mastered", "reason": "判断依据，一句话"}],
-  "episodes": ["这次聊了什么、卡在哪里、有没有讲通，一句话"]
+  "episodes": ["这次聊了什么、卡在哪里、有没有讲通，一句话"],
+  "todos": [{"title": "要做的事，动词开头，20 字以内", "when": "今天|明天|后天|周三|下周三|这周|3月5日|2026-03-05"}],
+  "weekly": ["这一周想做到的、比较笼统的目标，如「把第一章过一遍」"],
+  "todoLinks": [{"todo": "待办标题（原样照抄）", "unit": "课程单元标题（原样照抄）"}]
 }
-
 严格规则：
 - 只记录**新的、稳定的、未来还有用**的信息。寒暄、一次性提问、情绪波动都不要记。
 - 已经在「已知记忆」里的内容不要重复输出。
 - facts 用第三人称陈述句，如「他是计算机专业大三学生，目标是转前端」。
 - 每条都要简短。宁可少记，也不要记废话。
-- 没有任何值得记的内容时，三个字段都返回空数组。`
+- **todos 只收他明确表达了"我要做/我打算做/得做"的具体事情**，而且必须是可执行的动作，
+  不要把他问的问题、想了解的知识点当成待办。「我想学 Rust」属于兴趣，进 facts 而不是 todos。
+- todos 里的 when 用**原话里的时间说法**（"明天""下周三"都行），没提时间就留空字符串 ——
+  系统会自己解析成日期，不要你去算。
+- **weekly 只收"这一周"这种跨天的笼统目标**（"这周把英语单词过完"）。
+  具体到某一天的事放 todos，不要两处都放。
+- 没有任何值得记的内容时，所有字段都返回空数组。`
 
 /**
  * 记忆抽取的输入。
@@ -262,9 +270,26 @@ export const MEMORY_EXTRACTION_SYSTEM_PROMPT = `你是一个记忆抽取器。�
  * - `existing` 是"不要重复"的参照，但记忆越攒越多，全列出来等于每 8 条消息就重发一遍全部记忆。
  *   只带最近的若干条就够了 —— 更早的记忆要么已经重复过，要么本来就不相关。
  */
+/**
+ * 记忆抽取的输入。
+ *
+ * 三处封顶都是必须的，否则这个请求会随对话增长而无限变贵：
+ * - `conversation` 只该是**自上次抽取以来的增量**（调用方负责切），这里再对单条与整体做截断；
+ * - `existing` 是"不要重复"的参照，但记忆越攒越多，全列出来等于每 8 条消息就重发一遍全部记忆；
+ * - `pendingTodos` 是要请模型判定归属的那几条待办（规则匹配不上的），同样要封顶。
+ *
+ * ⚠️ 这里**不额外多花一次请求**：待办、周目标、待办与课程的关联判定，
+ * 全都挤在这一次抽取里产出 —— 否则每轮对话要为"全局 AI"多付一次钱。
+ */
 export function buildMemoryExtractionMessages(
   conversation: ChatMessage[],
   existing: MemoryEntry[],
+  options: {
+    /** 规则匹配不上归属的待办标题（最多几条） */
+    pendingTodos?: string[]
+    /** 可供归属的课程单元清单 */
+    courseUnits?: { course: string; unit: string }[]
+  } = {},
 ): LlmMessage[] {
   const transcript = conversation
     .map(
@@ -279,11 +304,22 @@ export function buildMemoryExtractionMessages(
       ? recent.map((memory) => `- ${clampText(memory.content, 80)}`).join('\n')
       : '（暂无）'
 
+  const pendingTodos = options.pendingTodos ?? []
+  const courseUnits = options.courseUnits ?? []
+  const linking =
+    pendingTodos.length > 0 && courseUnits.length > 0
+      ? `\n\n## 待关联的待办（判断它属于哪个单元）\n${pendingTodos
+          .map((title) => `- ${title}`)
+          .join('\n')}\n\n## 课程单元（只能从这里挑，标题要原样照抄）\n${courseUnits
+          .map((item) => `- ${item.course} ／ ${item.unit}`)
+          .join('\n')}\n\n请额外输出 todoLinks：把确实对应某个单元的待办写进去，格式 [{ "todo": "待办标题原样", "unit": "单元标题原样" }]。拿不准就不要写 —— 宁可让它留在待办里，也不要挂错课程。`
+      : ''
+
   return [
     { role: 'system', content: MEMORY_EXTRACTION_SYSTEM_PROMPT },
     {
       role: 'user',
-      content: `## 已知记忆（不要重复，只列了最近 ${recent.length} 条）\n${known}\n\n## 新增对话\n${transcript}\n\n请抽取新记忆。`,
+      content: `## 已知记忆（不要重复，只列了最近 ${recent.length} 条）\n${known}\n\n## 新增对话\n${transcript}\n\n请抽取新记忆。${linking}`,
     },
   ]
 }

@@ -1,9 +1,15 @@
+import { matchTodoToCourse, normalizeForMatch, resolveWhen, weekStartOf } from '@/features/today/autoTodo'
 import { extractJson } from '@/lib/llm'
 import { buildMemoryExtractionMessages, buildSummaryMessages } from '@/lib/llm/prompts'
 import type { LlmProvider } from '@/lib/llm/types'
+import { toDateKey } from '@/lib/date'
+import { useCourseStore } from '@/store/courses'
 import { useMemoryStore } from '@/store/memory'
 import type { MemoryDraft } from '@/store/memory'
-import type { ChatMessage, Id, MasteryLevel, MemoryEntry } from '@/types/models'
+import { usePlanStore } from '@/store/plans'
+import { useTodoStore } from '@/store/todos'
+import type { TodoDraft } from '@/store/todos'
+import type { ChatMessage, DateKey, Id, MasteryLevel, MemoryEntry } from '@/types/models'
 
 /**
  * 每积累这么多条新消息才触发一次记忆抽取。
@@ -28,6 +34,9 @@ interface RawExtraction {
   facts?: unknown
   mastery?: unknown
   episodes?: unknown
+  todos?: unknown
+  weekly?: unknown
+  todoLinks?: unknown
 }
 
 export function shouldExtractMemory(
@@ -65,13 +74,34 @@ export async function extractMemories(input: {
 
   const existing = useMemoryStore.getState().entries
 
+  /*
+   * 规则匹配不上归属的待办，顺带请模型判定一次（同一次调用，不额外花钱）。
+   * 只挑最近的几条、且只挑"还没挂上课程"的 —— 清单越短，模型越不会乱挂。
+   */
+  const pendingTodos = useTodoStore
+    .getState()
+    .todos.filter((todo) => !todo.unitId && !todo.weekStart && !todo.planItemId)
+    .slice(-PENDING_LINK_LIMIT)
+    .map((todo) => todo.title)
+
+  const courseUnits = useCourseStore
+    .getState()
+    .courses.flatMap((course) =>
+      course.stages.flatMap((stage) =>
+        stage.units.map((unit) => ({ course: course.title, unit: unit.title })),
+      ),
+    )
+
   let parsed: RawExtraction
   try {
-    const raw = await provider.chat(buildMemoryExtractionMessages(recent, existing), {
-      // 抽取任务要的是稳定输出，不是创造力
-      temperature: 0,
-      maxTokens: 1024,
-    })
+    const raw = await provider.chat(
+      buildMemoryExtractionMessages(recent, existing, { pendingTodos, courseUnits }),
+      {
+        // 抽取任务要的是稳定输出，不是创造力
+        temperature: 0,
+        maxTokens: 1024,
+      },
+    )
     parsed = extractJson<RawExtraction>(raw)
   } catch (error) {
     console.warn('[L-partner] 记忆抽取失败，已跳过本次：', error)
@@ -123,10 +153,148 @@ export async function extractMemories(input: {
   }
 
   const fresh = drafts.filter((draft) => !isDuplicate(draft, existing))
-  if (fresh.length === 0) return 0
+  if (fresh.length > 0) useMemoryStore.getState().addMany(fresh)
 
-  useMemoryStore.getState().addMany(fresh)
-  return fresh.length
+  /*
+   * 同一次调用里顺手把「他说要做的事」落成待办 —— 这就是「全局 AI」的无感部分：
+   * 不额外请求、不额外花钱，用户只是在聊天，待办栏里自己就多了东西。
+   */
+  const createdTodos = applyExtractedTodos(parsed, { courseId })
+  const linked = applyTodoLinks(parsed)
+
+  return fresh.length + createdTodos + linked
+}
+
+/** 请模型判定的待办条数上限：清单越长，模型越容易乱挂 */
+export const PENDING_LINK_LIMIT = 5
+
+/**
+ * 应用模型给出的「待办 → 单元」归属。
+ *
+ * 两道校验缺一不可：待办标题必须真在库里，单元标题必须真能匹配到某个单元 ——
+ * 模型偶尔会把标题写得不太一样，直接把它的答案写进数据里，就会出现指向不存在单元的悬空关联。
+ */
+export function applyTodoLinks(parsed: RawExtraction): number {
+  const links = asObjectArray(parsed.todoLinks)
+  if (links.length === 0) return 0
+
+  const todos = useTodoStore.getState().todos
+  const courses = useCourseStore.getState().courses
+  const plans = usePlanStore.getState().plans
+  let applied = 0
+
+  for (const link of links) {
+    const todoTitle = typeof link.todo === 'string' ? link.todo.trim() : ''
+    const unitTitle = typeof link.unit === 'string' ? link.unit.trim() : ''
+    if (!todoTitle || !unitTitle) continue
+
+    const target = todos.find(
+      (todo) =>
+        !todo.unitId &&
+        !todo.weekStart &&
+        normalizeForMatch(todo.title) === normalizeForMatch(todoTitle),
+    )
+    if (!target) continue
+
+    // 用单元标题再走一遍规则匹配：模型给的标题能不能落到某个真单元上，由本地说了算
+    const resolved = matchTodoToCourse(unitTitle, courses, plans)
+    if (!resolved) continue
+
+    useTodoStore.getState().update(target.id, {
+      courseId: resolved.courseId,
+      unitId: resolved.unitId,
+      planItemId: resolved.planItemId,
+    })
+    applied += 1
+  }
+
+  return applied
+}
+
+/**
+ * 把抽取出来的待办写进待办库。
+ *
+ * 三件事值得说明：
+ * 1. 日期用 resolveWhen 解析**原话里的时间说法**（"下周三"这类），模型不需要算日期；
+ * 2. 解析不出来时兜底成"今天" —— 最坏结果是早提醒一天，而不是把任务丢进一个没人看的日期；
+ * 3. 落库前先按"同一天 + 同名"去重：对话里同一件事常常被提起好几次。
+ */
+export function applyExtractedTodos(
+  parsed: RawExtraction,
+  options: { courseId?: Id; now?: Date } = {},
+): number {
+  const now = options.now ?? new Date()
+  const today = toDateKey(now)
+
+  interface PendingDraft {
+    title: string
+    date: DateKey
+    weekStart?: DateKey
+  }
+
+  const pending: PendingDraft[] = []
+
+  for (const item of asObjectArray(parsed.todos)) {
+    const title = typeof item.title === 'string' ? item.title.trim() : ''
+    if (!title) continue
+    const when = typeof item.when === 'string' ? item.when : ''
+    const resolved = resolveWhen(when, now)
+
+    if (resolved.kind === 'week') {
+      /*
+       * 周目标：date 与 weekStart 都落在本周一。
+       *
+       * ⚠️ 这里必须用它自己的日期，不能兜底成 today ——
+       * 否则它会同时出现在「本周」和「今日」两处，用户会以为有两件事要做。
+       */
+      pending.push({ title, date: resolved.weekStart, weekStart: resolved.weekStart })
+      continue
+    }
+
+    pending.push({ title, date: resolved.kind === 'day' ? resolved.date : today })
+  }
+
+  for (const goal of asStringArray(parsed.weekly)) {
+    const title = goal.trim()
+    if (!title) continue
+    // 周目标：date 落在本周一，这样它不会混进"今日"清单，而是走「本周」那一块
+    pending.push({ title, date: weekStartOf(today), weekStart: weekStartOf(today) })
+  }
+
+  if (pending.length === 0) return 0
+
+  const todos = useTodoStore.getState().todos
+  const seen = new Set(todos.map((todo) => `${todo.date}|${normalizeForMatch(todo.title)}`))
+  const courses = useCourseStore.getState().courses
+  const plans = usePlanStore.getState().plans
+
+  const drafts: TodoDraft[] = []
+  for (const item of pending) {
+    const key = `${item.date}|${normalizeForMatch(item.title)}`
+    if (seen.has(key)) continue
+    seen.add(key)
+
+    /*
+     * 课程关联：规则先匹配。匹配不上不留空 —— 待办照常存在，
+     * 只是不带课程标签；拿不准的由下一次抽取（见 buildMemoryExtractionMessages
+     * 里的「待关联待办」）让模型判定。
+     */
+    const link = matchTodoToCourse(item.title, courses, plans)
+
+    drafts.push({
+      title: item.title,
+      date: item.date,
+      courseId: link?.courseId ?? options.courseId,
+      unitId: link?.unitId,
+      planItemId: link?.planItemId,
+      ...(item.weekStart ? { weekStart: item.weekStart } : {}),
+      source: 'ai-extract',
+    })
+  }
+
+  if (drafts.length === 0) return 0
+  useTodoStore.getState().addMany(drafts)
+  return drafts.length
 }
 
 /** 会话摘要（记忆第 1 层）：对话变长后，用摘要替换掉冗长的原始历史 */

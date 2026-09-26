@@ -17,6 +17,7 @@
     "icon": "node scripts/generate-icon.mjs",
     "shots": "node scripts/capture-ui.mjs",
     "shots:assistant": "node scripts/capture-assistant.mjs",
+    "shots:global-ai": "node scripts/capture-global-ai.mjs",
     "inspect:storage": "node scripts/inspect-storage.mjs",
     "test": "vitest run",
     "test:watch": "vitest",

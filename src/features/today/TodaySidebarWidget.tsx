@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 
+import { isWeeklyTodo, matchTodoToCourse } from '@/features/today/autoTodo'
 import { syncMasteryForCourse } from '@/features/memory/mastery'
 import { formatDateHuman, isOverdue, todayKey } from '@/lib/date'
 import { useCourseStore } from '@/store/courses'
@@ -29,6 +30,7 @@ export function TodaySidebarWidget() {
   const addTodo = useTodoStore((state) => state.add)
   const toggleTodo = useTodoStore((state) => state.toggle)
   const updatePlanItemStatus = usePlanStore((state) => state.updateItemStatus)
+  const plans = usePlanStore((state) => state.plans)
   const courses = useCourseStore((state) => state.courses)
 
   // 必须订阅 courses 而不是 getState()：新建或删除课程后这里要跟着变，
@@ -49,7 +51,33 @@ export function TodaySidebarWidget() {
     [todos, today],
   )
 
-  const overdue = useMemo(() => todos.filter((todo) => !todo.done && isOverdue(todo.date)), [todos])
+  /**
+   * 本周目标：置顶显示。
+   *
+   * 它的 date 落在本周一，所以天然不会混进"今天"的清单 ——
+   * 两处都显示会让用户以为有两件事要做。到下周它自己就不在这里了（weekStart 不再匹配）。
+   */
+  const weeklyTodos = useMemo(
+    () =>
+      todos
+        .filter((todo) => isWeeklyTodo(todo, today))
+        .sort((a, b) => {
+          if (a.done !== b.done) return a.done ? 1 : -1
+          return a.createdAt.localeCompare(b.createdAt)
+        }),
+    [todos, today],
+  )
+
+  /**
+   * 逾期：只算"某一天的事"。
+   *
+   * 周目标必须排除 —— 它的日期落在本周一，周一到周五都会被算成"逾期"，
+   * 于是侧栏整个星期都挂着一条红色警告，而它其实只是"这周要完成"。
+   */
+  const overdue = useMemo(
+    () => todos.filter((todo) => !todo.done && !todo.weekStart && isOverdue(todo.date)),
+    [todos],
+  )
 
   const doneCount = todayTodos.filter((todo) => todo.done).length
   const totalCount = todayTodos.length
@@ -68,7 +96,20 @@ export function TodaySidebarWidget() {
     event.preventDefault()
     const title = draft.trim()
     if (!title) return
-    addTodo({ title, date: today })
+    /*
+     * 手输的待办也走一次课程匹配：用户写「看完第一章视频」，
+     * 系统就该知道它对应哪门课的哪个单元 —— 勾掉它，课程结构里那一行会跟着划掉。
+     * 匹配不上就只是一条普通待办，不留空字段。
+     */
+    const link = matchTodoToCourse(title, courses, plans)
+    addTodo({
+      title,
+      date: today,
+      courseId: link?.courseId,
+      unitId: link?.unitId,
+      planItemId: link?.planItemId,
+      source: 'manual',
+    })
     setDraft('')
   }
 
@@ -113,6 +154,41 @@ export function TodaySidebarWidget() {
         <p className="mx-1 mt-2 rounded-sm bg-alert-soft px-2 py-1 text-small text-alert">
           另有 {overdue.length} 项逾期未完成
         </p>
+      )}
+
+      {/*
+        本周目标置顶：它是"这一周"的颗粒度，和下面的今日清单不是一回事，
+        所以给一块独立的小标题和一条分隔线，而不是混进同一个列表。
+      */}
+      {/* 本周块与今日清单之间加一道分隔：两块东西颗粒度不同，不分开会读成一串 */}
+      {weeklyTodos.length > 0 && (
+        <div className="mx-1 mt-3 border-t border-line-soft pt-2">
+          <p className="px-1 text-label font-bold tracking-[0.05em] text-ink-soft uppercase">本周</p>
+          <ul className="mt-1.5 space-y-0.5">
+            {weeklyTodos.map((todo) => (
+              <li key={todo.id}>
+                <label className="flex cursor-pointer items-start gap-2 rounded-sm px-1.5 py-1.5 transition-all duration-200 ease-out hover:bg-ink/5">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 size-3.5 shrink-0 accent-ink"
+                    checked={todo.done}
+                    aria-label={`完成本周目标「${todo.title}」`}
+                    onChange={() => handleToggle(todo)}
+                  />
+                  <span
+                    className={
+                      todo.done
+                        ? 'min-w-0 flex-1 text-small leading-snug text-ink-faint line-through'
+                        : 'min-w-0 flex-1 text-small leading-snug text-ink'
+                    }
+                  >
+                    {todo.title}
+                  </span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {/* 列表自己滚动：侧栏高度必须守恒，不能待办一多就把导航挤出去 */}

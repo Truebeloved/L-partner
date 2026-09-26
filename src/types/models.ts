@@ -125,19 +125,36 @@ export interface Plan {
 /**
  * 待办有两种来源：
  * - 由 PlanItem 派生（planItemId 有值）—— 完成它会回流更新掌握状态
- * - 用户手写（planItemId 为空）—— 独立任务，如「交作业」
+ * - 用户手写或对话里抽出来的（planItemId 为空）—— 独立任务，如「交作业」
  */
 export interface Todo {
   id: Id
   courseId?: Id
   planItemId?: Id
+  /**
+   * 关联到的课程单元。
+   *
+   * 与 planItemId 的分工：计划项是"某个单元被排到了某一天"，
+   * 而关联说的是"这件事就是那个单元的内容"。手输的待办没有计划项，
+   * 但同样应该让课程结构里对应单元变成灰态 —— 所以这里要能直接指向单元。
+   */
+  unitId?: Id
   title: string
   /** 归属日期，今日待办按它过滤 */
   date: DateKey
   minutes?: number
+  /**
+   * 周标记：这一条不是"某天的事"，而是"这一周想做到的事"。
+   *
+   * 存的是那一周的周一（DateKey），于是它天然可排序、可跨天比较，
+   * 也就能在左侧待办区置顶显示而不必再建一种数据类型。
+   */
+  weekStart?: DateKey
   done: boolean
   completedAt?: IsoDateTime
   createdAt: IsoDateTime
+  /** 来源：手动添加，或从对话里由 AI 抽取 —— UI 上据此给出不同提示 */
+  source?: 'manual' | 'ai-extract'
 }
 
 // ---------------------------------------------------------------------------

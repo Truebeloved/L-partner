@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import type { ReactNode, RefObject } from 'react'
 import { Link } from 'react-router-dom'
 
 import { Icon } from '@/components/Icon'
+import { PersonaSwitch } from '@/features/assistant/PersonaSwitch'
 import { stepExchange, toExchanges } from '@/features/assistant/exchanges'
 import { DOCK_METRICS } from '@/features/assistant/dock'
 import type { DockPlacement } from '@/features/assistant/dock'
@@ -85,6 +86,14 @@ export function AssistantBar({ placement }: AssistantBarProps) {
   const [focused, setFocused] = useState<number | null>(null)
   /** 回答是否向下展开 */
   const [answerOpen, setAnswerOpen] = useState(false)
+  /** 回答在**收起态**下是否被截断（放不下一行）。短回答因此永远不会被展开 */
+  const [answerOverflows, setAnswerOverflows] = useState(false)
+  /** 用户自己收起过这一次回答：此时不要再自动展开，那是跟他抢控制权 */
+  const userCollapsedRef = useRef(false)
+  /** 输入框的 ref：「按回车问下一个」之后要把光标放进去 */
+  const inputRef = useRef<HTMLInputElement>(null)
+  /** 递增计数：每一次变化都表示"请把焦点给输入框" */
+  const [focusRequest, setFocusRequest] = useState(0)
   /** 提问是否横向展开（展开时回答让位并收成缩略） */
   const [questionOpen, setQuestionOpen] = useState(false)
   /**
@@ -126,7 +135,9 @@ export function AssistantBar({ placement }: AssistantBarProps) {
         question: text,
         answer: '还没接入大模型，所以我还答不了。到「设置 → 大模型接入」填上 API 地址和密钥，就能接着聊了。',
       })
-      setAnswerOpen(true)
+      // 同上：默认不展开，放不下时由 AnswerBubble 报告、再展开
+      userCollapsedRef.current = false
+      setAnswerOpen(false)
       setMorphing(true)
       window.setTimeout(() => setMorphing(false), 16)
       setAutoSettle(false)
@@ -134,13 +145,46 @@ export function AssistantBar({ placement }: AssistantBarProps) {
     }
 
     setLocalAnswer(null)
-    setAnswerOpen(true)
+    /*
+     * 默认**不展开**：展开与否交给"这段回答在一行里放不放得下"来决定
+     * （AnswerBubble 量完通过 handleAnswerOverflow 告诉我们）。
+     * 原来是发完就无条件展开，于是每一条回答都铺成好几行、把页面顶掉一大块 ——
+     * 用户的原话是"模型对话总是换行"。短回答就该一直待在那条缩略的一行里。
+     */
+    userCollapsedRef.current = false
+    setAnswerOpen(false)
     setMorphing(true)
-    setAutoSettle(!inputOnly)
+    setAutoSettle(false)
     // 下一帧解除形变第一拍，压缩 + 生长才有得过渡
     window.setTimeout(() => setMorphing(false), 16)
     void session.send(text)
-  }, [draft, session, inputOnly, settings.llm])
+  }, [draft, session, settings.llm])
+
+  /**
+   * 回答被截断时（一行放不下）才展开，并且只展开"一会儿"。
+   *
+   * 为什么由 AnswerBubble 报告而不是在这里按字数猜：一行能放多少字取决于
+   * 输入条的实际宽度（窗口尺寸、有没有侧栏都会变），按字数猜迟早会在某个宽度上猜错。
+   */
+  const handleAnswerOverflow = useCallback(
+    (overflowing: boolean) => {
+      setAnswerOverflows(overflowing)
+      if (!overflowing || userCollapsedRef.current) return
+      setAnswerOpen(true)
+      // 展开只给一小会儿：看完这 3 秒它会自己收回缩略态
+      setAutoSettle(!inputOnly)
+    },
+    [inputOnly],
+  )
+
+  /** 回到输入态，并且把光标放进输入框 —— 「按回车问下一个」要真的能接着打字 */
+  const startNewQuestion = useCallback(() => {
+    setComposing(true)
+    setQuestionOpen(false)
+    setAnswerOpen(false)
+    setAutoSettle(false)
+    setFocusRequest((value) => value + 1)
+  }, [])
 
   /*
    * 答完停留一会再收成长条。
@@ -200,6 +244,34 @@ export function AssistantBar({ placement }: AssistantBarProps) {
 
   const canBrowse = !composingNow && total > 1
 
+  /*
+   * 「答完之后按回车 = 问下一个问题」。
+   *
+   * 为什么挂在 window 上而不是这条自己身上：答完时输入框已经卸载，焦点落回 body，
+   * 事件根本传不到这里。但这不意味着可以无条件抢回车 —— 三条护栏：
+   * 1. 正在输入态（composingNow）不处理，那时回车归输入框自己发送；
+   * 2. 焦点在别的输入框/可编辑区域里不处理，否则用户在表单里回车会被抢走；
+   * 3. 有弹窗开着不处理（弹窗里的按钮要用回车激活，对话框也不该在背后响应）。
+   */
+  useEffect(() => {
+    if (composingNow) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Enter' || event.isComposing) return
+      if (document.querySelector('[role="dialog"]')) return
+
+      const target = event.target
+      if (target instanceof HTMLElement) {
+        const tag = target.tagName
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return
+      }
+
+      event.preventDefault()
+      startNewQuestion()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [composingNow, startNewQuestion])
+
   return (
     <div ref={rootRef} className="relative w-full" data-assistant-bar={placement}>
       {/*
@@ -219,6 +291,8 @@ export function AssistantBar({ placement }: AssistantBarProps) {
             onChange={setDraft}
             onSubmit={submit}
             onStop={session.stop}
+            inputRef={inputRef}
+            focusRequest={focusRequest}
             /* 只有在对话页才给"切换性格"：那是整页对话的地方，
                一级界面上那一条是随手问一句的入口，塞进一个选择器只会挤掉输入空间 */
             personaSwitch={inputOnly ? <PersonaSwitch /> : null}
@@ -243,8 +317,14 @@ export function AssistantBar({ placement }: AssistantBarProps) {
                 text={exchange?.answer ?? ''}
                 open={answerExpanded}
                 streaming={streaming}
+                onOverflow={handleAnswerOverflow}
+                truncated={answerOverflows}
                 onToggle={() => {
-                  setAnswerOpen((value) => !value)
+                  setAnswerOpen((value) => {
+                    // 用户自己收起之后不要再替他展开（那是跟他抢控制权）
+                    userCollapsedRef.current = value
+                    return !value
+                  })
                   setAutoSettle(false)
                 }}
               />
@@ -278,11 +358,8 @@ export function AssistantBar({ placement }: AssistantBarProps) {
             <NewQuestionButton
               hidden={morphing}
               onClick={() => {
-                setComposing(true)
-                setQuestionOpen(false)
-                setAnswerOpen(false)
-                setAutoSettle(false)
                 setLocalAnswer(null)
+                startNewQuestion()
               }}
             />
           </>
@@ -319,41 +396,6 @@ export function AssistantBar({ placement }: AssistantBarProps) {
  * 只有它带背景 —— 长条本身要看起来"可以打字"，而气泡不需要外框。
  * 流式输出时把发送键换成「停止」，对话页尤其需要：那一页本来就有停止按钮的位置。
  */
-/**
- * 输入框里的「切换性格」。
- *
- * 用户要求把它从对话页顶栏挪到输入框里 —— 对话页现在只有两样东西：
- * 上面是对话、下面是输入框。角色是"派谁去回答"的属性，跟着输入框走最自然。
- *
- * 用原生 select 而不是自定义菜单：它自带键盘可达、滚动与移动端行为，
- * 而这里只需要一个"选一个"的动作。样式上保持无底色，融进输入框那条胶囊里。
- */
-function PersonaSwitch() {
-  const personas = usePersonaStore((state) => state.personas)
-  const activeId = useSettingsStore((state) => state.settings.activePersonaId)
-  const update = useSettingsStore((state) => state.update)
-
-  if (personas.length === 0) return null
-
-  return (
-    <label className="flex shrink-0 items-center">
-      <span className="sr-only">切换性格</span>
-      <select
-        className="max-w-28 cursor-pointer truncate rounded-pill bg-transparent py-1 pr-1 text-small text-ink-soft outline-none transition-colors duration-200 hover:text-ink"
-        value={activeId}
-        onChange={(event) => update({ activePersonaId: event.target.value })}
-        title="换一个角色来回答 —— 记忆是跨角色共享的，换了老师它依然了解你"
-      >
-        {personas.map((persona) => (
-          <option key={persona.id} value={persona.id}>
-            {persona.name}
-          </option>
-        ))}
-      </select>
-    </label>
-  )
-}
-
 function Composer({
   draft,
   height,
@@ -363,6 +405,8 @@ function Composer({
   onSubmit,
   onStop,
   personaSwitch,
+  inputRef,
+  focusRequest,
 }: {
   draft: string
   height: number
@@ -372,13 +416,26 @@ function Composer({
   onSubmit: () => void
   onStop: () => void
   personaSwitch?: ReactNode
+  inputRef?: RefObject<HTMLInputElement | null>
+  /** 每次递增表示"请把焦点给输入框"（按回车问下一个问题时用） */
+  focusRequest?: number
 }) {
+  /*
+   * 焦点跟着 focusRequest 走：那个计数一变就把光标放进输入框。
+   * 不能只靠 autoFocus —— 它只在挂载时生效，而这里是想"从气泡态回到输入态"时抢焦点。
+   */
+  useEffect(() => {
+    if (!focusRequest) return
+    inputRef?.current?.focus()
+  }, [focusRequest, inputRef])
+
   return (
     <div
       className="flex w-full items-center gap-1 rounded-pill bg-raised pl-5 pr-1.5 transition-shadow duration-200 ease-out focus-within:shadow-lift"
       style={{ height }}
     >
       <input
+        ref={inputRef}
         className="min-w-0 flex-1 bg-transparent text-body text-ink outline-none placeholder:text-ink-faint"
         value={draft}
         placeholder={`问问${personaName}…`}
@@ -434,12 +491,33 @@ function AnswerBubble({
   open,
   streaming,
   onToggle,
+  onOverflow,
+  truncated,
 }: {
   text: string
   open: boolean
   streaming: boolean
   onToggle: () => void
+  /** 报告"收起态下一行放不下"这件事，决定要不要自动展开 */
+  onOverflow?: (overflowing: boolean) => void
+  /** 收起态是否被截断：决定悬停提示说什么（"点开看完整内容"还是"展开回答"） */
+  truncated?: boolean
 }) {
+  const collapsedRef = useRef<HTMLParagraphElement>(null)
+
+  /*
+   * 量的是**收起态那一层**：它用 truncate 显示一行，scrollWidth 比 clientWidth 大
+   * 就说明被截断了。每个字都要量（流式输出时内容一直在长），所以依赖 text。
+   *
+   * 这是"短回答不展开"唯一可靠的判断方式：一行能放多少字取决于输入条的实际宽度，
+   * 按字数猜在别的窗口尺寸上就会猜错。
+   */
+  useLayoutEffect(() => {
+    const node = collapsedRef.current
+    if (!node || !onOverflow) return
+    onOverflow(node.scrollWidth > node.clientWidth + 1)
+  }, [text, onOverflow])
+
   if (!text) {
     return (
       <div className="flex items-center rounded-card bg-raised px-4" style={{ minHeight: 40 }}>
@@ -460,7 +538,7 @@ function AnswerBubble({
       className="block w-full rounded-card bg-raised px-4 py-2 text-left transition-shadow duration-200 ease-out hover:shadow-lift"
       style={{ minHeight: 40 }}
       onClick={onToggle}
-      title={open ? '收起回答' : '展开完整回答'}
+      title={open ? '收起回答' : truncated ? '这条回答较长，点开看完整内容' : '展开回答'}
       aria-expanded={open}
     >
       <div
@@ -481,6 +559,8 @@ function AnswerBubble({
           {streaming && <span className="ml-0.5 animate-pulse">▍</span>}
         </p>
         <p
+          ref={collapsedRef}
+          data-assistant-collapsed
           className={[
             'absolute inset-x-0 top-0 truncate text-body leading-snug text-ink transition-opacity duration-200',
             open ? 'opacity-0' : 'opacity-100',

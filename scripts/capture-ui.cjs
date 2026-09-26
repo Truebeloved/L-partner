@@ -395,6 +395,24 @@ app.whenReady().then(async () => {
     await capture(window, name)
   }
 
+  // 输入框里的「切换性格」是弹层，hash 切不过去，点一下再拍
+  await window.webContents.executeJavaScript(`location.hash = '#/chat'`)
+  await sleep(ROUTE_WAIT)
+  const personaOpened = await window.webContents.executeJavaScript(`
+    (() => {
+      const trigger = document.querySelector('[data-persona-switch] button')
+      if (!trigger) return false
+      trigger.click()
+      return true
+    })()
+  `)
+  if (personaOpened) {
+    await sleep(400)
+    await capture(window, '4-chat-persona')
+  } else {
+    console.warn('  ⚠ 没找到「切换性格」入口，跳过该截图')
+  }
+
   // 学伴设定的两个标签是组件内部状态，hash 切不过去，只能真的点一下
   await window.webContents.executeJavaScript(`location.hash = '#/companion'`)
   await sleep(ROUTE_WAIT)

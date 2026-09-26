@@ -1,3 +1,5 @@
+import type { MouseEvent } from 'react'
+
 import { dayjs, formatMinutes, formatRelativeDay } from '@/lib/date'
 import type { Todo } from '@/types/models'
 
@@ -8,13 +10,17 @@ interface TodoItemProps {
   /** 逾期区里的条目要把计划日期显示出来，今日列表里则不必重复「今天」 */
   showDate?: boolean
   onToggle: (todo: Todo) => void
-  onRemove: (todo: Todo) => void
+  /** 右键：打开这一条的小窗（删除在里面）。左键做事、右键管理，与书架同一套手势 */
+  onContextMenu: (todo: Todo, event: MouseEvent) => void
 }
 
-/** 待办行：今日列表与逾期列表共用，两处的勾选/删除行为必须一致，不该写两份 */
-export function TodoItem({ todo, courseTitle, showDate, onToggle, onRemove }: TodoItemProps) {
+/** 待办行：今日列表与逾期列表共用，两处的勾选/右键行为必须一致，不该写两份 */
+export function TodoItem({ todo, courseTitle, showDate, onToggle, onContextMenu }: TodoItemProps) {
   return (
-    <li className="flex items-start gap-3 px-4 py-3 transition-all duration-200 ease-out hover:bg-ink/5">
+    <li
+      className="flex items-start gap-3 px-4 py-3 transition-all duration-200 ease-out hover:bg-ink/5"
+      onContextMenu={(event) => onContextMenu(todo, event)}
+    >
       <input
         type="checkbox"
         className="mt-0.5 size-4 shrink-0 accent-ink"
@@ -46,15 +52,6 @@ export function TodoItem({ todo, courseTitle, showDate, onToggle, onRemove }: To
           </span>
         </div>
       </div>
-
-      <button
-        type="button"
-        className="btn btn-ghost btn-sm shrink-0"
-        onClick={() => onRemove(todo)}
-        aria-label={`删除「${todo.title}」`}
-      >
-        删除
-      </button>
     </li>
   )
 }

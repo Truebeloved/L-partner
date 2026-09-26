@@ -395,6 +395,32 @@ app.whenReady().then(async () => {
     await capture(window, name)
   }
 
+  // 待办的右键小窗也是弹层，点开再拍
+  await window.webContents.executeJavaScript(`location.hash = '#/today'`)
+  await sleep(ROUTE_WAIT)
+  const todoMenuOpened = await window.webContents.executeJavaScript(`
+    (() => {
+      const row = document.querySelector('ul.card li')
+      if (!row) return false
+      const rect = row.getBoundingClientRect()
+      row.dispatchEvent(
+        new MouseEvent('contextmenu', {
+          bubbles: true,
+          cancelable: true,
+          clientX: Math.round(rect.left + 120),
+          clientY: Math.round(rect.top + 20),
+        }),
+      )
+      return true
+    })()
+  `)
+  if (todoMenuOpened) {
+    await sleep(400)
+    await capture(window, '3-today-todo-menu')
+  } else {
+    console.warn('  ⚠ 没找到待办行，跳过该截图')
+  }
+
   // 输入框里的「切换性格」是弹层，hash 切不过去，点一下再拍
   await window.webContents.executeJavaScript(`location.hash = '#/chat'`)
   await sleep(ROUTE_WAIT)

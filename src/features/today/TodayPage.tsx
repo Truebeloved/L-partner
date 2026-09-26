@@ -8,6 +8,8 @@ import { ReminderPanel } from '@/features/reminder/components/ReminderPanel'
 import { useReminder } from '@/features/reminder/context'
 import { syncMasteryForCourse } from '@/features/memory/mastery'
 import { TodoItem } from '@/features/today/TodoItem'
+import { TodoMenuPopup } from '@/features/today/TodoMenuPopup'
+import { useTodoMenu } from '@/features/today/useTodoMenu'
 import { formatDateHuman, formatMinutes, isOverdue, todayKey } from '@/lib/date'
 import { useCourseStore } from '@/store/courses'
 import { usePlanStore } from '@/store/plans'
@@ -132,6 +134,13 @@ export function TodayPage() {
 
   const handleRemove = (todo: Todo) => removeTodo(todo.id)
 
+  /*
+   * 右键待办 → 小窗里删除。
+   * 菜单状态放在页面这一层：它是浮层，跟着页面而不是跟着某一行 ——
+   * 放在行里的话，行被滚出视口或列表重排时菜单会跟着消失。
+   */
+  const todoMenu = useTodoMenu()
+
   const handleAdd = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const title = draft.trim()
@@ -233,7 +242,7 @@ export function TodayPage() {
                 todo={todo}
                 courseTitle={courseTitleOf(todo)}
                 onToggle={handleToggle}
-                onRemove={handleRemove}
+                onContextMenu={todoMenu.open}
               />
             ))}
           </ul>
@@ -255,7 +264,7 @@ export function TodayPage() {
                 courseTitle={courseTitleOf(todo)}
                 showDate
                 onToggle={handleToggle}
-                onRemove={handleRemove}
+                onContextMenu={todoMenu.open}
               />
             ))}
           </ul>
@@ -276,7 +285,7 @@ export function TodayPage() {
                 courseTitle={courseTitleOf(todo)}
                 showDate
                 onToggle={handleToggle}
-                onRemove={handleRemove}
+                onContextMenu={todoMenu.open}
               />
             ))}
           </ul>
@@ -293,6 +302,17 @@ export function TodayPage() {
         }}
       />
       </div>
+
+      {/* 右键小窗画在最外层：它用 fixed 定位，不该被列表的滚动容器裁掉 */}
+      {todoMenu.menu && (
+        <TodoMenuPopup
+          todo={todoMenu.menu.todo}
+          anchor={todoMenu.menu.anchor}
+          courseTitle={courseTitleOf(todoMenu.menu.todo)}
+          onDelete={handleRemove}
+          onClose={todoMenu.close}
+        />
+      )}
     </>
   )
 }

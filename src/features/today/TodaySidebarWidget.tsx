@@ -6,6 +6,8 @@ import { isWeeklyTodo, matchTodoToCourse } from '@/features/today/autoTodo'
 import { syncMasteryForCourse } from '@/features/memory/mastery'
 import { formatDateHuman, isOverdue, todayKey } from '@/lib/date'
 import { useCourseStore } from '@/store/courses'
+import { TodoMenuPopup } from '@/features/today/TodoMenuPopup'
+import { useTodoMenu } from '@/features/today/useTodoMenu'
 import { usePlanStore } from '@/store/plans'
 import { useTodoStore } from '@/store/todos'
 import type { Todo } from '@/types/models'
@@ -29,9 +31,17 @@ export function TodaySidebarWidget() {
   const todos = useTodoStore((state) => state.todos)
   const addTodo = useTodoStore((state) => state.add)
   const toggleTodo = useTodoStore((state) => state.toggle)
+  const removeTodo = useTodoStore((state) => state.remove)
   const updatePlanItemStatus = usePlanStore((state) => state.updateItemStatus)
   const plans = usePlanStore((state) => state.plans)
   const courses = useCourseStore((state) => state.courses)
+
+  /*
+   * 右键待办 → 小窗里删除。菜单状态放在这一层：它是浮层，跟着面板而不是跟着某一行 ——
+   * 放在行里的话，列表一重排菜单就跟着消失。
+   */
+  const todoMenu = useTodoMenu()
+  const handleRemove = (todo: Todo) => removeTodo(todo.id)
 
   // 必须订阅 courses 而不是 getState()：新建或删除课程后这里要跟着变，
   // 用 getState() 只在首次计算时取一次，之后课程名会一直显示旧值
@@ -45,6 +55,15 @@ export function TodaySidebarWidget() {
     () => new Map(courses.flatMap((course) => course.stages.map((stage) => [stage.id, stage.title]))),
     [courses],
   )
+
+  /** 课程名（带阶段）—— 菜单里要说清这条待办挂在哪 */
+  const courseTitleOf = (todo: Todo) => {
+    if (!todo.courseId) return undefined
+    const course = courseTitles.get(todo.courseId)
+    if (!course) return undefined
+    const stage = todo.stageId ? stageTitles.get(todo.stageId) : undefined
+    return stage ? `${course} · ${stage}` : course
+  }
 
   const todayTodos = useMemo(
     () =>
@@ -173,7 +192,10 @@ export function TodaySidebarWidget() {
           <p className="px-1 text-label font-bold tracking-[0.05em] text-ink-soft uppercase">本周</p>
           <ul className="mt-1.5 space-y-0.5">
             {weeklyTodos.map((todo) => (
-              <li key={todo.id}>
+              <li
+                key={todo.id}
+                onContextMenu={(event) => todoMenu.open(todo, event)}
+              >
                 <label className="flex cursor-pointer items-start gap-2 rounded-sm px-1.5 py-1.5 transition-all duration-200 ease-out hover:bg-ink/5">
                   <input
                     type="checkbox"
@@ -204,7 +226,7 @@ export function TodaySidebarWidget() {
           <li className="px-1 py-2 text-small leading-relaxed text-ink-faint">还没有安排</li>
         ) : (
           todayTodos.map((todo) => (
-            <li key={todo.id}>
+            <li key={todo.id} onContextMenu={(event) => todoMenu.open(todo, event)}>
               <label className="flex cursor-pointer items-start gap-2 rounded-sm px-1.5 py-1.5 transition-all duration-200 ease-out hover:bg-ink/5">
                 <input
                   type="checkbox"
@@ -248,6 +270,17 @@ export function TodaySidebarWidget() {
           onChange={(event) => setDraft(event.target.value)}
         />
       </form>
+
+      {/* 右键小窗：侧栏这一列会自滚，所以菜单画在列表之外 */}
+      {todoMenu.menu && (
+        <TodoMenuPopup
+          todo={todoMenu.menu.todo}
+          anchor={todoMenu.menu.anchor}
+          courseTitle={courseTitleOf(todoMenu.menu.todo)}
+          onDelete={handleRemove}
+          onClose={todoMenu.close}
+        />
+      )}
     </section>
   )
 }

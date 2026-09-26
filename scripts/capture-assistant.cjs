@@ -40,6 +40,12 @@ const FAKE_ANSWER = `闭包就是「函数 + 它出生时的那个作用域」�
 要不要我用你正在学的 React 举个例子？useState 之所以能"记住"上一次的值，靠的正是闭包。`
 
 /**
+ * 第二条回答故意很短：要验证的正是"气泡跟着内容长短走"——
+ * 短回答不该撑成一条极长的板子。第一条长回答则用来验证"向下生长覆盖页面"。
+ */
+const SHORT_ANSWER = '闭包就是「函数 + 它出生时的那个作用域」。'
+
+/**
  * 把假回答包成一个 SSE 流，逐字吐出来，才有"正在生成"的中间态。
  *
  * 注意整段必须是一个**返回字符串**的表达式：executeJavaScript 的返回值要走 IPC 序列化，
@@ -47,8 +53,9 @@ const FAKE_ANSWER = `闭包就是「函数 + 它出生时的那个作用域」�
  */
 const FAKE_FETCH = `
   (() => {
+    let call = 0
     window.fetch = () => {
-      const text = ${JSON.stringify(FAKE_ANSWER)}
+      const text = call++ === 0 ? ${JSON.stringify(FAKE_ANSWER)} : ${JSON.stringify(SHORT_ANSWER)}
       const encoder = new TextEncoder()
       let cursor = 0
       const stream = new ReadableStream({
@@ -346,15 +353,12 @@ async function run() {
   await capture(window, 'a11-bar-secondary-route')
   await captureBar(window, 'b11-bar-secondary-route')
 
-  // ---- 学伴对话：输入条要平滑位移到页面底部，变成对话输入区 ----
+  // ---- 学伴对话：输入条直接落到页面底部（不再有位移动画），页面本身淡入 ----
   await window.webContents.executeJavaScript(`location.hash = '#/chat'`)
-  await sleep(150)
-  await capture(window, 'a12-move-to-bottom-1')
-  // 交接动画：输入条上的两个气泡飞向对话列表里对应的两条消息
-  await sleep(120)
-  await capture(window, 'a12b-handoff-flying')
+  await sleep(180)
+  await capture(window, 'a12-chat-enter-1')
   await sleep(260)
-  await capture(window, 'a13-move-to-bottom-2')
+  await capture(window, 'a13-chat-enter-2')
   await sleep(600)
   await capture(window, 'a14-chat-bottom-input')
   await captureBar(window, 'b14-chat-bottom-input')

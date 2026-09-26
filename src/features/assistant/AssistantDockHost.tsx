@@ -2,12 +2,25 @@ import { useEffect, useState } from 'react'
 
 import { AssistantBar } from '@/features/assistant/AssistantBar'
 import { useAssistantDockState } from '@/features/assistant/dock'
+import type { DockPlacement } from '@/features/assistant/dock'
 
 interface Box {
   top: number
   left: number
   width: number
   height: number
+}
+
+interface Layout {
+  box: Box
+  placement: DockPlacement
+  /** 这次变化要不要过渡 */
+  animate: boolean
+}
+
+/** 顶部两个位置之间才生长；与对话页底部之间的切换直接归位 */
+function isTop(placement: DockPlacement): boolean {
+  return placement === 'top' || placement === 'top-wide'
 }
 
 /**
@@ -18,31 +31,45 @@ interface Box {
  * 用 CSS 表达式或者写死的数字去推，迟早会有一处对不上。
  * 直接读空位的矩形，是唯一"永远对"的做法。
  *
- * 换页时组件**不卸载**：空位换了，矩形变了，于是过渡把这次变化演成一段生长动画
- * （从一级进二级，输入条会左右撑开、略微变高，而不是「啪」地换一个）。
+ * 动画的取舍（用户明确要求）：
+ * - **一级 ↔ 二级**：走过渡。输入条左右撑开、略微变高，是一次"生长"；
+ * - **任何 ↔ 对话页底部**：**不做位移动画**，直接归位。
+ *   输入条在页面顶部与页面底部之间来回飞，看着是在"变来变去"，不如让它在应该出现的地方出现。
+ *   对话页本身的淡入淡出已经足够交代"换页了"。
  */
 export function AssistantDockHost() {
   const slot = useAssistantDockState()
-  const [box, setBox] = useState<Box | null>(null)
-  /** 首次定位不开过渡，否则会从 0,0 飞过来 */
-  const [animated, setAnimated] = useState(false)
+  const [layout, setLayout] = useState<Layout | null>(null)
 
   useEffect(() => {
     const element = slot.element
     if (!element) return
 
     let frame = 0
+
     const measure = () => {
       const rect = element.getBoundingClientRect()
       // 元素已经被摘掉（或还没布局）时 rect 全是 0，这时保留上一次的位置更稳
       if (rect.width === 0 || rect.height === 0) return
-      setBox({ top: rect.top, left: rect.left, width: rect.width, height: rect.height })
+
+      setLayout((previous) => ({
+        box: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
+        placement: slot.placement,
+        /*
+         * 只有"上一次也在顶部、这一次也在顶部"才过渡。
+         * 首次定位（previous 为空）不过渡，否则会从 0,0 飞过来。
+         */
+        animate: Boolean(
+          previous &&
+            previous.placement !== slot.placement &&
+            isTop(previous.placement) &&
+            isTop(slot.placement),
+        ),
+      }))
     }
 
     // 首帧之后再量：挂载那一帧元素可能还没进布局
     frame = window.requestAnimationFrame(measure)
-    // 过渡要等第一次定位落地之后再打开
-    const readyTimer = window.setTimeout(() => setAnimated(true), 80)
 
     /*
      * jsdom（单测环境）里没有 ResizeObserver，没有它就跳过"跟随尺寸变化"这一档能力 ——
@@ -59,14 +86,15 @@ export function AssistantDockHost() {
 
     return () => {
       window.cancelAnimationFrame(frame)
-      window.clearTimeout(readyTimer)
       observer?.disconnect()
       window.removeEventListener('resize', measure)
       window.removeEventListener('scroll', measure, true)
     }
-  }, [slot.element])
+  }, [slot.element, slot.placement])
 
-  if (!box) return null
+  if (!layout) return null
+
+  const { box, placement, animate } = layout
 
   return (
     <div
@@ -79,17 +107,14 @@ export function AssistantDockHost() {
         /*
          * 带自己的 view-transition-name：换页时页面内容交叉淡入，而输入条**不参与** ——
          * 它的移动由下面这组过渡负责，两条动画各管各的，不会互相覆盖。
-         * （view-transition 的快照取在样式刚改、过渡还没跑的那一刻，
-         * 所以浏览器看到的是"没动"，移动完全交给我们。）
          */
         viewTransitionName: 'assistant-bar',
         /*
          * 生长与位移用两套缓动：
          * - 尺寸（width / min-height）走 spring，末段有一点回弹 —— "长出来"的感觉就在这点回弹上；
          * - 位置（top / left）走 glide，位移带弹会晕。
-         * 时长从 320ms 提到 460ms：之前快到看不清它在动。
          */
-        transition: animated
+        transition: animate
           ? [
               `top 460ms var(--ease-glide)`,
               `left 460ms var(--ease-glide)`,
@@ -101,7 +126,7 @@ export function AssistantDockHost() {
     >
       {/* 容器整体不接收鼠标事件（它是个定位壳，会盖住页面），交互只落在输入条自己身上 */}
       <div className="pointer-events-auto">
-        <AssistantBar placement={slot.placement} />
+        <AssistantBar placement={placement} />
       </div>
     </div>
   )

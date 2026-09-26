@@ -6,7 +6,6 @@ import { stepExchange, toExchanges } from '@/features/assistant/exchanges'
 import { DOCK_METRICS } from '@/features/assistant/dock'
 import type { DockPlacement } from '@/features/assistant/dock'
 import { useChatSessionContext } from '@/features/chat/context'
-import { boxOf, rememberBubbleRects } from '@/features/assistant/handoff'
 import { usePersonaStore } from '@/store/personas'
 import { useSettingsStore } from '@/store/settings'
 
@@ -199,27 +198,6 @@ export function AssistantBar({ placement }: AssistantBarProps) {
   }, [composingNow, total, focused])
 
   const canBrowse = !composingNow && total > 1
-
-  /*
-   * 随时把两个气泡的矩形与文案记下来。
-   *
-   * 交给对话页做"飞过去"的交接动画时，起点必须在这一页**还活着的时候**量 ——
-   * 一旦换到对话页，输入条就只剩输入框了，气泡早已不在。所以不能等到那时再量。
-   */
-  useEffect(() => {
-    if (composingNow) {
-      rememberBubbleRects({ answerText: '', questionText: '' })
-      return
-    }
-    const root = rootRef.current
-    if (!root) return
-    rememberBubbleRects({
-      answer: boxOf(root.querySelector('[data-assistant-answer]')),
-      question: boxOf(root.querySelector('[data-assistant-question]')),
-      answerText: exchange?.answer ?? '',
-      questionText: exchange?.question ?? '',
-    })
-  }, [composingNow, exchange?.answer, exchange?.question, answerExpanded, questionOpen])
 
   return (
     <div ref={rootRef} className="relative w-full" data-assistant-bar={placement}>

@@ -4,8 +4,6 @@ import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-d
 import { AppLayout } from '@/components/AppLayout'
 import { AssistantDockHost } from '@/features/assistant/AssistantDockHost'
 import { AssistantDockProvider } from '@/features/assistant/AssistantDockProvider'
-import { AssistantHandoffLayer } from '@/features/assistant/AssistantHandoffLayer'
-import { AssistantHandoffProvider } from '@/features/assistant/AssistantHandoffProvider'
 import { ChatSessionProvider } from '@/features/chat/ChatSessionProvider'
 import { ChatPage } from '@/features/chat/ChatPage'
 import { CompanionPage } from '@/features/companion/CompanionPage'
@@ -77,20 +75,14 @@ export default function App() {
         {/* 会话宿主：一级界面的输入条、二级界面的输入条、对话页的输入区共用同一场对话 */}
         <ChatSessionProvider>
           <AssistantDockProvider>
-            <AssistantHandoffProvider>
-              {/*
-                输入条的宿主挂在路由之外 —— 只有一份实例，换页时它把页面上的空位量出来贴上去，
-                于是"从一级进二级"是一次位移与生长，而不是卸载再挂载。
+            {/*
+              输入条的宿主挂在路由之外 —— 只有一份实例，换页时它把页面上的空位量出来贴上去。
 
-                但要等开屏结束再挂：开屏是一块 z-50 的全屏遮罩，而输入条也是 fixed + z-50，
-                两者同层时后出现的那个会盖在上面 —— 于是开屏动画里会浮出一条输入框。
-                更根本的理由是：应用还没"开启"，输入条本来就不该存在。
-              */}
-              {splashDone && <AssistantDockHost />}
-              {/* 交接动画的影子层：输入条上的两个气泡飞进对话列表 */}
-              <AssistantHandoffLayer />
-              <AppRoutes />
-            </AssistantHandoffProvider>
+              要等开屏结束再挂：开屏是一块全屏遮罩，而输入条是 fixed 浮层，
+              应用还没"开启"时它本来就不该存在（曾经因为层级撞车，开屏动画里浮出过一条输入框）。
+            */}
+            {splashDone && <AssistantDockHost />}
+            <AppRoutes splashDone={splashDone} />
           </AssistantDockProvider>
         </ChatSessionProvider>
       </HashRouter>
@@ -101,7 +93,7 @@ export default function App() {
 /**
  * 路由表 + 切换动画。
  *
- * 必须放在 `<HashRouter>` **内部**：它要用 useLocation 才能知道该往哪个地址去。
+ * 必须放在 `<HashRouter>` **内部**：它要用 useLocation 才知道该往哪个地址去。
  * 页面切换的淡入淡出交给 View Transitions —— 由合成器"拍旧图 → 换 DOM → 交叉淡入"，
  * 比自己在 React 里维护"退场中的旧页面"简单得多，也不会因为两棵树并存而状态错乱。
  *
@@ -109,11 +101,8 @@ export default function App() {
  * 就把状态更新包进 startViewTransition，浏览器因此拿到了同一帧的两种画面。
  * 左侧导航栏、学伴输入条各自带 view-transition-name（见 AppLayout / AssistantDockHost），
  * 它们**不参与**交叉淡入 —— 换页时纹丝不动，只有中间的内容淡出淡入。
- *
- * 不支持这个 API 时直接切换（少一段动画，功能不受影响）；开屏期间也跳过，
- * 那时整个屏幕都在播开场动画，再叠一层淡入只会互相打架。
  */
-function AppRoutes() {
+function AppRoutes({ splashDone }: { splashDone: boolean }) {
   const location = useLocation()
   const [displayLocation, setDisplayLocation] = useState(location)
 
@@ -133,12 +122,18 @@ function AppRoutes() {
     if (target === shown) return
 
     const apply = () => setDisplayLocation(location)
-    if (typeof document.startViewTransition !== 'function' || SPLASH_ENABLED) {
+    /*
+     * ⚠️ 判断条件是**开屏是否还在播**（splashDone），不是"这个项目启不启用开屏"。
+     * 之前这里写的是常量 SPLASH_ENABLED —— 它在开发和生产里都是 true，
+     * 于是淡入淡出在任何情况下都被跳过了（用户看到的正是"没有动画"）。
+     * 开屏期间确实该跳过：那时整屏都在播开场动画，再叠一层淡入只会互相打架。
+     */
+    if (typeof document.startViewTransition !== 'function' || !splashDone) {
       apply()
       return
     }
     document.startViewTransition(apply)
-  }, [target, shown, location])
+  }, [target, shown, location, splashDone])
 
   return (
     <Routes location={displayLocation}>

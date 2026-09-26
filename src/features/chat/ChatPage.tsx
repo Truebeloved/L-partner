@@ -4,8 +4,6 @@ import { Link } from 'react-router-dom'
 import { Icon } from '@/components/Icon'
 import { PersonaAvatar } from '@/components/PersonaAvatar'
 import { useAssistantDock } from '@/features/assistant/dock'
-import { boxOf, takeBubbleRects, useAssistantHandoff } from '@/features/assistant/handoff'
-import type { GhostSpec } from '@/features/assistant/handoff'
 import { MessageBubble } from '@/features/chat/components/MessageBubble'
 import { useChatSessionContext } from '@/features/chat/context'
 import { useActiveConversation } from '@/features/chat/useChatSession'
@@ -49,8 +47,6 @@ export function ChatPage() {
   const session = useChatSessionContext()
   /** 输入条会在这一页滑到底部变成输入区，这里只留空位 */
   const dockRef = useAssistantDock('bottom')
-  /** 交接动画：输入条上的两个气泡飞成这一页的两条消息 */
-  const { handoff, start } = useAssistantHandoff()
 
   const [notice, setNotice] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -70,44 +66,6 @@ export function ChatPage() {
     if (!element) return
     element.scrollTop = element.scrollHeight
   }, [messages.length, lastContentLength])
-
-  /*
-   * 交接动画：上一页输入条上的两个气泡，飞到这一页对应的两条消息上。
-   *
-   * 只在该「有历史」时做 —— 没有历史就没有目标可飞，那时输入条自己滑到底部就好
-   * （见 dock 的位移），两种情况因此各有各的动作，不会互相打架。
-   *
-   * 依赖刻意是 `[]`：这是一次**进场**动画，量的是挂载那一刻的位置。
-   * 挂在 messages.length 上的话，用户每发一条消息都会重放一次。
-   */
-  useEffect(() => {
-    const source = takeBubbleRects()
-    if (!source.answer && !source.question) return
-
-    const list = [...document.querySelectorAll('[data-chat-message]')]
-    const lastAssistant = list.reverse().find((node) => node.getAttribute('data-chat-message') === 'assistant')
-    const lastUser = list.find((node) => node.getAttribute('data-chat-message') === 'user')
-
-    const ghosts: GhostSpec[] = []
-    const hidden: string[] = []
-
-    const answerBox = boxOf(lastAssistant ?? null)
-    if (source.answer && answerBox) {
-      ghosts.push({ from: source.answer, to: answerBox, text: source.answerText, kind: 'answer' })
-      hidden.push(lastAssistant?.getAttribute('data-message-id') ?? '')
-    }
-
-    const questionBox = boxOf(lastUser ?? null)
-    if (source.question && questionBox) {
-      ghosts.push({ from: source.question, to: questionBox, text: source.questionText, kind: 'question' })
-      hidden.push(lastUser?.getAttribute('data-message-id') ?? '')
-    }
-
-    start(ghosts, hidden.filter(Boolean))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const hiddenMessages = new Set(handoff?.hiddenMessageIds ?? [])
 
   function handleSend(text: string) {
     if (!conversation) {
@@ -159,9 +117,10 @@ export function ChatPage() {
   }
 
   return (
-    /* 外壳已改为「主区域自己滚动」，所以这里用 h-full 填满可用高度，
-       而不是再按视口高度做减法（那会因为侧栏结构的调整而算错，留出一截空白） */
-    <div className="flex h-full flex-col overflow-hidden rounded-card border border-line-soft bg-raised">
+    /* 这一页占据整个内容区，是一块"铺满"的面板而不是浮起来的卡片 ——
+       所以不给圆角：圆角会让它看起来是一张浮在页面上的卡片，而它其实是页面本身。
+       外壳已改为「主区域自己滚动」，所以这里用 h-full 填满可用高度 */
+    <div className="flex h-full flex-col overflow-hidden border border-line-soft bg-raised">
       {/* 顶栏：角色、课程、记忆状态 */}
       <div className="flex flex-wrap items-center gap-2 border-b border-line-soft px-3 py-2.5">
         <select
@@ -283,12 +242,7 @@ export function ChatPage() {
           </div>
         ) : (
           messages.map((message) => (
-            <MessageBubble
-              key={message.id}
-              message={message}
-              persona={activePersona}
-              hidden={hiddenMessages.has(message.id)}
-            />
+            <MessageBubble key={message.id} message={message} persona={activePersona} />
           ))
         )}
       </div>

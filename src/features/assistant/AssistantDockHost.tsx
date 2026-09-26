@@ -76,8 +76,26 @@ export function AssistantDockHost() {
         left: box.left,
         width: box.width,
         minHeight: box.height,
+        /*
+         * 带自己的 view-transition-name：换页时页面内容交叉淡入，而输入条**不参与** ——
+         * 它的移动由下面这组过渡负责，两条动画各管各的，不会互相覆盖。
+         * （view-transition 的快照取在样式刚改、过渡还没跑的那一刻，
+         * 所以浏览器看到的是"没动"，移动完全交给我们。）
+         */
+        viewTransitionName: 'assistant-bar',
+        /*
+         * 生长与位移用两套缓动：
+         * - 尺寸（width / min-height）走 spring，末段有一点回弹 —— "长出来"的感觉就在这点回弹上；
+         * - 位置（top / left）走 glide，位移带弹会晕。
+         * 时长从 320ms 提到 460ms：之前快到看不清它在动。
+         */
         transition: animated
-          ? 'top 320ms cubic-bezier(0.32, 0.72, 0, 1), left 320ms cubic-bezier(0.32, 0.72, 0, 1), width 320ms cubic-bezier(0.32, 0.72, 0, 1), min-height 320ms cubic-bezier(0.32, 0.72, 0, 1)'
+          ? [
+              `top 460ms var(--ease-glide)`,
+              `left 460ms var(--ease-glide)`,
+              `width 460ms var(--ease-spring)`,
+              `min-height 460ms var(--ease-spring)`,
+            ].join(', ')
           : undefined,
       }}
     >

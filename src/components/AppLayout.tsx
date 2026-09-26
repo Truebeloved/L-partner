@@ -62,8 +62,13 @@ export function AppLayout() {
   return (
     <ReminderProvider>
       <div className="flex h-screen overflow-hidden bg-surface">
-        {/* 桌面端侧栏。设计约束：导航背景与页面同色，靠一条 1px 线分隔 */}
-        <aside className="hidden w-60 shrink-0 flex-col border-r border-line-soft md:flex">
+        {/* 桌面端侧栏。设计约束：导航背景与页面同色，靠一条 1px 线分隔。
+            它带自己的 view-transition-name：换页时页面内容交叉淡入，而侧栏**不参与**，
+            所以导航看起来始终待在原地（见 styles/index.css 的说明）。 */}
+        <aside
+          className="hidden w-60 shrink-0 flex-col border-r border-line-soft md:flex"
+          style={{ viewTransitionName: 'sidebar' }}
+        >
           <div className="flex items-center gap-2.5 px-4 py-4">
             <span className="font-display text-h3 font-bold text-ink">L</span>
             <div>
@@ -106,7 +111,9 @@ export function AppLayout() {
             </div>
           )}
 
-          <main className="min-h-0 flex-1 overflow-y-auto">
+          {/* 内容区带 view-transition-name="page"：换页时淡出淡入的是它。
+              侧栏与输入条各自有名字，所以它们稳在原地不动。 */}
+          <main className="min-h-0 flex-1 overflow-y-auto" style={{ viewTransitionName: 'page' }}>
             <Outlet />
           </main>
 

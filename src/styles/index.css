@@ -98,6 +98,16 @@
      仅用于：卡片、浮层、被抽出的书。 */
   --shadow-lift: 0 1px 2px rgba(0, 0, 0, 0.05), 0 4px 14px rgba(0, 0, 0, 0.06);
   --shadow-pop: 0 10px 30px rgba(0, 0, 0, 0.16);
+
+  /* ---- 缓动 ----
+     两档，用途分得很清：
+     - spring：**有回弹**（末段会冲过一点点再回来）。用于"东西长出来"的动作 ——
+       气泡出现、回答展开、输入条换页生长。它让界面显得有物理感，而不是幻灯片。
+     - glide：**没有回弹**的顺滑减速。用于"东西移动"的动作 ——
+       输入条滑到底部、页面淡入。位移加回弹会晕，位移只要顺。
+     注意 spring 的过冲是**视觉**上的：它只影响 transform/尺寸，不会改变最终布局。 */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-glide: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @layer base {
@@ -240,6 +250,77 @@
    */
   .page-container {
     @apply mx-auto w-full max-w-3xl px-8 pb-10;
+  }
+
+  /*
+   * 隐藏滚动条但保留滚动能力。
+   * 用在学伴输入条里：那条长条上挂一根系统滚动条，比"看不到结尾"更破坏观感，
+   * 而内容本身仍然可以滚（滚轮、触摸、键盘都照常）。
+   */
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   页面切换（View Transitions）
+
+   为什么不自己做淡入淡出：真的要"淡出 + 淡入"就得让旧页面在退出期间仍然挂在 DOM 里，
+   而那意味着两棵路由树并存，状态、定时器、滚动位置全都要自己管。
+   View Transitions 把这件事交给合成器：拍照 → 换 DOM → 交叉淡入。
+
+   左侧导航栏与学伴输入条各自命名（见 AppLayout / AssistantDockHost 的 style），
+   于是它们**不参与**这次交叉淡入 —— 页面内容淡入淡出时，导航和输入条稳稳待着不动，
+   这正是"左侧导航栏和对话框不受动画影响"的做法。
+--------------------------------------------------------------------------- */
+::view-transition-old(page),
+::view-transition-new(page) {
+  /* 交叉淡入的总时长；比组件级动效略长，因为它承载的是"换了一个地方"这件事 */
+  animation-duration: 260ms;
+  animation-timing-function: var(--ease-glide);
+}
+
+/* 新页面从下方轻轻浮上来，而不是原地闪现 —— 与开屏的上浮是同一套语言 */
+@keyframes page-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+::view-transition-new(page) {
+  animation-name: page-rise;
+}
+
+/* ---------------------------------------------------------------------------
+   交接动画：输入条上的气泡飞进对话列表
+
+   起点与终点都是运行期量出来的，所以写成自定义属性交给 keyframes 插值 ——
+   这样只需要一次渲染，不用"先画在起点、下一帧再改成终点"那套两拍状态。
+--------------------------------------------------------------------------- */
+@keyframes handoff-fly {
+  from {
+    top: var(--fly-from-top);
+    left: var(--fly-from-left);
+    width: var(--fly-from-width);
+    height: var(--fly-from-height);
+    opacity: 0.9;
+  }
+  to {
+    top: var(--fly-to-top);
+    left: var(--fly-to-left);
+    width: var(--fly-to-width);
+    height: var(--fly-to-height);
+    opacity: 1;
   }
 }
 

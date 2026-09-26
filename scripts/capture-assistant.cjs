@@ -264,10 +264,18 @@ async function run() {
   await captureBar(window, 'b1-bar-idle')
 
   // ---- 提问 → 流式回答（向下生长、覆盖页面）----
-  await sendQuestion(window, '帮我讲讲闭包，我总觉得没真的懂')
-  await sleep(1400)
+  // 发送后的形变分两拍：先连拍两帧看"提问滑到右边、回答从左边长出来"
+  await window.webContents.executeJavaScript(typeInto('[aria-label="问学伴"]', '帮我讲讲闭包，我总觉得没真的懂'))
+  await sleep(150)
+  await window.webContents.executeJavaScript(click('[aria-label="发送"]'))
+  await captureBar(window, 'b2-morph-1')
+  await sleep(200)
+  await captureBar(window, 'b3-morph-2')
+  await sleep(500)
+  await captureBar(window, 'b4-morph-3')
+  await sleep(600)
   await capture(window, 'a2-bar-answering')
-  await captureBar(window, 'b2-bar-answering')
+  await captureBar(window, 'b5-bar-answering')
 
   // 等回答吐完（约 500 字 ÷ 4 字 × 35ms ≈ 4.4s），此时处在"答完停留"的窗口里
   await sleep(4500)
@@ -342,7 +350,10 @@ async function run() {
   await window.webContents.executeJavaScript(`location.hash = '#/chat'`)
   await sleep(150)
   await capture(window, 'a12-move-to-bottom-1')
-  await sleep(200)
+  // 交接动画：输入条上的两个气泡飞向对话列表里对应的两条消息
+  await sleep(120)
+  await capture(window, 'a12b-handoff-flying')
+  await sleep(260)
   await capture(window, 'a13-move-to-bottom-2')
   await sleep(600)
   await capture(window, 'a14-chat-bottom-input')

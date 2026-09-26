@@ -6,6 +6,7 @@ import { stepExchange, toExchanges } from '@/features/assistant/exchanges'
 import { DOCK_METRICS } from '@/features/assistant/dock'
 import type { DockPlacement } from '@/features/assistant/dock'
 import { useChatSessionContext } from '@/features/chat/context'
+import { boxOf, rememberBubbleRects } from '@/features/assistant/handoff'
 import { usePersonaStore } from '@/store/personas'
 import { useSettingsStore } from '@/store/settings'
 
@@ -39,6 +40,17 @@ const ANSWER_MAX_HEIGHT = '40vh'
 /** 答完之后停留多久再收成长条 */
 const SETTLE_MS = 3200
 
+/**
+ * 发送时的形变分两拍：
+ * 第一拍让提问气泡以"输入框的样子"占满整条，第二拍（下一帧）它压缩到右侧变成气泡，
+ * 同时回答从左边长出来。
+ *
+ * 为什么必须分两拍：CSS 过渡要有起始值。如果直接渲染成"右侧小气泡"，
+ * 浏览器第一帧看到的就是终态，没有任何东西可以过渡 —— 那就成了瞬间切换，
+ * 也就是"看起来根本没做动画"。
+ */
+const MORPH_MS = 460
+
 export function AssistantBar({ placement }: AssistantBarProps) {
   const session = useChatSessionContext()
   const settings = useSettingsStore((state) => state.settings)
@@ -58,6 +70,17 @@ export function AssistantBar({ placement }: AssistantBarProps) {
   const [draft, setDraft] = useState('')
   /** true = 正在输入（长条显示输入框）；false = 显示问答气泡 */
   const [composing, setComposing] = useState(true)
+  /**
+   * 形变第一拍：提问气泡先以"输入框的样子"占满整条，下一帧再压缩到右侧。
+   * 没有这一拍就没有过渡的起始值，动效会变成瞬间切换。
+   */
+  const [morphing, setMorphing] = useState(false)
+  /**
+   * 没配置大模型时，这一问不会被写进会话（store 不该留下没人回答的问题）。
+   * 但**动效和反馈都要照常**：提问照样成气泡、回答侧照样长出来，里面写清楚去哪配置。
+   * 之前的做法是直接弹一条错误、什么都不动 —— 从用户视角看就是"发出去没反应"。
+   */
+  const [localAnswer, setLocalAnswer] = useState<{ question: string; answer: string } | null>(null)
   /** 当前停在那一对问答上；null 表示最新一对 */
   const [focused, setFocused] = useState<number | null>(null)
   /** 回答是否向下展开 */
@@ -75,8 +98,12 @@ export function AssistantBar({ placement }: AssistantBarProps) {
   const rootRef = useRef<HTMLDivElement>(null)
 
   const index = focused ?? Math.max(0, total - 1)
-  const exchange = total > 0 ? exchanges[index] : undefined
-  const composingNow = inputOnly || composing || total === 0
+  const storeExchange = total > 0 ? exchanges[index] : undefined
+  // 本地那一问（没配 key）优先显示，它还没进会话
+  const exchange = localAnswer
+    ? { id: 'local', question: localAnswer.question, answer: localAnswer.answer, at: '' }
+    : storeExchange
+  const composingNow = inputOnly || (composing && !localAnswer) || (!localAnswer && total === 0)
   // 提问展开时回答收成缩略 —— 这是"挤压"的语义，不是隐藏
   const answerExpanded = !inputOnly && answerOpen && !questionOpen
   const streaming = session.streaming
@@ -86,12 +113,34 @@ export function AssistantBar({ placement }: AssistantBarProps) {
     if (!text) return
     setDraft('')
     setComposing(false)
-    setAnswerOpen(true)
     setQuestionOpen(false)
     setFocused(null)
+
+    const configured = Boolean(
+      settings.llm.baseUrl.trim() && settings.llm.apiKey.trim() && settings.llm.model.trim(),
+    )
+
+    if (!configured) {
+      // 先把这一问摆出来（动效照常），回答侧给出可执行的下一步
+      setLocalAnswer({
+        question: text,
+        answer: '还没接入大模型，所以我还答不了。到「设置 → 大模型接入」填上 API 地址和密钥，就能接着聊了。',
+      })
+      setAnswerOpen(true)
+      setMorphing(true)
+      window.setTimeout(() => setMorphing(false), 16)
+      setAutoSettle(false)
+      return
+    }
+
+    setLocalAnswer(null)
+    setAnswerOpen(true)
+    setMorphing(true)
     setAutoSettle(!inputOnly)
+    // 下一帧解除形变第一拍，压缩 + 生长才有得过渡
+    window.setTimeout(() => setMorphing(false), 16)
     void session.send(text)
-  }, [draft, session, inputOnly])
+  }, [draft, session, inputOnly, settings.llm])
 
   /*
    * 答完停留一会再收成长条。
@@ -151,6 +200,27 @@ export function AssistantBar({ placement }: AssistantBarProps) {
 
   const canBrowse = !composingNow && total > 1
 
+  /*
+   * 随时把两个气泡的矩形与文案记下来。
+   *
+   * 交给对话页做"飞过去"的交接动画时，起点必须在这一页**还活着的时候**量 ——
+   * 一旦换到对话页，输入条就只剩输入框了，气泡早已不在。所以不能等到那时再量。
+   */
+  useEffect(() => {
+    if (composingNow) {
+      rememberBubbleRects({ answerText: '', questionText: '' })
+      return
+    }
+    const root = rootRef.current
+    if (!root) return
+    rememberBubbleRects({
+      answer: boxOf(root.querySelector('[data-assistant-answer]')),
+      question: boxOf(root.querySelector('[data-assistant-question]')),
+      answerText: exchange?.answer ?? '',
+      questionText: exchange?.question ?? '',
+    })
+  }, [composingNow, exchange?.answer, exchange?.question, answerExpanded, questionOpen])
+
   return (
     <div ref={rootRef} className="relative w-full" data-assistant-bar={placement}>
       {/*
@@ -173,10 +243,19 @@ export function AssistantBar({ placement }: AssistantBarProps) {
           />
         ) : (
           <>
-            {/* 回答：从左侧长出来。展开时容器变高，答案向下覆盖页面 */}
+            {/*
+              回答：从左侧长出来。形变第一拍时它还没有宽度（maxWidth 0 + 透明），
+              第二拍才撑开 —— 于是看到的是"回答从左边慢慢长出来"，而不是"啪"地出现。
+              展开时容器变高，答案向下覆盖页面。
+            */}
             <div
-              className="min-w-0 flex-1 transition-[flex-grow] duration-300 ease-out"
-              style={{ flexGrow: questionOpen ? 1 : 4 }}
+              className="min-w-0 transition-all ease-spring"
+              style={{
+                flexGrow: morphing ? 0 : questionOpen ? 1 : 4,
+                maxWidth: morphing ? '0%' : '100%',
+                opacity: morphing ? 0 : 1,
+                transitionDuration: `${MORPH_MS}ms`,
+              }}
             >
               <AnswerBubble
                 text={exchange?.answer ?? ''}
@@ -189,14 +268,23 @@ export function AssistantBar({ placement }: AssistantBarProps) {
               />
             </div>
 
-            {/* 提问：压缩在右侧，缩略成省略号；点一下横向生长、把回答挤成缩略 */}
+            {/*
+              提问：压缩在右侧，缩略成省略号；点一下横向生长、把回答挤成缩略。
+              形变第一拍它先占满整条、并保持输入框的样式 ——
+              用户看到的就是"刚才打的那行字"，第二拍才滑到右边、收成气泡。
+            */}
             <div
-              className="min-w-0 transition-[flex-grow] duration-300 ease-out"
-              style={{ flexGrow: questionOpen ? 5 : 1.6, maxWidth: questionOpen ? '70%' : '42%' }}
+              className="min-w-0 transition-all ease-spring"
+              style={{
+                flexGrow: questionOpen ? 5 : morphing ? 0 : 1.6,
+                maxWidth: questionOpen ? '70%' : morphing ? '100%' : '42%',
+                transitionDuration: `${MORPH_MS}ms`,
+              }}
             >
               <QuestionBubble
                 text={exchange?.question ?? ''}
                 open={questionOpen}
+                morphing={morphing}
                 onToggle={() => {
                   setQuestionOpen((value) => !value)
                   setAnswerOpen(false)
@@ -206,11 +294,13 @@ export function AssistantBar({ placement }: AssistantBarProps) {
             </div>
 
             <NewQuestionButton
+              hidden={morphing}
               onClick={() => {
                 setComposing(true)
                 setQuestionOpen(false)
                 setAnswerOpen(false)
                 setAutoSettle(false)
+                setLocalAnswer(null)
               }}
             />
           </>
@@ -354,15 +444,16 @@ function AnswerBubble({
       aria-expanded={open}
     >
       <div
-        className="relative overflow-hidden transition-[max-height] duration-300 ease-out"
+        className="relative overflow-hidden transition-[max-height] duration-[420ms] ease-spring"
         style={{ maxHeight: open ? ANSWER_MAX_HEIGHT : '1.5em' }}
       >
         <p
           data-assistant-scroll
           className={[
-            'text-body leading-snug whitespace-pre-wrap text-ink transition-opacity duration-200',
+            'no-scrollbar text-body leading-snug whitespace-pre-wrap text-ink transition-opacity duration-200',
             open ? 'opacity-100' : 'opacity-0',
-            // 展开后超出上限时自己滚，不然长回答会被硬生生切掉
+            // 展开后超出上限时自己滚，不然长回答会被硬生生切掉。
+            // 滚动条隐藏（no-scrollbar）：这条长条上挂一根系统滚动条比"看不到结尾"更破坏观感
             open ? 'max-h-[40vh] overflow-y-auto' : '',
           ].join(' ')}
         >
@@ -383,28 +474,42 @@ function AnswerBubble({
   )
 }
 
-/** 提问气泡：右侧、缩略成省略号；点一下横向展开、把回答挤成缩略 */
+/**
+ * 提问气泡：右侧、缩略成省略号；点一下横向展开、把回答挤成缩略。
+ *
+ * `morphing` 是发送后的第一拍：此时它**先以输入框的样子**占满整条
+ * （浅底、圆角、文字在左），下一拍才滑到右边、收成深色气泡。
+ * 用户看到的因此是"我刚打的那行字变成气泡滑过去了"，而不是"输入框消失、气泡凭空出现"。
+ */
 function QuestionBubble({
   text,
   open,
+  morphing,
   onToggle,
 }: {
   text: string
   open: boolean
+  morphing: boolean
   onToggle: () => void
 }) {
   return (
     <button
       type="button"
       data-assistant-question
-      className="block w-full rounded-card bg-ink px-4 py-2 text-left text-ink-inverse transition-opacity duration-200 ease-out hover:opacity-90"
+      className={[
+        'block w-full px-4 py-2 text-left',
+        'transition-[background-color,color,border-radius] duration-[380ms] ease-spring',
+        morphing
+          ? 'rounded-pill bg-raised text-ink'
+          : 'rounded-card bg-ink text-ink-inverse hover:opacity-90',
+      ].join(' ')}
       style={{ minHeight: 40 }}
       onClick={onToggle}
       title={open ? '收起提问' : '展开提问'}
       aria-expanded={open}
     >
       <div
-        className="relative overflow-hidden transition-[max-height] duration-300 ease-out"
+        className="relative overflow-hidden transition-[max-height] duration-[420ms] ease-spring"
         style={{ maxHeight: open ? '10em' : '1.5em' }}
       >
         <p
@@ -430,11 +535,15 @@ function QuestionBubble({
 }
 
 /** 回到输入态。收起之后要能马上接着问，这个入口必须一直在 */
-function NewQuestionButton({ onClick }: { onClick: () => void }) {
+function NewQuestionButton({ hidden, onClick }: { hidden: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
-      className="mt-1.5 flex size-7 shrink-0 items-center justify-center rounded-pill text-ink-soft transition-all duration-200 ease-out hover:bg-ink/10 hover:text-ink"
+      className={[
+        'mt-1.5 flex size-7 shrink-0 items-center justify-center rounded-pill text-ink-soft',
+        'transition-[opacity,background-color,color] duration-300 ease-out hover:bg-ink/10 hover:text-ink',
+        hidden ? 'pointer-events-none opacity-0' : 'opacity-100',
+      ].join(' ')}
       onClick={onClick}
       aria-label="问新问题"
       title="问新问题"

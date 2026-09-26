@@ -43,7 +43,8 @@ export function CourseStudyPage() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-4xl px-6 py-6">
+      {/* 与一级界面的内容区同名：从书架进来时，两边的页面内容做交叉淡入 */}
+      <div className="mx-auto max-w-4xl px-6 py-6" style={{ viewTransitionName: 'page' }}>
         <CourseDetailPage />
       </div>
     </div>

@@ -68,7 +68,12 @@ export function SplashScreen({ name, onDone }: SplashScreenProps) {
   return (
     <div
       className={[
-        'fixed inset-0 z-50 flex items-center justify-center overflow-hidden',
+        /*
+         * z-[100]：开屏期间它必须是**最上面**的那一层。
+         * 曾经用 z-50，和学伴输入条同层 —— 同层时就比谁在 DOM 里更靠后，
+         * 结果开屏动画里浮出了一条输入框。层级要留出余量，不能和业务浮层平起平坐。
+         */
+        'fixed inset-0 z-[100] flex items-center justify-center overflow-hidden',
         'bg-[radial-gradient(120%_120%_at_50%_0%,#2b2b2b_0%,#141414_55%,#000000_100%)]',
         phase === 'leaving' ? 'splash-leaving' : '',
       ].join(' ')}

@@ -5,6 +5,7 @@ import { retrieveMemories } from '@/features/memory/retrieve'
 import { createProvider } from '@/lib/llm'
 import { assembleMessages, clampText, estimateMessagesTokens } from '@/lib/llm/context'
 import { buildStablePrompt, buildVolatilePrompt } from '@/lib/llm/prompts'
+import { replyPolicyFor } from '@/lib/llm/reply-policy'
 import { LlmError } from '@/lib/llm/types'
 import { useChatStore } from '@/store/chat'
 import { useCourseStore } from '@/store/courses'
@@ -128,12 +129,21 @@ export function useChatSession(): ChatSession {
       }
 
       /*
-       * 组装消息：稳定前缀（人设 + 准则）在最前，易变部分（课程进度、今日安排、记忆）其后。
-       * 顺序决定缓存能否命中，见 lib/llm/context.ts 的说明。
+       * 动态回复策略：先看他这句话是打招呼、小问题、要解释，还是明确要展开，
+       * 再把对应的长度策略追加到本轮的易变部分。
+       *
+       * 放在易变部分而不是稳定前缀里，是因为它**每轮都不一样** ——
+       * 塞进前缀等于每轮都让厂商的上下文缓存失效，省下的那点输出 token 还不够赔。
+       */
+      const policy = replyPolicyFor(trimmed, settings.llm.maxTokens)
+
+      /*
+       * 组装消息：稳定前缀（人设 + 准则）在最前，易变部分（课程进度、今日安排、记忆、
+       * 本轮长度策略）其后。顺序决定缓存能否命中，见 lib/llm/context.ts 的说明。
        */
       const llmMessages = assembleMessages({
         systemStable: buildStablePrompt(persona),
-        systemVolatile: buildVolatilePrompt(promptContext),
+        systemVolatile: `${buildVolatilePrompt(promptContext)}\n\n## 这一轮怎么回\n${policy.instruction}`,
         summary: before?.summary,
         history,
         question: trimmed,
@@ -151,6 +161,8 @@ export function useChatSession(): ChatSession {
         const provider = createProvider(settings.llm)
         await provider.chat(llmMessages, {
           signal: controller.signal,
+          // 这一轮的长度上限由策略给出：寒暄不会写成一篇，明确要展开的也不会被卡住
+          maxTokens: policy.maxTokens,
           onDelta: (delta) => {
             accumulated += delta
             useChatStore

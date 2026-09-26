@@ -1,8 +1,8 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 
 import { Icon } from '@/components/Icon'
 import type { IconName } from '@/components/Icon'
-import { AssistantBar } from '@/features/assistant/AssistantBar'
+import { useAssistantDock } from '@/features/assistant/dock'
 import { ReminderProvider } from '@/features/reminder/ReminderProvider'
 import { TodaySidebarWidget } from '@/features/today/TodaySidebarWidget'
 
@@ -54,6 +54,11 @@ function navLinkClass({ isActive }: { isActive: boolean }): string {
  * 今日待办必须能自己滚 —— 否则待办一多就会把上面的导航条目挤出屏幕。
  */
 export function AppLayout() {
+  const { pathname } = useLocation()
+  /** 对话页的输入条在底部（整页就是对话区），顶部条带要让位 */
+  const isChat = pathname.startsWith('/chat')
+  const dockRef = useAssistantDock('top')
+
   return (
     <ReminderProvider>
       <div className="flex h-screen overflow-hidden bg-surface">
@@ -86,17 +91,20 @@ export function AppLayout() {
           </header>
 
           {/*
-            学伴输入条的位置：内容区顶部一条**专属条带**，右对齐。
-            为什么占位而不是悬浮：悬浮会盖住页面右上角的内容（标题、操作按钮都在那一带）。
-            占位只让正文下移几十像素，而回答展开时它才向下覆盖内容 ——
-            "平时不碍事、需要时才铺开"正是这条输入条的定位。
-            右内边距 24px 与二级界面（course 页）一致，两处切换时右边缘在同一条竖线上。
+            学伴输入条的位置：内容区顶部一条**专属条带**。
+            这里只放一个空位，输入条本体由 AssistantDockHost 量出这个矩形后贴上来 ——
+            这样从一级进二级时它是"生长"，而不是卸载再挂载。
+
+            为什么占位而不是让输入条直接浮在页面上：浮着会盖住页面顶部的内容。
+            条带的高度（40）和二级界面（48）不同，但两者的**重心高度**都落在 top 36px 上，
+            从书架点进课程时输入条的中轴不会上下跳。
+            对话页不在这里留位：那一页的输入条在底部（见 ChatPage）。
           */}
-          <div className="relative z-30 shrink-0 px-6 pt-4 pb-1">
-            <div className="flex justify-end">
-              <AssistantBar variant="primary" />
+          {!isChat && (
+            <div className="shrink-0 px-6 pt-4 pb-1">
+              <div ref={dockRef} className="h-10" />
             </div>
-          </div>
+          )}
 
           <main className="min-h-0 flex-1 overflow-y-auto">
             <Outlet />

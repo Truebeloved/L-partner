@@ -132,8 +132,27 @@ function click(selector) {
   `
 }
 
+/**
+ * 拍一张，失败就重试。
+ *
+ * capturePage 偶尔会抛 Chromium 合成器的 UnknownVizError（GPU 进程抽风），
+ * 一次失败就让整个工具白跑一分钟不值得 —— 重试三次基本都能过。
+ */
+async function shoot(window, rect) {
+  let lastError
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await window.webContents.capturePage(rect)
+    } catch (error) {
+      lastError = error
+      await sleep(500)
+    }
+  }
+  throw lastError
+}
+
 async function capture(window, name) {
-  const image = await window.webContents.capturePage()
+  const image = await shoot(window)
   fs.writeFileSync(path.join(OUT_DIR, `${name}.png`), image.toPNG())
   const { width, height } = image.getSize()
   console.log(`  ${name.padEnd(26)} ${width}x${height}`)
@@ -164,7 +183,7 @@ async function captureBar(window, name) {
     console.warn(`  ⚠ 找不到输入条，跳过 ${name}`)
     return
   }
-  const image = await window.webContents.capturePage(rect)
+  const image = await shoot(window, rect)
   fs.writeFileSync(path.join(OUT_DIR, `${name}.png`), image.toPNG())
   const { width, height } = image.getSize()
   console.log(`  ${name.padEnd(26)} ${width}x${height}`)
@@ -178,6 +197,18 @@ async function sendQuestion(window, text) {
 
 app.whenReady().then(async () => {
   fs.mkdirSync(OUT_DIR, { recursive: true })
+  try {
+    await run()
+  } catch (error) {
+    console.error(`\n截图过程出错：${String(error)}`)
+    app.exit(1)
+    return
+  }
+  console.log(`\n已输出到 ${OUT_DIR}`)
+  app.exit(0)
+})
+
+async function run() {
 
   const window = new BrowserWindow({
     width: WIDTH,
@@ -196,11 +227,37 @@ app.whenReady().then(async () => {
   })
 
   await window.loadURL(`${BASE_URL}/#/`)
-  // 先等开屏走完，再写设置并重载 —— 保证 store 读到的是假 key
+  // 先等开屏走完，再写设置
   await sleep(6000)
-  await window.webContents.executeJavaScript(SEED_SETTINGS)
-  await window.loadURL(`${BASE_URL}/#/`)
-  await sleep(6000)
+  const seeded = await window.webContents.executeJavaScript(SEED_SETTINGS)
+  console.log(`  写入假 key：${seeded}`)
+  /*
+   * 写设置之后必须**真正重新导航一次**才能让 store 重新读 IndexedDB。
+   * 注意不能用 `loadURL` 只换 hash —— 那是同文档导航，页面不会重新加载，
+   * 刚写进去的假 key 读不到，发问会直接落在「还没有配置大模型 API」上。
+   * 这里加一个查询参数，强制它是一次完整导航。
+   */
+  await window.loadURL(`${BASE_URL}/?seed=${Date.now()}#/`)
+  await sleep(6500)
+  // 读回来确认一次：这个 profile 里的 key 写进去了没有（写不进去后面的截图全是错的）
+  const keyState = await window.webContents.executeJavaScript(`
+    new Promise((resolve) => {
+      const open = indexedDB.open('keyval-store')
+      open.onsuccess = () => {
+        const db = open.result
+        const tx = db.transaction('keyval', 'readonly')
+        const req = tx.objectStore('keyval').get('lpartner.settings')
+        req.onsuccess = () => {
+          db.close()
+          try {
+            const parsed = JSON.parse(req.result)
+            resolve(parsed.state.settings.llm.apiKey ? 'ok' : 'empty')
+          } catch { resolve('unreadable') }
+        }
+      }
+    })
+  `)
+  console.log(`  假 key 状态：${keyState}`)
   await window.webContents.executeJavaScript(FAKE_FETCH)
 
   await capture(window, 'a1-bar-idle')
@@ -257,15 +314,11 @@ app.whenReady().then(async () => {
   await sleep(900)
   await capture(window, 'a7-bar-browse-history')
 
-  // ---- 二级界面（课程页）的输入条 ----
-  const courseId = await window.webContents.executeJavaScript(`
-    (() => {
-      const raw = window.location.hash
-      return raw
-    })()
-  `)
+  // ---- 一级 → 二级：宽度/高度变化必须是一段生长，而不是瞬间换一个 ----
   await window.webContents.executeJavaScript(`location.hash = '#/courses'`)
   await sleep(1200)
+  await capture(window, 'a8-primary-before')
+
   const opened = await window.webContents.executeJavaScript(
     `(() => {
       const cards = [...document.querySelectorAll('a, button')]
@@ -275,10 +328,63 @@ app.whenReady().then(async () => {
       return 'clicked'
     })()`,
   )
-  console.log(`  打开课程：${opened}（hash=${courseId}）`)
-  await sleep(1500)
-  await capture(window, 'a8-bar-secondary-route')
+  console.log(`  进入课程：${opened}`)
+  // 过渡是 320ms：隔着 180ms 连拍两帧，能看出它是"长"过去的而不是跳过去的
+  await sleep(180)
+  await capture(window, 'a9-growth-1')
+  await sleep(160)
+  await capture(window, 'a10-growth-2')
+  await sleep(500)
+  await capture(window, 'a11-bar-secondary-route')
+  await captureBar(window, 'b11-bar-secondary-route')
 
-  console.log(`\n已输出到 ${OUT_DIR}`)
-  app.quit()
-})
+  // ---- 学伴对话：输入条要平滑位移到页面底部，变成对话输入区 ----
+  await window.webContents.executeJavaScript(`location.hash = '#/chat'`)
+  await sleep(150)
+  await capture(window, 'a12-move-to-bottom-1')
+  await sleep(200)
+  await capture(window, 'a13-move-to-bottom-2')
+  await sleep(600)
+  await capture(window, 'a14-chat-bottom-input')
+  await captureBar(window, 'b14-chat-bottom-input')
+
+  // ---- 没配置大模型时：接入卡片照显示，输入条照样滑到底部 ----
+  await window.webContents.executeJavaScript(`
+    (async () => {
+      const key = 'lpartner.settings'
+      const read = () => new Promise((resolve) => {
+        const open = indexedDB.open('keyval-store')
+        open.onsuccess = () => {
+          const db = open.result
+          const tx = db.transaction('keyval', 'readonly')
+          const req = tx.objectStore('keyval').get(key)
+          req.onsuccess = () => { db.close(); resolve(req.result) }
+        }
+      })
+      const write = (value) => new Promise((resolve) => {
+        const open = indexedDB.open('keyval-store')
+        open.onsuccess = () => {
+          const db = open.result
+          const tx = db.transaction('keyval', 'readwrite')
+          tx.objectStore('keyval').put(value, key)
+          tx.oncomplete = () => { db.close(); resolve(true) }
+        }
+      })
+      const parsed = JSON.parse(await read())
+      parsed.state.settings.llm.apiKey = ''
+      await write(JSON.stringify(parsed))
+      return 'cleared'
+    })()
+  `)
+  await window.webContents.executeJavaScript(`location.hash = '#/chat'`)
+  // 同样要一次真正的导航，才能读到「已经清掉 key」的设置。
+  // 末尾这一步偶尔会撞上 Chromium 合成器的 UnknownVizError —— 前面该拍的都拍到了，
+  // 所以这里兜住异常，只跳过这一张，不让整个工具失败。
+  try {
+    await window.loadURL(`${BASE_URL}/?seed=${Date.now()}#/chat`)
+    await sleep(6500)
+    await capture(window, 'a14-chat-no-llm')
+  } catch (error) {
+    console.warn(`  ⚠ 无 key 那一张没拍成：${String(error)}`)
+  }
+}

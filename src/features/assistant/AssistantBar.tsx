@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 
 import { Icon } from '@/components/Icon'
 import { stepExchange, toExchanges } from '@/features/assistant/exchanges'
+import { DOCK_METRICS } from '@/features/assistant/dock'
+import type { DockPlacement } from '@/features/assistant/dock'
 import { useChatSessionContext } from '@/features/chat/context'
 import { usePersonaStore } from '@/store/personas'
 import { useSettingsStore } from '@/store/settings'
@@ -10,39 +12,34 @@ import { useSettingsStore } from '@/store/settings'
 /**
  * 学伴输入条 —— 全应用唯一的 AI 入口。
  *
- * 它不是「另一块对话区域」，而是一条**常驻的长条**：平时是输入框，
+ * 它不是「另一块对话区域」，而是一条**长条**：平时是输入框，
  * 发问之后当场变成一对气泡（回答在左、提问在右），长回答向下覆盖页面内容，
  * 答完停一会再自己收成长条。设计意图是"AI 随时在手边，但不占地方"。
  *
  * 几个关键取舍：
  * - **和「学伴对话」页共用同一场对话**（同一个 store、同一份上下文），
  *   所以这里问过的问题切到对话页能接着聊，也不会为同一段上下文付两次钱。
- * - **回答展开时向下覆盖，而不是撑开页面**：输入条常驻在页面顶部，
- *   如果它一展开就把正文推下去，用户读到一半的位置会被挤走 —— 那是最让人烦的一种动效。
+ * - **回答展开时向下覆盖，而不是撑开页面**：如果它一展开就把正文推下去，
+ *   用户读到一半的位置会被挤走 —— 那是最让人烦的一种动效。
+ * - **组件本身不管自己在哪里**：位置由 dock（见 dock.tsx）量出来贴上去，
+ *   这样换页时它是位移与生长，而不是卸载再挂载。
  * - 滚动**只在有条目可翻时才拦**，否则页面滚动会莫名其妙失灵。
  */
-export type AssistantBarVariant = 'primary' | 'secondary'
-
-interface AssistantBarProps {
+export interface AssistantBarProps {
   /**
-   * 一级 / 二级界面用的两档尺寸。
-   * 面积不同（二级更大），但**右边缘始终对齐** —— 一级的右边缘就是窗口右边缘
-   * （侧栏在左边），二级全屏，所以两边其实是同一条竖线。
+   * 停靠位。决定要不要显示气泡、以及尺寸：
+   * - top / top-wide：顶部两档，发问后显示一问一答两个气泡
+   * - bottom：对话页底部，整页已经是对话区，这里只当输入框
    */
-  variant?: AssistantBarVariant
+  placement: DockPlacement
 }
 
 /** 回答展开后最多占多高，超出的部分自己滚 —— 再高就把整页盖没了 */
-const ANSWER_MAX_HEIGHT = '44vh'
+const ANSWER_MAX_HEIGHT = '40vh'
 /** 答完之后停留多久再收成长条 */
 const SETTLE_MS = 3200
 
-const SIZES: Record<AssistantBarVariant, { width: number; height: number }> = {
-  primary: { width: 420, height: 40 },
-  secondary: { width: 520, height: 48 },
-}
-
-export function AssistantBar({ variant = 'primary' }: AssistantBarProps) {
+export function AssistantBar({ placement }: AssistantBarProps) {
   const session = useChatSessionContext()
   const settings = useSettingsStore((state) => state.settings)
   const personas = usePersonaStore((state) => state.personas)
@@ -51,7 +48,10 @@ export function AssistantBar({ variant = 'primary' }: AssistantBarProps) {
     [personas, settings.activePersonaId],
   )
 
-  const size = SIZES[variant]
+  const height = DOCK_METRICS[placement].height
+  /** 对话页：整页就是对话区，这里只做输入，气泡交给页面 */
+  const inputOnly = placement === 'bottom'
+
   const exchanges = useMemo(() => toExchanges(session.messages), [session.messages])
   const total = exchanges.length
 
@@ -76,9 +76,9 @@ export function AssistantBar({ variant = 'primary' }: AssistantBarProps) {
 
   const index = focused ?? Math.max(0, total - 1)
   const exchange = total > 0 ? exchanges[index] : undefined
-  const composingNow = composing || total === 0
+  const composingNow = inputOnly || composing || total === 0
   // 提问展开时回答收成缩略 —— 这是"挤压"的语义，不是隐藏
-  const answerExpanded = answerOpen && !questionOpen
+  const answerExpanded = !inputOnly && answerOpen && !questionOpen
   const streaming = session.streaming
 
   const submit = useCallback(() => {
@@ -89,9 +89,9 @@ export function AssistantBar({ variant = 'primary' }: AssistantBarProps) {
     setAnswerOpen(true)
     setQuestionOpen(false)
     setFocused(null)
-    setAutoSettle(true)
+    setAutoSettle(!inputOnly)
     void session.send(text)
-  }, [draft, session])
+  }, [draft, session, inputOnly])
 
   /*
    * 答完停留一会再收成长条。
@@ -152,29 +152,24 @@ export function AssistantBar({ variant = 'primary' }: AssistantBarProps) {
   const canBrowse = !composingNow && total > 1
 
   return (
-    <div
-      ref={rootRef}
-      className="relative"
-      style={{ width: size.width }}
-      // 展开的回答从这一层向**下**溢出，压住页面内容而不是把它推走
-      data-assistant-bar={variant}
-    >
+    <div ref={rootRef} className="relative w-full" data-assistant-bar={placement}>
+      {/*
+        这一行**没有自己的背景**：页面上看到的就是两个气泡（回答浅、提问深），
+        不是"一块白卡片里装着两个气泡"。输入态时背景留给输入框本身。
+      */}
       <div
-        className={[
-          'flex gap-2 rounded-card bg-raised shadow-lift',
-          // 输入态里三个元素高度不同，要居中对齐；气泡态里回答会变高，顶部对齐才不会看着歪
-          composingNow ? 'items-center' : 'items-start',
-        ].join(' ')}
-        style={{ minHeight: size.height }}
+        className={['flex gap-2', composingNow ? 'items-center' : 'items-start'].join(' ')}
+        style={{ minHeight: height }}
       >
         {composingNow ? (
           <Composer
             draft={draft}
-            height={size.height}
+            height={height}
             personaName={persona?.name ?? '学伴'}
+            streaming={streaming}
             onChange={setDraft}
             onSubmit={submit}
-            disabled={streaming}
+            onStop={session.stop}
           />
         ) : (
           <>
@@ -246,27 +241,36 @@ export function AssistantBar({ variant = 'primary' }: AssistantBarProps) {
   )
 }
 
-/** 输入态：一条细长输入框 + 发送键 */
+/**
+ * 输入态：一条长条输入框。
+ *
+ * 只有它带背景 —— 长条本身要看起来"可以打字"，而气泡不需要外框。
+ * 流式输出时把发送键换成「停止」，对话页尤其需要：那一页本来就有停止按钮的位置。
+ */
 function Composer({
   draft,
   height,
   personaName,
+  streaming,
   onChange,
   onSubmit,
-  disabled,
+  onStop,
 }: {
   draft: string
   height: number
   personaName: string
+  streaming: boolean
   onChange: (value: string) => void
   onSubmit: () => void
-  disabled: boolean
+  onStop: () => void
 }) {
   return (
-    <>
+    <div
+      className="flex w-full items-center rounded-pill bg-raised pl-5 pr-1.5 transition-shadow duration-200 ease-out focus-within:shadow-lift"
+      style={{ height }}
+    >
       <input
-        className="min-w-0 flex-1 bg-transparent px-4 text-body text-ink outline-none placeholder:text-ink-faint"
-        style={{ height }}
+        className="min-w-0 flex-1 bg-transparent text-body text-ink outline-none placeholder:text-ink-faint"
         value={draft}
         placeholder={`问问${personaName}…`}
         aria-label="问学伴"
@@ -278,20 +282,30 @@ function Composer({
           }
         }}
       />
-      <button
-        type="button"
-        className="mr-1.5 flex size-7 shrink-0 items-center justify-center rounded-pill transition-all duration-200 ease-out disabled:opacity-30"
-        style={{
-          background: draft.trim() ? 'var(--color-ink)' : 'transparent',
-          color: draft.trim() ? 'var(--color-ink-inverse)' : 'var(--color-ink-faint)',
-        }}
-        aria-label="发送"
-        disabled={!draft.trim() || disabled}
-        onClick={onSubmit}
-      >
-        <Icon name="send" size={15} />
-      </button>
-    </>
+      {streaming ? (
+        <button
+          type="button"
+          className="shrink-0 rounded-pill px-3 text-small text-ink-soft transition-colors duration-200 hover:text-ink"
+          onClick={onStop}
+        >
+          停止
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="flex size-8 shrink-0 items-center justify-center rounded-pill transition-all duration-200 ease-out disabled:opacity-30"
+          style={{
+            background: draft.trim() ? 'var(--color-ink)' : 'transparent',
+            color: draft.trim() ? 'var(--color-ink-inverse)' : 'var(--color-ink-faint)',
+          }}
+          aria-label="发送"
+          disabled={!draft.trim()}
+          onClick={onSubmit}
+        >
+          <Icon name="send" size={16} />
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -318,7 +332,7 @@ function AnswerBubble({
 }) {
   if (!text) {
     return (
-      <div className="flex items-center rounded-card bg-ink/10 px-3" style={{ minHeight: 40 }}>
+      <div className="flex items-center rounded-card bg-raised px-4" style={{ minHeight: 40 }}>
         <span className="text-small text-ink-faint">{streaming ? '正在想…' : '（没有回答）'}</span>
       </div>
     )
@@ -328,7 +342,12 @@ function AnswerBubble({
     <button
       type="button"
       data-assistant-answer
-      className="block w-full rounded-card bg-ink/10 px-3 py-2 text-left transition-colors duration-200 ease-out hover:bg-ink/15"
+      /*
+       * 气泡底色必须是**不透明**的：展开时它会盖住页面内容，
+       * 半透明会把下面的标题、书脊透出来，字叠着字根本读不了。
+       * hover 只加一层浅阴影，不再改底色 —— 改底色就等于把它又变透明了。
+       */
+      className="block w-full rounded-card bg-raised px-4 py-2 text-left transition-shadow duration-200 ease-out hover:shadow-lift"
       style={{ minHeight: 40 }}
       onClick={onToggle}
       title={open ? '收起回答' : '展开完整回答'}
@@ -344,7 +363,7 @@ function AnswerBubble({
             'text-body leading-snug whitespace-pre-wrap text-ink transition-opacity duration-200',
             open ? 'opacity-100' : 'opacity-0',
             // 展开后超出上限时自己滚，不然长回答会被硬生生切掉
-            open ? 'max-h-[44vh] overflow-y-auto' : '',
+            open ? 'max-h-[40vh] overflow-y-auto' : '',
           ].join(' ')}
         >
           {text}
@@ -378,7 +397,7 @@ function QuestionBubble({
     <button
       type="button"
       data-assistant-question
-      className="block w-full rounded-card bg-ink px-3 py-2 text-left text-ink-inverse transition-opacity duration-200 ease-out hover:opacity-90"
+      className="block w-full rounded-card bg-ink px-4 py-2 text-left text-ink-inverse transition-opacity duration-200 ease-out hover:opacity-90"
       style={{ minHeight: 40 }}
       onClick={onToggle}
       title={open ? '收起提问' : '展开提问'}
@@ -415,12 +434,12 @@ function NewQuestionButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       type="button"
-      className="mr-1.5 flex size-7 shrink-0 items-center justify-center rounded-pill text-ink-soft transition-all duration-200 ease-out hover:bg-ink/10 hover:text-ink"
+      className="mt-1.5 flex size-7 shrink-0 items-center justify-center rounded-pill text-ink-soft transition-all duration-200 ease-out hover:bg-ink/10 hover:text-ink"
       onClick={onClick}
       aria-label="问新问题"
       title="问新问题"
     >
-      <Icon name="plus" size={15} />
+      <Icon name="plus" size={16} />
     </button>
   )
 }

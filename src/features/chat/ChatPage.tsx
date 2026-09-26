@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 
 import { Icon } from '@/components/Icon'
 import { PersonaAvatar } from '@/components/PersonaAvatar'
-import { Composer } from '@/features/chat/components/Composer'
+import { useAssistantDock } from '@/features/assistant/dock'
 import { MessageBubble } from '@/features/chat/components/MessageBubble'
 import { useChatSessionContext } from '@/features/chat/context'
 import { useActiveConversation } from '@/features/chat/useChatSession'
@@ -41,10 +41,12 @@ export function ChatPage() {
   const conversation = useActiveConversation()
   /**
    * 会话状态来自应用外壳的 ChatSessionProvider，而不是在这里现起一份：
-   * 顶部输入条和这一页看的是同一场对话，两份状态必然会对不上
+   * 输入条和这一页看的是同一场对话，两份状态必然会对不上
    * （页面上点了发送，输入条却不知道正在流式输出）。
    */
   const session = useChatSessionContext()
+  /** 输入条会在这一页滑到底部变成输入区，这里只留空位 */
+  const dockRef = useAssistantDock('bottom')
 
   const [notice, setNotice] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -80,23 +82,35 @@ export function ChatPage() {
 
   if (!hasLlm) {
     return (
-      <div className="mx-auto max-w-md px-6 pt-12">
-        <div className="card py-10 text-center">
-          <span className="inline-flex text-ink-soft">
-            <Icon name="sliders" size={28} />
-          </span>
-          <h2 className="card-title mt-5">先接入你的大模型 API</h2>
-          <p className="muted mx-auto mt-3 max-w-sm leading-relaxed">
-            学伴由你自己的模型驱动，L-partner 不内置密钥、也没有服务端。
-          </p>
-          <div className="mt-6">
-            <Link to="/settings" className="btn btn-primary">
-              去设置里填写
-            </Link>
+      /*
+       * 没配置大模型时这一页退回"接入引导"，但**底部照样留输入条的位置** ——
+       * 用户要的是"打开对话页，输入条就滑到底部"这个动作本身，
+       * 它不该因为还没填 key 就不发生（填 key 是下一步的事）。
+       */
+      <div className="flex h-full flex-col overflow-hidden">
+        <div className="flex-1 overflow-y-auto">
+          <div className="mx-auto max-w-md px-6 pt-12">
+            <div className="card py-10 text-center">
+              <span className="inline-flex text-ink-soft">
+                <Icon name="sliders" size={28} />
+              </span>
+              <h2 className="card-title mt-5">先接入你的大模型 API</h2>
+              <p className="muted mx-auto mt-3 max-w-sm leading-relaxed">
+                学伴由你自己的模型驱动，L-partner 不内置密钥、也没有服务端。
+              </p>
+              <div className="mt-6">
+                <Link to="/settings" className="btn btn-primary">
+                  去设置里填写
+                </Link>
+              </div>
+              <p className="mt-5 border-t border-line-soft pt-4 text-small text-ink-faint">
+                没有 API Key 时，课程、计划、待办和提醒照常可用。
+              </p>
+            </div>
           </div>
-          <p className="mt-5 border-t border-line-soft pt-4 text-small text-ink-faint">
-            没有 API Key 时，课程、计划、待办和提醒照常可用。
-          </p>
+        </div>
+        <div className="shrink-0 border-t border-line-soft px-4 py-3">
+          <div ref={dockRef} className="h-12" />
         </div>
       </div>
     )
@@ -249,16 +263,15 @@ export function ChatPage() {
         </div>
       )}
 
-      <Composer
-        onSend={handleSend}
-        onStop={session.stop}
-        streaming={session.streaming}
-        placeholder={
-          activePersona
-            ? `和${activePersona.name}聊聊…（Enter 发送，Shift + Enter 换行）`
-            : undefined
-        }
-      />
+      {/*
+        底部输入区：这里**不留输入框**，只留一个空位。
+        学伴输入条会从页面顶部一路平滑位移下来变成这一页的输入框 ——
+        整页就是对话区（消息列表 + 底部长条），而不是"页面里再嵌一个聊天框"。
+        没有配置大模型时也照旧：上面的接入卡片照显示，输入条照样滑到底部。
+      */}
+      <div className="shrink-0 border-t border-line-soft px-4 py-3">
+        <div ref={dockRef} className="h-12" />
+      </div>
     </div>
   )
 }

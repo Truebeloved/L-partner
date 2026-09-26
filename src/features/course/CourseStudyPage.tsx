@@ -1,6 +1,6 @@
 import { useNavigate, useParams } from 'react-router-dom'
 
-import { AssistantBar } from '@/features/assistant/AssistantBar'
+import { useAssistantDock } from '@/features/assistant/dock'
 import { CourseDetailPage } from '@/features/course/CourseDetailPage'
 import { useCourseStore } from '@/store/courses'
 
@@ -20,23 +20,27 @@ import { useCourseStore } from '@/store/courses'
 export function CourseStudyPage() {
   const navigate = useNavigate()
   const { courseId } = useParams<{ courseId: string }>()
+  const dockRef = useAssistantDock('top-wide')
   const title = useCourseStore((state) =>
     courseId ? state.courses.find((course) => course.id === courseId)?.title : undefined,
   )
 
   return (
     <div className="min-h-screen bg-surface">
-      <header className="sticky top-0 z-20 flex items-center gap-4 border-b border-line-soft bg-surface/95 px-6 py-3 backdrop-blur">
-        <button type="button" className="btn btn-secondary btn-sm" onClick={() => navigate('/')}>
-          ← 返回书架
-        </button>
-        <span className="min-w-0 flex-1 truncate text-small text-ink-soft">{title ?? '课程'}</span>
-        {/*
-          二级界面同样是「顶部 + 右对齐」，只是面积更大一档。
-          右内边距与一级界面一致（都是 24px），所以从书架点进课程时，
-          输入条的右边缘停在原处不动 —— 换页时位置跳一下是很廉价的感觉。
-        */}
-        <AssistantBar variant="secondary" />
+      {/*
+        二级界面的输入条在**整页顶部**，宽度占满全幅（一级界面要扣掉侧栏，所以更窄）。
+        两处的高度不同（48 / 40），但 top 差正好补回来 —— 输入条的中轴始终在 36px 处，
+        从书架点进课程时它不会上下跳，只是左右撑开、略微变高，也就是"生长"。
+        返回与标题因此挪到第二行：输入条要求的是整幅横向长度，不能被按钮挤掉。
+      */}
+      <header className="sticky top-0 z-20 border-b border-line-soft bg-surface/95 px-6 pt-3 backdrop-blur">
+        <div ref={dockRef} className="h-12" />
+        <div className="flex items-center gap-4 pb-3 pt-1">
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => navigate('/')}>
+            ← 返回书架
+          </button>
+          <span className="min-w-0 flex-1 truncate text-small text-ink-soft">{title ?? '课程'}</span>
+        </div>
       </header>
 
       <div className="mx-auto max-w-4xl px-6 py-6">

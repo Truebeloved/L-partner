@@ -8,7 +8,7 @@ import { onToastDismiss } from '@/lib/platform'
  * 主进程那边的总时长预算是：出现 + 停留 + 消失 = 3000ms，
  * 所以这里的取值会直接影响停留时间的长短。
  */
-const ENTER_MS = 200
+const ENTER_MS = 180
 
 /**
  * 消失动画时长。
@@ -16,7 +16,7 @@ const ENTER_MS = 200
  * ⚠️ 必须与 electron/main.cjs 的 `TOAST_EXIT_MS` 一致 ——
  * 主进程会提前这么久通知退场，早了动画被切断，晚了会黑屏干等。
  */
-const EXIT_MS = 220
+const EXIT_MS = 180
 
 /**
  * 桌面提醒小窗的内容。
@@ -28,6 +28,9 @@ const EXIT_MS = 220
  *   两边各有一个计时器的话，总时长迟早会走偏。
  * - 整块**不可交互**（窗口本身 focusable: false），所以这里没有按钮、没有 hover 态：
  *   一条 3 秒的提示不该让用户产生"我该点哪里"的疑问。
+ *
+ * 视觉上刻意做得**轻**：不加图标、不加边框、字重只用 400、位移只有 6px。
+ * 它是一条"路过"的提示，不是一块需要被阅读的面板 —— 存在感越低，越不会打断手上正在做的事。
  */
 export function ToastView() {
   const [params] = useSearchParams()
@@ -55,21 +58,15 @@ export function ToastView() {
     <div className="flex h-screen w-screen items-center justify-center p-2">
       <div
         className={[
-          'flex w-full items-start gap-3 rounded-card border border-line-soft bg-raised px-4 py-3.5 shadow-pop',
+          // 无边框、无图标、浅阴影：靠背景与位移表达"浮在上面"，而不是靠描边和重量
+          'w-full rounded-card bg-raised/95 px-4 py-3 shadow-lift',
           'transition-[opacity,transform] ease-out',
-          phase === 'shown'
-            ? 'translate-y-0 opacity-100'
-            : 'translate-y-3 opacity-0',
+          phase === 'shown' ? 'translate-y-0 opacity-100' : 'translate-y-1.5 opacity-0',
         ].join(' ')}
         style={{ transitionDuration: `${phase === 'leaving' ? EXIT_MS : ENTER_MS}ms` }}
       >
-        {/* 用应用图标本身做标识，而不是另画一个钟表图标 ——
-            用户一眼就知道这条提示来自哪个应用 */}
-        <img src="./icon.svg" alt="" className="mt-0.5 size-6 shrink-0" />
-        <div className="min-w-0 flex-1">
-          <p className="text-body leading-snug font-bold text-ink">{title}</p>
-          {body && <p className="mt-1 text-small leading-snug text-ink-soft">{body}</p>}
-        </div>
+        <p className="truncate text-body leading-snug text-ink">{title}</p>
+        {body && <p className="mt-0.5 truncate text-small leading-snug text-ink-faint">{body}</p>}
       </div>
     </div>
   )

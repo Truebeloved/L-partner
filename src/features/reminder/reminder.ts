@@ -1,4 +1,4 @@
-import { dayjs, toDateKey } from '@/lib/date'
+import { dayjs, parseTimeKey, toDateKey } from '@/lib/date'
 import type { ReminderKind, ReminderLog, TimeKey } from '@/types/models'
 
 /**
@@ -11,8 +11,6 @@ import type { ReminderKind, ReminderLog, TimeKey } from '@/types/models'
 
 /** 设置项损坏时的兜底时刻：退化成次日零点。抛异常会让整个调度器停摆，不如降级 */
 const FALLBACK_TIME = { hours: 0, minutes: 0 }
-
-const TIME_KEY_PATTERN = /^(\d{1,2}):(\d{2})$/
 
 /**
  * 补发窗口：页面从后台切回来时，若错过的提醒时刻还在 2 小时以内就补发一次。
@@ -62,21 +60,15 @@ export function hasFiredToday(logs: ReminderLog[], now: Date, kind: ReminderKind
 
 /** 目标时刻落在 now 同一天的 Date；秒与毫秒归零，让「到点」有唯一的判定基准 */
 function fireAtOnSameDay(now: Date, targetTime: TimeKey): dayjs.Dayjs {
-  const { hours, minutes } = parseTimeKey(targetTime)
+  const { hours, minutes } = parseTime(targetTime)
   return dayjs(now).hour(hours).minute(minutes).second(0).millisecond(0)
 }
 
 /**
  * 解析 `HH:mm`。持久化数据可能来自旧版本（缺字段）或被直接改坏（`25:99`），
  * 所以这里不抛异常，一律退化成兜底时刻 —— 提醒晚一点，好过整个功能崩掉。
+ * 实现已上收到 lib/date.ts，与桌面小窗共用同一套宽容规则。
  */
-function parseTimeKey(time: TimeKey): { hours: number; minutes: number } {
-  const matched = typeof time === 'string' ? TIME_KEY_PATTERN.exec(time.trim()) : null
-  if (!matched) return FALLBACK_TIME
-
-  const hours = Number(matched[1])
-  const minutes = Number(matched[2])
-  if (hours > 23 || minutes > 59) return FALLBACK_TIME
-
-  return { hours, minutes }
+function parseTime(time: TimeKey): { hours: number; minutes: number } {
+  return parseTimeKey(time, FALLBACK_TIME)
 }

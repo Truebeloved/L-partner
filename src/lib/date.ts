@@ -45,3 +45,29 @@ export function formatMinutes(minutes: number): string {
 export function isOverdue(key: DateKey): boolean {
   return dayjs(key).isBefore(dayjs(), 'day')
 }
+
+/** `HH:mm` 的宽松解析结果：解析失败时退回兜底值，绝不抛异常 */
+const TIME_KEY_PATTERN = /^(\d{1,2}):(\d{2})$/
+
+/**
+ * 解析 `HH:mm`，**永不抛异常**。
+ *
+ * 为什么必须宽容：持久化数据可能来自旧版本（字段根本不存在）或被直接改坏（`25:99`）。
+ * 曾经真的出过一次事故 —— 旧版本存下来的 settings 里没有 `desktopReminderFrom`，
+ * 用户打开桌面提醒开关后取到 undefined，`undefined.split(':')` 直接把整棵 React 树
+ * 掀掉，界面变成一片空白，而且因为开关已经存进本地，之后每次启动都是空白。
+ * 所以时间解析只有一条规则：宁可退化成兜底时刻（提醒晚一点），也不能让功能崩掉。
+ */
+export function parseTimeKey(time: unknown, fallback: { hours: number; minutes: number }): {
+  hours: number
+  minutes: number
+} {
+  const matched = typeof time === 'string' ? TIME_KEY_PATTERN.exec(time.trim()) : null
+  if (!matched) return fallback
+
+  const hours = Number(matched[1])
+  const minutes = Number(matched[2])
+  if (hours > 23 || minutes > 59) return fallback
+
+  return { hours, minutes }
+}

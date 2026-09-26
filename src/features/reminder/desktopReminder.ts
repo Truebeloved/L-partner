@@ -1,4 +1,4 @@
-import { dayjs } from '@/lib/date'
+import { dayjs, parseTimeKey } from '@/lib/date'
 import type { TimeKey } from '@/types/models'
 
 /**
@@ -103,13 +103,12 @@ function hitsDailyReminder(at: dayjs.Dayjs, dailyTime: TimeKey | null): boolean 
   return Math.abs(at.diff(atTime(at, dailyTime), 'minute')) < DAILY_CLEARANCE_MINUTES
 }
 
+/** 脏设置项的兜底时刻：与 reminder.ts 保持同一条规则 —— 退化，但不崩 */
+const FALLBACK_TIME = { hours: 0, minutes: 0 }
+
 function atTime(reference: dayjs.Dayjs, time: TimeKey): dayjs.Dayjs {
-  const [hour, minute] = time.split(':').map(Number)
-  return reference
-    .hour(hour ?? 0)
-    .minute(minute ?? 0)
-    .second(0)
-    .millisecond(0)
+  const { hours, minutes } = parseTimeKey(time, FALLBACK_TIME)
+  return reference.hour(hours).minute(minutes).second(0).millisecond(0)
 }
 
 // ---------------------------------------------------------------------------

@@ -280,8 +280,8 @@ app.whenReady().then(async () => {
    * TOAST_WIDTH / TOAST_HEIGHT 保持一致。
    */
   const toast = new BrowserWindow({
-    width: 372,
-    height: 136,
+    width: 320,
+    height: 92,
     show: true,
     frame: false,
     transparent: true,
@@ -298,7 +298,7 @@ app.whenReady().then(async () => {
     body: '书架上的课还在等你翻',
   }).toString()
   await toast.loadURL(`${BASE_URL}/#/toast?${toastQuery}`)
-  // 进场动画 200ms，留足时间让它停稳
+  // 进场动画 180ms，留足时间让它停稳
   await sleep(600)
   await capture(toast, '9-toast')
   toast.destroy()

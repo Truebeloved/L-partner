@@ -16,6 +16,7 @@
     "check:design": "node scripts/check-design-tokens.mjs",
     "icon": "node scripts/generate-icon.mjs",
     "shots": "node scripts/capture-ui.mjs",
+    "inspect:storage": "node scripts/inspect-storage.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",

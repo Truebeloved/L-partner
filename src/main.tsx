@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
 import App from '@/App'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { HydrationGate } from '@/components/HydrationGate'
 import '@/styles/index.css'
 
@@ -21,12 +22,16 @@ const isToastWindow = window.location.hash.startsWith('#/toast')
 
 createRoot(container).render(
   <StrictMode>
-    {isToastWindow ? (
-      <App />
-    ) : (
-      <HydrationGate>
+    {/* 错误边界放在最外层：连 HydrationGate 的读盘失败也要能显示出来，
+        而不是留下一块什么都没有的界面 */}
+    <ErrorBoundary>
+      {isToastWindow ? (
         <App />
-      </HydrationGate>
-    )}
+      ) : (
+        <HydrationGate>
+          <App />
+        </HydrationGate>
+      )}
+    </ErrorBoundary>
   </StrictMode>,
 )

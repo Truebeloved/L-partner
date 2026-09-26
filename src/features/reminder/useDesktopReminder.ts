@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { pickToastMessage, planNextToast } from '@/features/reminder/desktopReminder'
 import type { ToastContext } from '@/features/reminder/desktopReminder'
-import { dayjs, todayKey } from '@/lib/date'
+import { dayjs, parseTimeKey, todayKey } from '@/lib/date'
 import { getAppInfo, showDesktopToast } from '@/lib/platform'
 import { useCourseStore } from '@/store/courses'
 import { usePlanStore } from '@/store/plans'
@@ -160,12 +160,12 @@ export function useDesktopReminder(): DesktopReminderState {
          * 注意 setters 的返回值必须接住 —— dayjs 是不可变的，丢掉返回值
          * 等于还是午夜，那会在凌晨 0 点把用户叫醒。
          */
-        const [hour, minute] = activeFrom.split(':').map(Number)
+        const { hours, minutes } = parseTimeKey(activeFrom, { hours: 0, minutes: 0 })
         const wakeUp = dayjs()
           .add(1, 'day')
           .startOf('day')
-          .hour(hour ?? 0)
-          .minute(minute ?? 0)
+          .hour(hours)
+          .minute(minutes)
         timerRef.current = window.setTimeout(() => arm(), Math.max(60_000, wakeUp.diff(dayjs())))
         return
       }

@@ -134,6 +134,48 @@ describe('planNextToast 与每日固定提醒的避让', () => {
   })
 })
 
+/*
+ * 脏设置项的回归测试。
+ *
+ * 真实事故：旧版本存下来的 settings 里没有 desktopReminderFrom / desktopReminderTo，
+ * 用户一打开桌面提醒开关，planNextToast 里 `undefined.split(':')` 就抛错，
+ * 整棵 React 树被掀掉 —— 界面一片空白，而且之后每次启动都是空白。
+ * 结论：这个纯函数对**任何**输入都不能抛异常，最差也要退化成一个合理时刻。
+ */
+describe('planNextToast 对脏设置项的容忍度', () => {
+  const NOW = new Date('2026-09-25T10:00:00')
+
+  it('缺少活跃时段字段时不抛异常（今天排不出来就返回 null，但不崩）', () => {
+    const next = planNextToast(NOW, {
+      ...BASE,
+      activeFrom: undefined as never,
+      activeTo: undefined as never,
+      random: fixedRandom(0),
+    })
+    expect(next === null || next instanceof Date).toBe(true)
+  })
+
+  it('时刻格式被改坏时也不抛异常', () => {
+    const next = planNextToast(NOW, {
+      ...BASE,
+      activeFrom: '25:99' as never,
+      activeTo: '不是时间' as never,
+      random: fixedRandom(0),
+    })
+    // 兜底为 00:00，早于当前时刻 → 直接顺延到明天；关键是它没有抛错
+    expect(next === null || next instanceof Date).toBe(true)
+  })
+
+  it('固定提醒时刻损坏时不影响随机提醒照常安排', () => {
+    const next = planNextToast(NOW, {
+      ...BASE,
+      dailyReminderTime: '' as never,
+      random: fixedRandom(0),
+    })
+    expect(next?.toISOString()).toBe(new Date('2026-09-25T11:00:00').toISOString())
+  })
+})
+
 const RICH: ToastContext = {
   name: '休伯利安',
   todayTotal: 5,

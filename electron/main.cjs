@@ -76,6 +76,42 @@ function preloadPath() {
   return path.join(__dirname, 'preload.cjs')
 }
 
+/**
+ * 把渲染进程的报错转发到终端。
+ *
+ * 起因是一个真实故障：打开提醒开关后整个界面变白。
+ * 渲染进程抛错时 React 会把整棵树卸掉，主进程这边只看到"窗口还在、内容是空的"，
+ * 终端里一个字都没有 —— 现场和原因之间隔着一整个进程边界，只能靠猜。
+ * 开发模式下把 console 与崩溃事件接过来，这类故障才第一次有了现场。
+ */
+function forwardRendererLogs(window) {
+  if (!DEV_SERVER_URL) return
+
+  window.webContents.on('console-message', (event) => {
+    /*
+     * 只转发 warning / error，避免把开发期的噪声刷满终端。
+     * 注意 level 的形态在版本之间变过：老版本是 0~3 的数字，新版本是
+     * 'debug' | 'info' | 'warning' | 'error' 字符串 —— 两种都要认，
+     * 否则过滤条件会把 error 一起挡掉（这个坑真的踩过一次）。
+     */
+    const level = event?.level
+    const isError = level === 3 || level === 'error'
+    const isWarning = level === 2 || level === 'warning'
+    if (!isError && !isWarning) return
+
+    const where = event?.sourceId ? ` (${event.sourceId}:${event.lineNumber})` : ''
+    console.log(`[renderer:${isError ? 'error' : 'warn'}] ${event?.message ?? ''}${where}`)
+  })
+
+  window.webContents.on('render-process-gone', (_event, details) => {
+    console.log(`[renderer] 进程结束：${JSON.stringify(details)}`)
+  })
+
+  window.webContents.on('preload-error', (_event, preload, error) => {
+    console.log(`[renderer] preload 出错：${preload} ${String(error)}`)
+  })
+}
+
 function createMainWindow() {
   const { width, height, minWidth, minHeight } = resolveWindowSize()
 
@@ -113,6 +149,7 @@ function createMainWindow() {
   // 居中：小屏上如果还用系统默认位置，窗口可能一半在屏幕外
   window.center()
   window.once('ready-to-show', () => window.show())
+  forwardRendererLogs(window)
 
   window.on('close', (event) => {
     // 关窗 = 收进托盘，应用继续跑（提醒需要它活着）。
@@ -200,8 +237,8 @@ function showTrayHintOnce() {
 --------------------------------------------------------------------------- */
 
 /** 窗口比卡片略大一圈，多出来的边距是留给 CSS 阴影的（透明窗口里阴影不会被裁掉） */
-const TOAST_WIDTH = 372
-const TOAST_HEIGHT = 136
+const TOAST_WIDTH = 320
+const TOAST_HEIGHT = 92
 /**
  * 小窗的**总**存活时长：从显示出来的那一刻算起，到彻底消失为止。
  * 这 3 秒里包含了出现动画、停留、消失动画三部分 ——
@@ -214,7 +251,7 @@ const TOAST_TOTAL_MS = 3000
  * ⚠️ 必须与 ToastView.tsx 里退场过渡的 duration 一致 ——
  * 不一致的话，要么动画被切断（提前销毁），要么黑屏干等（销毁太晚）。
  */
-const TOAST_EXIT_MS = 220
+const TOAST_EXIT_MS = 180
 const TOAST_MARGIN = 18
 
 function closeToast() {

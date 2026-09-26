@@ -21,6 +21,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
   activePersonaId: 'builtin-senior',
   reminderEnabled: false,
   dailyReminderTime: '20:00',
+  // 默认关闭：一个刚装好的应用不该自己开始弹系统通知。
+  // 用户去设置里主动开启之后才启用（与需求里"在设置的辅助功能中开启后自动调用"一致）
+  desktopReminderEnabled: false,
+  desktopReminderFrom: '09:00',
+  desktopReminderTo: '21:30',
+  desktopReminderMaxPerDay: 4,
   autoExtractMemory: true,
 }
 

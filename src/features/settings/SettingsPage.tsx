@@ -1,8 +1,9 @@
 import { useState } from 'react'
 
 import { PageHeader } from '@/components/PageHeader'
+import { useDesktopReminderState } from '@/features/reminder/context'
 import { LlmSettingsCard } from '@/features/settings/components/LlmSettingsCard'
-import { todayKey } from '@/lib/date'
+import { dayjs, todayKey } from '@/lib/date'
 import { BUILTIN_PERSONAS } from '@/lib/seed/personas'
 import { useChatStore } from '@/store/chat'
 import { useCourseStore } from '@/store/courses'
@@ -17,6 +18,8 @@ const REMINDER_TIMES = ['08:00', '12:30', '18:00', '20:00', '21:30', '22:00']
 export function SettingsPage() {
   const settings = useSettingsStore((state) => state.settings)
   const update = useSettingsStore((state) => state.update)
+  /** 桌面提醒的调度状态由应用外壳提供 —— 它在托盘里也在跑，不只是这个页面 */
+  const desktop = useDesktopReminderState()
   const [clearConfirm, setClearConfirm] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
 
@@ -75,10 +78,113 @@ export function SettingsPage() {
       <div className="page-container space-y-8">
         <LlmSettingsCard />
 
+        {/* 桌面提醒：与上面那套「固定时刻的页面内提醒」是两件事，所以放成独立区块。
+            它才是应用收进托盘后唯一还能把人叫回来的通道 */}
         <section className="card">
-          <h2 className="section-title">学习提醒</h2>
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <h2 className="section-title">桌面提醒</h2>
+              <p className="muted mt-2 leading-relaxed">
+                开启后，一天中会在<strong className="font-bold text-ink">随机时间</strong>
+                于屏幕右下角弹一条小窗，3 秒后自动消失。你正在使用本应用时不会弹 ——
+                那时候没必要再提醒一次。
+              </p>
+            </div>
+            <label className="flex shrink-0 cursor-pointer items-center gap-2.5">
+              <input
+                type="checkbox"
+                className="size-4 accent-ink"
+                checked={settings.desktopReminderEnabled}
+                aria-label="开启桌面提醒"
+                onChange={(event) => update({ desktopReminderEnabled: event.target.checked })}
+              />
+              <span className="text-body text-ink">
+                {settings.desktopReminderEnabled ? '已开启' : '已关闭'}
+              </span>
+            </label>
+          </div>
+
+          {settings.desktopReminderEnabled && (
+            <div className="mt-5 space-y-4 border-t border-line-soft pt-4">
+              <div className="flex flex-wrap items-end gap-6">
+                <div>
+                  <label className="label" htmlFor="desktop-from">
+                    活跃时段
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="desktop-from"
+                      type="time"
+                      className="input w-28 py-1 text-small"
+                      value={settings.desktopReminderFrom}
+                      onChange={(event) => update({ desktopReminderFrom: event.target.value })}
+                    />
+                    <span className="text-small text-ink-faint">至</span>
+                    <input
+                      type="time"
+                      className="input w-28 py-1 text-small"
+                      aria-label="活跃时段结束"
+                      value={settings.desktopReminderTo}
+                      onChange={(event) => update({ desktopReminderTo: event.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <span className="label">每天最多</span>
+                  <div className="flex flex-wrap gap-2">
+                    {[2, 3, 4, 6].map((count) => (
+                      <button
+                        key={count}
+                        type="button"
+                        className={
+                          settings.desktopReminderMaxPerDay === count
+                            ? 'btn bg-ink text-ink-inverse btn-sm'
+                            : 'btn btn-ghost btn-sm'
+                        }
+                        onClick={() => update({ desktopReminderMaxPerDay: count })}
+                      >
+                        {count} 条
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-4">
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => {
+                    void desktop.fireNow().then((shown) => {
+                      setNotice(
+                        shown
+                          ? '已弹出，看屏幕右下角'
+                          : '没弹出 —— 本应用正在前台，或当前不在桌面端',
+                      )
+                    })
+                  }}
+                >
+                  立刻试一条
+                </button>
+                <span className="hint">
+                  {desktop.firedToday >= (settings.desktopReminderMaxPerDay ?? 4)
+                    ? '今天已经弹满了，明天继续'
+                    : desktop.nextAt
+                      ? `下一条大约在 ${dayjs(desktop.nextAt).format('HH:mm')} 前后`
+                      : '今天不在活跃时段内'}
+                  {' · 今天已弹 '}
+                  {desktop.firedToday} 条
+                </span>
+              </div>
+            </div>
+          )}
+        </section>
+
+        <section className="card">
+          <h2 className="section-title">每日固定提醒</h2>
           <p className="muted mt-2">
-            到点提醒你今天的学习任务。系统通知需要授权，且只在页面打开时有效。
+            固定时刻在应用内弹一条横幅。与上面的桌面提醒相互独立，可以只开其中一个。
           </p>
 
           <label className="mt-4 flex cursor-pointer items-center gap-2.5">

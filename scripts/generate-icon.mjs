@@ -12,6 +12,7 @@
  * 产物：
  *   assets/icon.ico   多尺寸（16/24/32/48/64/128/256），给 Windows 与 electron-builder
  *   assets/icon.png   512px，给非 Windows 平台与一般用途
+ *   assets/tray.png   32px，给 Windows 托盘（托盘按 16px 显示，32px 供高 DPI 缩放）
  *   public/icon.svg   矢量版，给网页 favicon（任意缩放下都锐利）
  */
 import { mkdirSync, writeFileSync } from 'node:fs'
@@ -252,6 +253,11 @@ writeFileSync(path.join(ROOT, 'assets', 'icon.ico'), ico)
 const large = encodePng(512, render(512))
 writeFileSync(path.join(ROOT, 'assets', 'icon.png'), large)
 
+// 托盘图标。Windows 托盘按 16px 显示，32px 是高 DPI 下的两倍图；
+// 给它一个独立的 32px 文件，比让系统从 256px 缩下去清晰得多。
+const tray = encodePng(32, render(32))
+writeFileSync(path.join(ROOT, 'assets', 'tray.png'), tray)
+
 const svg = buildSvg()
 writeFileSync(path.join(ROOT, 'public', 'icon.svg'), svg)
 
@@ -260,4 +266,5 @@ console.log(
   `  assets/icon.ico   ${(ico.length / 1024).toFixed(1)} KB   尺寸 ${ICO_SIZES.join(' / ')}`,
 )
 console.log(`  assets/icon.png   ${(large.length / 1024).toFixed(1)} KB   512×512`)
+console.log(`  assets/tray.png   ${(tray.length / 1024).toFixed(1)} KB   32×32`)
 console.log(`  public/icon.svg   ${(Buffer.byteLength(svg) / 1024).toFixed(1)} KB   矢量`)

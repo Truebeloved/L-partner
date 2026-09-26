@@ -67,7 +67,8 @@
       "dist/**/*",
       "electron/**/*",
       "package.json",
-      "assets/icon.ico"
+      "assets/icon.ico",
+      "assets/tray.png"
     ],
     "win": {
       "icon": "assets/icon.ico",

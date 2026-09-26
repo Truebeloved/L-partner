@@ -2,7 +2,8 @@ import { useCallback } from 'react'
 import type { ReactNode } from 'react'
 
 import { ReminderBanner } from '@/features/reminder/components/ReminderBanner'
-import { ReminderContext } from '@/features/reminder/context'
+import { DesktopReminderContext, ReminderContext } from '@/features/reminder/context'
+import { useDesktopReminder } from '@/features/reminder/useDesktopReminder'
 import { useReminderScheduler } from '@/features/reminder/useReminderScheduler'
 import { todayKey } from '@/lib/date'
 import { useTodoStore } from '@/store/todos'
@@ -14,6 +15,10 @@ import type { ReminderKind } from '@/types/models'
  * 它挂在应用外壳上而不是某个页面里 —— 提醒是「到点就该响」的能力，
  * 不该因为用户此刻正在课程页或对话页就失效。
  * 横幅用固定定位渲染成浮层，所以不会挤动任何页面的布局。
+ *
+ * 这里同时托管**两套提醒**，它们的开关与可达范围都不同：
+ * - useReminderScheduler：每日固定时刻的页面内横幅，只在应用开着时看得到
+ * - useDesktopReminder：一天内随机时刻的桌面小窗，应用收进托盘后照样会弹
  */
 export function ReminderProvider({ children }: { children: ReactNode }) {
   /**
@@ -37,19 +42,20 @@ export function ReminderProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const scheduler = useReminderScheduler({ buildMessage })
+  const desktop = useDesktopReminder()
 
   return (
-    <ReminderContext.Provider value={scheduler}>
-      {children}
-      {scheduler.activeReminder && (
-        <div className="pointer-events-none fixed inset-x-0 top-4 z-40 flex justify-center px-4">
-          {/* 原来套的是一层 Tailwind 内置投影档位，而设计系统只留 shadow-lift / shadow-pop。
-              提醒是浮层，用 shadow-pop。阴影施加在横幅自身即可，不必套一层代理元素 */}
-          <div className="pointer-events-auto w-full max-w-lg">
-            <ReminderBanner reminder={scheduler.activeReminder} onDismiss={scheduler.dismiss} />
+    <DesktopReminderContext.Provider value={desktop}>
+      <ReminderContext.Provider value={scheduler}>
+        {children}
+        {scheduler.activeReminder && (
+          <div className="pointer-events-none fixed inset-x-0 top-4 z-40 flex justify-center px-4">
+            <div className="pointer-events-auto w-full max-w-lg">
+              <ReminderBanner reminder={scheduler.activeReminder} onDismiss={scheduler.dismiss} />
+            </div>
           </div>
-        </div>
-      )}
-    </ReminderContext.Provider>
+        )}
+      </ReminderContext.Provider>
+    </DesktopReminderContext.Provider>
   )
 }

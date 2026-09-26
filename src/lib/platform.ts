@@ -16,9 +16,15 @@ export interface AppInfo {
   platform: string
 }
 
+export interface ToastPayload {
+  title: string
+  body: string
+}
+
 interface LpartnerBridge {
   isDesktop?: boolean
   getAppInfo: () => Promise<AppInfo>
+  showToast: (payload: ToastPayload) => Promise<boolean>
 }
 
 declare global {
@@ -44,5 +50,22 @@ export async function getAppInfo(): Promise<AppInfo | null> {
   } catch (error) {
     console.warn('[L-partner] 读取本机信息失败：', error)
     return null
+  }
+}
+
+/**
+ * 请求主进程弹一条桌面提醒小窗。
+ *
+ * 返回是否真的弹了：主窗口在前台时主进程会拒绝（用户正看着应用，不必再弹窗）。
+ * 浏览器里没有这个能力，返回 false 而不是抛错 —— 网页版少一个桌面提醒而已，
+ * 不该让整条提醒链路崩掉。
+ */
+export async function showDesktopToast(payload: ToastPayload): Promise<boolean> {
+  if (typeof window === 'undefined' || !window.lpartner?.showToast) return false
+  try {
+    return await window.lpartner.showToast(payload)
+  } catch (error) {
+    console.warn('[L-partner] 弹出桌面提醒失败：', error)
+    return false
   }
 }

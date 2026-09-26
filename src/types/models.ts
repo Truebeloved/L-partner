@@ -268,9 +268,23 @@ export interface AppSettings {
   llm: LlmSettings
   /** 当前使用的角色 */
   activePersonaId: Id
+  /** 每日固定时刻的页面内提醒（只在应用打开时可见） */
   reminderEnabled: boolean
-  /** 每日固定提醒时刻 */
   dailyReminderTime: TimeKey
+  /**
+   * 桌面提醒：一天中在**随机时间**于屏幕右下角弹一条小窗，3 秒后自动消失。
+   *
+   * 与 reminderEnabled 是两件事，刻意分开：
+   * - 那个是「固定时刻 + 页面内横幅」，只在应用开着时看得到
+   * - 这个是「随机时刻 + 系统级小窗」，应用收进托盘后照样会弹 ——
+   *   它才是真正能把人叫回来的那条通道
+   */
+  desktopReminderEnabled: boolean
+  /** 只在活跃时段内弹，之外不打扰 */
+  desktopReminderFrom: TimeKey
+  desktopReminderTo: TimeKey
+  /** 一天最多弹几条。没有上限的提醒会变成骚扰 */
+  desktopReminderMaxPerDay: number
   /** 是否在生成记忆前征求确认（控制 token 消耗） */
   autoExtractMemory: boolean
 }

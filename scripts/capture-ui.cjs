@@ -273,6 +273,36 @@ app.whenReady().then(async () => {
     console.warn('  ⚠ 没找到「记忆」标签，跳过该截图')
   }
 
+  /*
+   * 提醒小窗：必须用一个与真实窗口同尺寸的小窗口来拍。
+   * 主窗口是 1440×900，拿它渲染 /toast 只会得到一张铺满屏幕的卡片，
+   * 完全看不出小窗实际长什么样。尺寸与 electron/main.cjs 的
+   * TOAST_WIDTH / TOAST_HEIGHT 保持一致。
+   */
+  const toast = new BrowserWindow({
+    width: 372,
+    height: 136,
+    show: true,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    webPreferences: {
+      preload: path.join(__dirname, '..', 'electron', 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      backgroundThrottling: false,
+    },
+  })
+  const toastQuery = new URLSearchParams({
+    title: '休伯利安，今天学点什么？',
+    body: '书架上的课还在等你翻',
+  }).toString()
+  await toast.loadURL(`${BASE_URL}/#/toast?${toastQuery}`)
+  // 进场动画 200ms，留足时间让它停稳
+  await sleep(600)
+  await capture(toast, '9-toast')
+  toast.destroy()
+
   console.log(`\n已输出到 ${OUT_DIR}`)
   app.quit()
 })

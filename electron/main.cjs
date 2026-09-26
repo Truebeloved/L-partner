@@ -2,20 +2,48 @@
 //
 // 用 .cjs 后缀是刻意的：package.json 里是 "type": "module"，
 // 而 Electron 的 preload 脚本在沙箱下仍需 CommonJS，统一用 .cjs 最省心。
-const { app, BrowserWindow, ipcMain, screen, shell } = require('electron')
+const { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, screen, shell } = require('electron')
 const os = require('node:os')
 const path = require('node:path')
 
 /**
- * 开发时由 npm run electron:dev 传入 Vite 的地址（有 HMR，改代码立即生效）；
+ * 开发时由 npm run dev:desktop 传入 Vite 的地址（有 HMR，改代码立即生效）；
  * 打包后没有这个变量，直接读构建产物 dist/index.html。
  *
  * 注意 dist 用相对路径引资源、路由用 HashRouter —— 这两点正是 file:// 协议需要的，
  * 所以同一份构建产物既能被 Electron 加载，也不需要为桌面端另做一套配置。
  */
 const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL || ''
+const ROOT = path.join(__dirname, '..')
 
 app.setName('L-partner')
+
+/* ---------------------------------------------------------------------------
+   单实例锁
+   没有它的话，用户双击桌面图标会再开一个完整实例：两份进程、两个托盘图标、
+   两套提醒定时器，而且第二次打开还会重播一遍开屏。
+   拿到锁的实例负责把已有窗口唤到前台。
+--------------------------------------------------------------------------- */
+
+if (!app.requestSingleInstanceLock()) {
+  // 已经有实例在跑：这次启动直接退出，由那个实例把窗口唤出来
+  app.quit()
+} else {
+  start()
+}
+
+/* ---------------------------------------------------------------------------
+   窗口
+--------------------------------------------------------------------------- */
+
+let mainWindow = null
+let tray = null
+let toastWindow = null
+let toastTimer = null
+/** 记下弹出时刻，用来在日志里核对"是否真的只停留了 3 秒" */
+let toastShownAt = null
+/** 区分「关窗收进托盘」与「真的退出」——只有后者才允许窗口关闭 */
+let isQuitting = false
 
 /** 期望的窗口尺寸；实际取值会被工作区尺寸夹住，见 resolveWindowSize */
 const PREFERRED_WIDTH = 1280
@@ -32,11 +60,6 @@ const MIN_HEIGHT = 540
 /** 四周留出的空隙，避免窗口紧贴屏幕边缘 */
 const SCREEN_MARGIN = 80
 
-/**
- * 按当前显示器的工作区算窗口尺寸。
- * 不做这一步的话，在一台 1366×768 的机器上会创建 1280×820 的窗口 ——
- * 比工作区还高，底部被任务栏压住，而 Windows 不会替你把它缩回来。
- */
 function resolveWindowSize() {
   const { workAreaSize } = screen.getPrimaryDisplay()
   return {
@@ -47,7 +70,11 @@ function resolveWindowSize() {
   }
 }
 
-function createWindow() {
+function preloadPath() {
+  return path.join(__dirname, 'preload.cjs')
+}
+
+function createMainWindow() {
   const { width, height, minWidth, minHeight } = resolveWindowSize()
 
   const window = new BrowserWindow({
@@ -60,19 +87,24 @@ function createWindow() {
      * 只有显式设置窗口图标，任务栏与 Alt+Tab 才会显示我们自己的 L。
      * 打包后 exe 的图标由 electron-builder 按 package.json 的 build.win.icon 写入。
      */
-    icon: path.join(__dirname, '..', 'assets', 'icon.ico'),
+    icon: path.join(ROOT, 'assets', 'icon.ico'),
     // 先不显示，等页面渲染好再显示，避免出现「先白屏再出内容」的闪烁
     show: false,
     // 与开屏底色一致，首帧才不会闪一下别的颜色。
-    // 这里是开屏径向渐变的中段值 —— 开屏改成纯黑之后它也得跟着改，
-    // 否则会在启动瞬间闪出一层蓝黑（原来是 #0b1020）。
     backgroundColor: '#141414',
     autoHideMenuBar: true,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs'),
+      preload: preloadPath(),
       // 安全基线：渲染进程拿不到 Node，所有系统能力都经 IPC 显式暴露
       contextIsolation: true,
       nodeIntegration: false,
+      /*
+       * 关掉后台节流。
+       * 窗口收进托盘之后，Chromium 默认会把隐藏窗口的定时器压到最低频率 ——
+       * 而「一天内随机时间弹提醒」恰恰要在隐藏状态下准时触发。
+       * 不关掉它，提醒会迟到甚至直接不响。
+       */
+      backgroundThrottling: false,
     },
   })
 
@@ -80,10 +112,19 @@ function createWindow() {
   window.center()
   window.once('ready-to-show', () => window.show())
 
+  window.on('close', (event) => {
+    // 关窗 = 收进托盘，应用继续跑（提醒需要它活着）。
+    // 只有从托盘菜单退出时才真正关闭。
+    if (isQuitting) return
+    event.preventDefault()
+    window.hide()
+    showTrayHintOnce()
+  })
+
   if (DEV_SERVER_URL) {
     window.loadURL(DEV_SERVER_URL)
   } else {
-    window.loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
+    window.loadFile(path.join(ROOT, 'dist', 'index.html'))
   }
 
   // 外部链接交给系统浏览器，不要在应用窗口里跳走 —— 那样用户会「回不来」
@@ -95,6 +136,180 @@ function createWindow() {
   return window
 }
 
+/** 把主窗口唤到前台：切到后台过就先还原，再显示、聚焦 */
+function showMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    mainWindow = createMainWindow()
+    return
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+}
+
+/* ---------------------------------------------------------------------------
+   托盘
+   关窗之后应用还活着，就必须给用户一个看得见、能退出的入口 ——
+   否则它就成了一个藏在后台、只能靠任务管理器结束的幽灵进程。
+--------------------------------------------------------------------------- */
+
+let trayHintShown = false
+
+function createTray() {
+  const icon = nativeImage.createFromPath(path.join(ROOT, 'assets', 'tray.png'))
+  tray = new Tray(icon)
+  tray.setToolTip('L-partner · 在后台继续提醒')
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: '打开 L-partner', click: showMainWindow },
+      { type: 'separator' },
+      {
+        label: '退出',
+        click: () => {
+          isQuitting = true
+          app.quit()
+        },
+      },
+    ]),
+  )
+  // Windows 上左键单击托盘图标的常规交互就是唤出主界面
+  tray.on('click', showMainWindow)
+}
+
+/** 第一次收进托盘时说明一次，否则用户会以为"关不掉" */
+function showTrayHintOnce() {
+  if (trayHintShown || !tray) return
+  trayHintShown = true
+  try {
+    tray.displayBalloon({
+      title: 'L-partner 仍在后台运行',
+      content: '这样才能按时提醒你学习。右键托盘图标可以退出。',
+    })
+  } catch {
+    // Windows 11 起气泡通知被系统 toast 取代，可能不显示 —— 无害，忽略
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   桌面小窗提醒
+--------------------------------------------------------------------------- */
+
+/** 窗口比卡片略大一圈，多出来的边距是留给 CSS 阴影的（透明窗口里阴影不会被裁掉） */
+const TOAST_WIDTH = 372
+const TOAST_HEIGHT = 136
+/** 停留时长：用户要求 3 秒后自动关闭 */
+const TOAST_DURATION = 3000
+const TOAST_MARGIN = 18
+
+function closeToast() {
+  if (toastTimer) {
+    clearTimeout(toastTimer)
+    toastTimer = null
+  }
+  if (toastWindow && !toastWindow.isDestroyed()) {
+    toastWindow.destroy()
+  }
+  if (toastShownAt !== null) {
+    // 打出实际停留时长，方便核对"是不是真的 3 秒"
+    console.log(`[toast] 已关闭，停留 ${Date.now() - toastShownAt}ms`)
+    toastShownAt = null
+  }
+  toastWindow = null
+}
+
+/**
+ * 在右下角弹一条小窗，3 秒后自动关闭。
+ *
+ * 返回是否真的弹了 —— 主窗口在前台时不弹：
+ * 用户正看着应用，再弹一个系统小窗只是打扰。
+ * `force` 只为开发期的演示开关准备，正常调用永远不该传。
+ */
+function showToast(payload, { force = false } = {}) {
+  if (!force && mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused()) {
+    // 拒绝也要留痕：静默跳过会让"提醒没弹"变成一个查不出原因的现象
+    console.log('[toast] 跳过：主窗口正在前台')
+    return false
+  }
+
+  const { workArea } = screen.getPrimaryDisplay()
+  const x = workArea.x + workArea.width - TOAST_WIDTH - TOAST_MARGIN
+  const y = workArea.y + workArea.height - TOAST_HEIGHT - TOAST_MARGIN
+
+  // 上一条还没消失就来了新的：直接换掉，避免两条叠在一起
+  closeToast()
+
+  const window = new BrowserWindow({
+    width: TOAST_WIDTH,
+    height: TOAST_HEIGHT,
+    x,
+    y,
+    // 无边框 + 透明：圆角和阴影都要靠页面自己画，窗口本身必须能透出去
+    frame: false,
+    transparent: true,
+    hasShadow: false,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    // 不进任务栏、不进 Alt+Tab —— 它是一条提示，不是一个窗口
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    /*
+     * 不可获得焦点：用户可能正在别处打字，一条提醒弹出来把焦点抢走是灾难性的。
+     * 配合 showInactive() 一起用，才能做到"看得见但不打扰"。
+     */
+    focusable: false,
+    show: false,
+    webPreferences: {
+      preload: preloadPath(),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  })
+
+  const query = new URLSearchParams({
+    title: String(payload?.title ?? ''),
+    body: String(payload?.body ?? ''),
+  }).toString()
+
+  if (DEV_SERVER_URL) {
+    window.loadURL(`${DEV_SERVER_URL}/#/toast?${query}`)
+  } else {
+    window.loadFile(path.join(ROOT, 'dist', 'index.html'), { hash: `/toast?${query}` })
+  }
+
+  window.once('ready-to-show', () => {
+    if (window.isDestroyed()) return
+    // showInactive：显示但不抢焦点
+    window.showInactive()
+    toastShownAt = Date.now()
+    console.log(
+      `[toast] 弹出于 ${x},${y}（${TOAST_WIDTH}×${TOAST_HEIGHT}）· ${payload?.title ?? ''}`,
+    )
+    // 3 秒计时从"真正显示出来"开始，否则加载耗时会把停留时间吃掉
+    toastTimer = setTimeout(closeToast, TOAST_DURATION)
+  })
+
+  // 保险：万一 ready-to-show 没触发（透明窗口偶发），也不能让它永远不显示或永远不关
+  setTimeout(() => {
+    if (window.isDestroyed() || toastTimer) return
+    window.showInactive()
+    toastTimer = setTimeout(closeToast, TOAST_DURATION)
+  }, 2000)
+
+  toastWindow = window
+  window.on('closed', () => {
+    if (toastWindow === window) toastWindow = null
+  })
+
+  return true
+}
+
+/* ---------------------------------------------------------------------------
+   IPC
+--------------------------------------------------------------------------- */
+
 /**
  * 开屏要用的本机信息。
  * 渲染进程在沙箱里拿不到 os 模块，所以必须由主进程取好再经 IPC 送过去。
@@ -105,16 +320,60 @@ ipcMain.handle('app:info', () => ({
   platform: process.platform,
 }))
 
-app.whenReady().then(() => {
-  createWindow()
+ipcMain.handle('reminder:toast', (_event, payload) => showToast(payload))
 
-  app.on('activate', () => {
-    // macOS 上点 Dock 图标且没有窗口时重新开一个
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+/* ---------------------------------------------------------------------------
+   启动
+--------------------------------------------------------------------------- */
+
+function start() {
+  // 第二个实例被启动时，把已有窗口唤到前台 —— 而不是开一个新的
+  app.on('second-instance', () => {
+    showMainWindow()
   })
-})
 
-app.on('window-all-closed', () => {
-  // macOS 的惯例是关掉窗口后应用仍留在 Dock 里
-  if (process.platform !== 'darwin') app.quit()
-})
+  app.on('before-quit', () => {
+    // 标记之后，窗口的 close 处理器才会放行
+    isQuitting = true
+  })
+
+  app.whenReady().then(() => {
+    mainWindow = createMainWindow()
+    createTray()
+
+    /*
+     * 开发期的演示开关：LPARTNER_DEMO_TOAST=1 时，启动 6 秒后自动弹一条。
+     *
+     * 存在的理由是"提醒"这件事没法靠单测证明 —— 窗口位置、是否真的不抢焦点、
+     * 3 秒后是否真的关掉，都只有在真实运行时才看得出来。
+     * 没有这个开关，就只能靠手动点设置页的按钮，而那无法自动化验证。
+     */
+    if (DEV_SERVER_URL && process.env.LPARTNER_DEMO_TOAST === '1') {
+      setTimeout(() => {
+        // force：演示的目的就是看这个窗口长什么样，所以绕过前台检查。
+        // 正常路径永远不会走到这里（提醒由渲染层按"不在前台才弹"的规则触发）
+        showToast(
+          {
+            title: '休伯利安，今天学点什么？',
+            body: '演示提醒：3 秒后自动消失',
+          },
+          { force: true },
+        )
+      }, 6000)
+    }
+
+    app.on('activate', () => {
+      // macOS 上点 Dock 图标时把窗口唤回来
+      showMainWindow()
+    })
+  })
+
+  app.on('window-all-closed', () => {
+    /*
+     * 刻意什么都不做：关掉窗口只是收进托盘。
+     * 应用必须继续活着，否则「一天内随机时间弹提醒」根本无从谈起 ——
+     * 提醒依赖进程在跑，这也正是"关窗 ≠ 退出"的原因。
+     * 真正的退出入口在托盘右键菜单。
+     */
+  })
+}

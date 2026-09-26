@@ -7,6 +7,7 @@ import { CompanionPage } from '@/features/companion/CompanionPage'
 import { CourseStudyPage } from '@/features/course/CourseStudyPage'
 import { CoursesRoute } from '@/features/course/CoursesRoute'
 import { SettingsPage } from '@/features/settings/SettingsPage'
+import { ToastView } from '@/features/reminder/components/ToastView'
 import { ShelfPage } from '@/features/shelf/ShelfPage'
 import { SplashScreen } from '@/features/splash/SplashScreen'
 import { TodayPage } from '@/features/today/TodayPage'
@@ -25,8 +26,14 @@ import { getAppInfo } from '@/lib/platform'
 /** 浏览器调试时的开屏称呼兜底 —— 网页拿不到计算机名 */
 const FALLBACK_NAME = '同学'
 
-/** 测试环境下不播开屏，否则每个路由测试都要先等 4 秒动画 */
-const SPLASH_ENABLED = import.meta.env.MODE !== 'test'
+/**
+ * 提醒小窗走的是同一份产物，但它是一个 3 秒就消失的表面：
+ * 既不该播开屏（那 3 秒就全被开场动画占了），也不该加载应用外壳。
+ */
+const IS_TOAST_WINDOW = window.location.hash.startsWith('#/toast')
+
+/** 测试环境不播开屏，否则每个路由测试都要先等 4 秒动画 */
+const SPLASH_ENABLED = import.meta.env.MODE !== 'test' && !IS_TOAST_WINDOW
 
 export default function App() {
   const [splashDone, setSplashDone] = useState(!SPLASH_ENABLED)
@@ -63,6 +70,12 @@ export default function App() {
 
       <HashRouter>
         <Routes>
+          {/*
+            提醒小窗：一个独立、极小、无外壳的表面。
+            必须在 AppLayout 之外 —— 它没有侧栏、没有导航，只有一条提示。
+          */}
+          <Route path="toast" element={<ToastView />} />
+
           {/* 二级界面：全屏，不带侧栏 */}
           <Route path="courses/:courseId" element={<CourseStudyPage />} />
 

@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react'
 
+import type { DesktopReminderState } from '@/features/reminder/useDesktopReminder'
 import type { ReminderScheduler } from '@/features/reminder/useReminderScheduler'
 
 /**
@@ -16,6 +17,23 @@ export function useReminder(): ReminderScheduler {
   const value = useContext(ReminderContext)
   if (!value) {
     throw new Error('useReminder 必须在 ReminderProvider 内部使用')
+  }
+  return value
+}
+
+/**
+ * 桌面小窗提醒的状态。
+ *
+ * 与上面的 ReminderContext 分开是刻意的：那是「每日固定时刻的页面内提醒」，
+ * 这是「随机时刻的系统级小窗」。两者的开关、状态与生命周期都不一样，
+ * 合成一个 context 只会让设置页每读一个字段都要先分清是哪一种。
+ */
+export const DesktopReminderContext = createContext<DesktopReminderState | null>(null)
+
+export function useDesktopReminderState(): DesktopReminderState {
+  const value = useContext(DesktopReminderContext)
+  if (!value) {
+    throw new Error('useDesktopReminderState 必须在 ReminderProvider 内部使用')
   }
   return value
 }

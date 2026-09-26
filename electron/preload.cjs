@@ -28,4 +28,12 @@ contextBridge.exposeInMainWorld('lpartner', {
     ipcRenderer.on('toast:dismiss', listener)
     return () => ipcRenderer.removeListener('toast:dismiss', listener)
   },
+  /**
+   * 读取一个 B 站视频/合集的目录（分 P 或合集分集）。
+   *
+   * 必须放在主进程：B 站对非浏览器客户端直接返回验证码，
+   * 所以那里是用一个**隐藏的真实浏览器窗口**去加载页面再取数据。
+   * 渲染进程自己 fetch 会被跨域拦掉，也拿不到这个能力。
+   */
+  fetchBilibiliCollection: (url) => ipcRenderer.invoke('bilibili:collection', url),
 })

@@ -6,6 +6,10 @@ const { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, screen, shell } = 
 const os = require('node:os')
 const path = require('node:path')
 
+// B 站目录抓取单独成文件：它需要被单独验证（见 scripts/probe-bilibili.mjs），
+// 而 require 这个文件会启动整个应用，那样没法只测抓取那一段
+const { fetchBilibiliCollection } = require('./bilibili.cjs')
+
 /**
  * 开发时由 npm run dev:desktop 传入 Vite 的地址（有 HMR，改代码立即生效）；
  * 打包后没有这个变量，直接读构建产物 dist/index.html。
@@ -390,6 +394,13 @@ ipcMain.handle('app:info', () => ({
 }))
 
 ipcMain.handle('reminder:toast', (_event, payload) => showToast(payload))
+
+/*
+ * 读取一个 B 站视频/合集的目录。
+ * 具体实现在 electron/bilibili.cjs —— 那里用隐藏的真实浏览器窗口加载页面，
+ * 因为 B 站对非浏览器客户端直接返回验证码（详见该文件的注释）。
+ */
+ipcMain.handle('bilibili:collection', (_event, url) => fetchBilibiliCollection(url))
 
 /* ---------------------------------------------------------------------------
    启动

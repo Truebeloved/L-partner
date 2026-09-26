@@ -8,7 +8,7 @@ import type {
 import { createProvider, extractJson } from '@/lib/llm'
 import { buildCoursePlanMessages } from '@/lib/llm/prompts'
 import { LlmError } from '@/lib/llm/types'
-import { draftFromCatalog, findCatalogCourse } from '@/lib/seed/great-courses'
+import { findRecommendedCollection } from '@/lib/seed/great-courses'
 import { useSettingsStore } from '@/store/settings'
 
 /**
@@ -27,29 +27,21 @@ interface RawPlan {
 }
 
 export async function generateCoursePlan(request: AiPlanRequest): Promise<CoursePlanDraft> {
-  /*
-   * 先查"公认好课"目录，命中就**直接按它的讲次建课，一次模型调用都不发**。
-   *
-   * 这是用户明确要求的方向：C 语言学翁恺就够了，让模型再写一份自己的章节体系
-   * 既不如它好，还白白烧掉几千 token。目录命中是最理想的情况 ——
-   * 结构是验证过的、链接是能打开的、成本是零。
-   */
-  const catalog = findCatalogCourse(request.goal)
-  if (catalog) {
-    return draftFromCatalog(catalog, {
-      weeklyHours: request.weeklyHours,
-      deadline: request.deadline,
-    })
-  }
-
   const settings = useSettingsStore.getState().settings
   const { baseUrl, apiKey, model } = settings.llm
 
   if (!baseUrl.trim() || !apiKey.trim() || !model.trim()) {
+    /*
+     * 没配模型时给一句**能照做**的提示：如果这门学科有公认好课，
+     * 直接把合集链接贴进来就行 —— 那条路不需要模型，也能拿到完整课程。
+     */
+    const recommended = findRecommendedCollection(request.goal)
     throw new LlmError(
       'auth',
       '还没有配置大模型 API',
-      '到「设置 → 大模型接入」填入 API 地址、模型名称与密钥后即可使用。没有 Key 也不影响手写创建课程与排期。',
+      recommended
+        ? `想学「${recommended.title}」的话有个更省事的办法：把 ${recommended.provider} 的合集链接粘到上面的输入框里，会把整份分集目录读下来当课程，不需要模型、也不消耗 token。链接：${recommended.url}`
+        : '到「设置 → 大模型接入」填入 API 地址、模型名称与密钥后即可使用。没有 Key 也不影响手写创建课程与排期。',
     )
   }
 

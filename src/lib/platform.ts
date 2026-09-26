@@ -21,11 +21,26 @@ export interface ToastPayload {
   body: string
 }
 
+/** 主进程读回来的 B 站目录（字段与 features/course/bilibili.ts 的 BilibiliEpisode 对齐） */
+export interface BilibiliCollectionResult {
+  ok: boolean
+  title?: string
+  episodes?: {
+    title: string
+    bvid: string
+    page: number
+    seconds: number
+    section: string
+  }[]
+  error?: string
+}
+
 interface LpartnerBridge {
   isDesktop?: boolean
   getAppInfo: () => Promise<AppInfo>
   showToast: (payload: ToastPayload) => Promise<boolean>
   onToastDismiss: (callback: () => void) => () => void
+  fetchBilibiliCollection: (url: string) => Promise<BilibiliCollectionResult>
 }
 
 declare global {
@@ -83,5 +98,22 @@ export function onToastDismiss(callback: () => void): () => void {
   } catch (error) {
     console.warn('[L-partner] 订阅提醒退场失败：', error)
     return () => {}
+  }
+}
+
+/**
+ * 读取一个 B 站视频/合集的目录。
+ *
+ * 只有桌面端能做（要用主进程里的隐藏浏览器窗口去绕开 B 站对脚本请求的拦截）。
+ * 浏览器里返回一句明确的失败原因，而不是抛错 —— 调用方照常显示提示即可。
+ */
+export async function fetchBilibiliCollection(url: string): Promise<BilibiliCollectionResult> {
+  if (typeof window === 'undefined' || !window.lpartner?.fetchBilibiliCollection) {
+    return { ok: false, error: '读取 B 站目录需要桌面版应用（浏览器里做不到）。' }
+  }
+  try {
+    return await window.lpartner.fetchBilibiliCollection(url)
+  } catch (error) {
+    return { ok: false, error: `读取失败：${String(error)}` }
   }
 }

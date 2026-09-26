@@ -1,6 +1,8 @@
 import { useState } from 'react'
 
+import { draftFromCollection } from '@/features/course/bilibili'
 import type { AiPlanRequest, CoursePlanDraft } from '@/features/course/drafts'
+import { fetchBilibiliCollection } from '@/lib/platform'
 
 interface AiPlanDialogProps {
   /**
@@ -17,14 +19,15 @@ interface AiPlanDialogProps {
 /** 「让 AI 帮我生成方案」的输入弹窗（D3 路径 A：用户只说想学什么） */
 export function AiPlanDialog({ generate, onCancel, onGenerated }: AiPlanDialogProps) {
   const [goal, setGoal] = useState('')
+  const [collectionUrl, setCollectionUrl] = useState('')
   const [weeklyHours, setWeeklyHours] = useState('10')
   const [deadline, setDeadline] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   async function handleGenerate() {
-    if (!goal.trim()) {
-      setError('先说清楚你想学什么，比如「两个月上手 React」。')
+    if (!goal.trim() && !collectionUrl.trim()) {
+      setError('先说清楚你想学什么，或者直接把 B 站合集的链接贴进来。')
       return
     }
 
@@ -32,12 +35,34 @@ export function AiPlanDialog({ generate, onCancel, onGenerated }: AiPlanDialogPr
     setError(null)
     try {
       const hours = Number(weeklyHours)
-      const draft = await generate({
-        goal: goal.trim(),
+      const options = {
         weeklyHours: Number.isFinite(hours) && hours > 0 ? hours : undefined,
         deadline: deadline || undefined,
-      })
-      onGenerated(draft)
+      }
+
+      /*
+       * 给了合集链接就走"抓真实目录"这条路：**一讲就是一个单元**。
+       *
+       * 这才是内容够多的正解 —— C 语言那门课 B 站上有一百多讲，
+       * 让模型凭记忆写只写得出十几个，而目录是现成的、每一讲都有能打开的地址、
+       * 而且一次模型调用都不用发。
+       */
+      if (collectionUrl.trim()) {
+        const result = await fetchBilibiliCollection(collectionUrl.trim())
+        if (!result.ok || !result.episodes?.length) {
+          setError(result.error ?? '没有读到分集目录，换一个合集链接试试。')
+          return
+        }
+        onGenerated(
+          draftFromCollection(
+            { title: result.title ?? goal.trim(), episodes: result.episodes },
+            { goal: goal.trim(), ...options },
+          ),
+        )
+        return
+      }
+
+      onGenerated(await generate({ goal: goal.trim(), ...options }))
     } catch (cause) {
       // 失败必须让用户看见：静默失败会让人以为按钮没反应，进而反复点击
       setError(cause instanceof Error ? cause.message : '生成失败，请检查大模型配置后重试。')
@@ -54,11 +79,11 @@ export function AiPlanDialog({ generate, onCancel, onGenerated }: AiPlanDialogPr
         aria-label="让 AI 帮我生成方案"
         className="w-full max-w-md rounded-card bg-raised p-5 shadow-pop"
       >
-        <h2 className="card-title">让 AI 帮我生成方案</h2>
+        <h2 className="card-title">我想学什么</h2>
         <p className="mt-2 text-small leading-relaxed text-ink-soft">
-          说清楚目标。如果这门学科有公认最好的公开课（比如 C 语言 → 浙大翁恺），
-          会**直接按它的讲次建课并附上每一讲的链接**，不消耗任何 token；
-          没有的话再由你配置的大模型拆阶段与单元。生成结果都会先填进表单，改完再保存。
+          一句话说清目标就行。如果 B 站上有公认好的合集（比如 C 语言 → 浙大翁恺），
+          **把合集链接贴进来**，会把它的分集目录整份读下来当课程 ——
+          一讲一个单元，每讲都能直接打开，而且不消耗任何 token。
         </p>
 
         <div className="mt-4 space-y-3">
@@ -74,6 +99,21 @@ export function AiPlanDialog({ generate, onCancel, onGenerated }: AiPlanDialogPr
               placeholder="如：两个月上手 React，能自己写个小项目"
               onChange={(event) => setGoal(event.target.value)}
             />
+          </div>
+          <div>
+            <label className="label" htmlFor="ai-collection">
+              B 站合集链接（可选，推荐）
+            </label>
+            <input
+              id="ai-collection"
+              className="input"
+              value={collectionUrl}
+              placeholder="https://www.bilibili.com/video/BV… 或合集链接"
+              onChange={(event) => setCollectionUrl(event.target.value)}
+            />
+            <p className="hint mt-1">
+              填了它就会把整个合集的分集读下来当课程，一讲一个单元；不填则按目标让模型设计
+            </p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>

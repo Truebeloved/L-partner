@@ -114,7 +114,7 @@ export function CourseFormDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-ink/40 p-4 sm:p-8">
+    <div className="fixed inset-0 z-[60] overflow-y-auto bg-ink/40 p-4 sm:p-8">
       <div
         role="dialog"
         aria-modal="true"
@@ -232,7 +232,13 @@ export function CourseFormDialog({
             </button>
           </div>
 
-          <div className="mt-3 space-y-4">
+          {/*
+            阶段列表自己滚动，且**不显示滚动条**。
+            从 B 站抓下来的课可能有一百讲、十来个阶段 —— 让它把整个弹窗撑到几屏高，
+            用户就得一路滑到底才能看到「保存」，而确认按钮恰恰是这个弹窗唯一的目的。
+            现在弹窗高度固定，列表在内部滚，保存始终在视野里。
+          */}
+          <div className="no-scrollbar mt-3 max-h-[46vh] space-y-4 overflow-y-auto pr-1">
             {form.stages.map((stage, stageIndex) => (
               <div key={stageIndex} className="rounded-card border border-line-soft p-4">
                 <div className="flex flex-wrap items-end gap-3">

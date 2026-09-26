@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  draftFromCollection,
-  episodeUrl,
-  knowledgePointsFromTitle,
-  titleNumber,
-} from '@/features/course/bilibili'
+import { draftFromCollection, episodeUrl, titleNumber } from '@/features/course/bilibili'
 import type { BilibiliEpisode } from '@/features/course/bilibili'
 
 /**
@@ -31,19 +26,10 @@ describe('episodeUrl', () => {
   })
 })
 
-describe('titleNumber / knowledgePointsFromTitle', () => {
-  it('取出教材自己的编号路径', () => {
+describe('titleNumber', () => {
+  it('取出教材自己的编号路径（只用来分章）', () => {
     expect(titleNumber('1.2.3 编程软件：C语言的编程软件选择太多')).toEqual(['1', '2', '3'])
     expect(titleNumber('第 3 讲 数组')).toBeNull()
-  })
-
-  it('知识点剥掉编号、按标点切开、最多三条', () => {
-    expect(knowledgePointsFromTitle('1.1.1 计算机与编程语言：计算机怎么做事情的')).toEqual([
-      '计算机与编程语言',
-      '计算机怎么做事情的',
-    ])
-    expect(knowledgePointsFromTitle('第 3 讲 数组')).toEqual(['数组'])
-    expect(knowledgePointsFromTitle('   ')).toEqual([])
   })
 })
 
@@ -104,6 +90,14 @@ describe('draftFromCollection', () => {
     expect(draft.stages).toHaveLength(3)
     expect(draft.stages[0]?.title).toBe('第 1~10 讲')
     expect(draft.stages[2]?.units).toHaveLength(5)
+  })
+
+  it('视频导入的章节**不带知识点标签** —— 从标题猜出来的标签内容是错的', () => {
+    const draft = draftFromCollection({ title: 'C 语言程序设计', episodes: hundredEpisodes() })
+    const units = draft.stages.flatMap((stage) => stage.units)
+    for (const unit of units) {
+      expect(unit.knowledgePoints).toEqual([])
+    }
   })
 
   it('时长来自视频本身，并夹在合理区间里', () => {

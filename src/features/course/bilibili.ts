@@ -38,6 +38,11 @@ const MAX_MINUTES = 180
 /** 没有分区信息时，每多少讲归一个阶段 */
 const FALLBACK_GROUP_SIZE = 10
 
+function minutesFromSeconds(seconds: number): number {
+  if (!Number.isFinite(seconds) || seconds <= 0) return 60
+  return Math.min(MAX_MINUTES, Math.max(MIN_MINUTES, Math.round(seconds / 60)))
+}
+
 /** 一集的观看地址：多 P 用 ?p=N，合集里每集是自己的 BV 号 */
 export function episodeUrl(episode: BilibiliEpisode): string {
   const base = `https://www.bilibili.com/video/${episode.bvid}`
@@ -45,30 +50,13 @@ export function episodeUrl(episode: BilibiliEpisode): string {
 }
 
 /**
- * 从标题里取知识点。
- *
- * 目录标题通常写成「1.1 变量与数据类型」或「第 3 讲 表达式」这种，
- * 直接整句当知识点太长（掌握状态面板里会被截断），所以剥掉序号再切一刀。
+ * 从标题里取出教材自己的编号路径；没有编号返回 null。
+ * 只用它来**分章**，不用来猜知识点（见 buildStage 的说明）。
  */
-export function knowledgePointsFromTitle(title: string): string[] {
-  const cleaned = title
-    .replace(/^\s*[（(【[]?\d+(\.\d+)*[）)】\]]?\s*/, '')
-    .replace(/^\s*第\s*\d+\s*[讲课章节集]\s*/, '')
-    .replace(/[|｜]/g, ' ')
-    .trim()
-
-  const parts = cleaned
-    .split(/[\s，,、；;：:]+/)
-    .map((part) => part.trim())
-    .filter((part) => part.length >= 2)
-
-  if (parts.length === 0) return cleaned ? [cleaned] : []
-  return parts.slice(0, 3)
-}
-
-function minutesFromSeconds(seconds: number): number {
-  if (!Number.isFinite(seconds) || seconds <= 0) return 60
-  return Math.min(MAX_MINUTES, Math.max(MIN_MINUTES, Math.round(seconds / 60)))
+export function titleNumber(title: string): string[] | null {
+  const matched = /^\s*(\d+(?:\.\d+)*)/.exec(title)
+  if (!matched) return null
+  return matched[1]!.split('.')
 }
 
 /**
@@ -95,13 +83,6 @@ export function draftFromCollection(
     weeklyMinutes: options.weeklyHours ? options.weeklyHours * 60 : undefined,
     stages,
   }
-}
-
-/** 从「1.2.3 简单历史」里取出编号路径；没有编号返回 null */
-export function titleNumber(title: string): string[] | null {
-  const matched = /^\s*(\d+(?:\.\d+)*)/.exec(title)
-  if (!matched) return null
-  return matched[1]!.split('.')
 }
 
 function groupIntoStages(episodes: BilibiliEpisode[]): StageDraft[] {
@@ -165,7 +146,15 @@ function groupByNumberDepth(
 function buildStage(title: string, episodes: BilibiliEpisode[]): StageDraft {
   const units: UnitDraft[] = episodes.map((episode) => ({
     title: episode.title || '未命名的一讲',
-    knowledgePoints: knowledgePointsFromTitle(episode.title),
+    /*
+     * 知识点**留空**。
+     *
+     * 一开始我从标题里切词当知识点，结果那一排圆角标签既不是知识点也不像摘要 ——
+     * 标题本身是"1.1.1 计算机与编程语言：计算机怎么做事情的"，切出来的东西毫无意义。
+     * 用户的判断是对的：宁可不显示，也不要显示错的。视频课的知识点该由视频内容决定，
+     * 不该从标题猜；以后要让 AI 总结，也得是**看过内容之后**再总结。
+     */
+    knowledgePoints: [],
     estimatedMinutes: minutesFromSeconds(episode.seconds),
     resourceUrl: episodeUrl(episode),
     resourceLabel: `B 站原视频 · ${episode.title}`.slice(0, 60),

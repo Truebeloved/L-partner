@@ -5,7 +5,7 @@ import { useDesktopReminderState } from '@/features/reminder/context'
 import { LlmSettingsCard } from '@/features/settings/components/LlmSettingsCard'
 import { SettingRow } from '@/features/settings/components/SettingRow'
 import { Toggle } from '@/features/settings/components/Toggle'
-import { dayjs, todayKey } from '@/lib/date'
+import { todayKey } from '@/lib/date'
 import { BUILTIN_PERSONAS } from '@/lib/seed/personas'
 import { useChatStore } from '@/store/chat'
 import { useCourseStore } from '@/store/courses'
@@ -82,7 +82,6 @@ export function SettingsPage() {
         <section className="card">
           <SettingRow
             title="桌面提醒"
-            hint="随机时间弹一条，3 秒消失"
             control={
               <Toggle
                 checked={settings.desktopReminderEnabled}
@@ -145,14 +144,6 @@ export function SettingsPage() {
                 >
                   试一条
                 </button>
-                <span className="hint tabular">
-                  {desktop.firedToday >= maxPerDay
-                    ? '今天已弹满'
-                    : desktop.nextAt
-                      ? `下一条约 ${dayjs(desktop.nextAt).format('HH:mm')}`
-                      : '已过活跃时段'}
-                  {` · 今天 ${desktop.firedToday} 条`}
-                </span>
               </div>
             </div>
           )}
@@ -161,7 +152,6 @@ export function SettingsPage() {
         <section className="card">
           <SettingRow
             title="每日固定提醒"
-            hint="固定时刻在应用内提醒一次"
             control={
               <Toggle
                 checked={settings.reminderEnabled}

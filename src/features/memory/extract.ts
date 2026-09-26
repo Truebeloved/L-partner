@@ -1,9 +1,16 @@
-import { matchTodoToCourse, normalizeForMatch, resolveWhen, weekStartOf } from '@/features/today/autoTodo'
+import {
+  matchTodoToCourse,
+  mentionedCourse,
+  normalizeForMatch,
+  resolveWhen,
+  weekStartOf,
+} from '@/features/today/autoTodo'
 import { splitIntent } from '@/features/today/intent'
 import { extractJson } from '@/lib/llm'
 import { buildMemoryExtractionMessages, buildSummaryMessages } from '@/lib/llm/prompts'
 import type { LlmProvider } from '@/lib/llm/types'
 import { toDateKey } from '@/lib/date'
+import { longestCommonSubstring } from '@/lib/text'
 import { useCourseStore } from '@/store/courses'
 import { useMemoryStore } from '@/store/memory'
 import type { MemoryDraft } from '@/store/memory'
@@ -155,6 +162,24 @@ export async function extractMemories(input: {
 
   const fresh = drafts.filter((draft) => !isDuplicate(draft, existing))
   if (fresh.length > 0) useMemoryStore.getState().addMany(fresh)
+
+  /*
+   * 与已有条目"说的是同一件事但换了说法"时，不新增，而是**把那条更新掉**。
+   *
+   * 为什么必须做：模型每次都会用自己的话重述一遍（"他是计算机专业大三学生" /
+   * "他在读计算机，大三"），只按字符串相等去重的话，记忆面板很快就变成一锅粥，
+   * 而"了解你"这件事恰恰最怕被同一件事的十种说法稀释。
+   * 保留信息量更大的那一版（字数多的），并刷新时间与置信度。
+   */
+  for (const draft of drafts) {
+    const similar = findSimilar(draft, existing)
+    if (!similar) continue
+    const better = draft.content.length > similar.content.length ? draft.content : similar.content
+    useMemoryStore.getState().update(similar.id, {
+      content: better,
+      confidence: Math.max(similar.confidence, draft.confidence),
+    })
+  }
 
   /*
    * 同一次调用里顺手把「他说要做的事」落成待办 —— 这就是「全局 AI」的无感部分：
@@ -309,13 +334,19 @@ export function applyExtractedTodos(
      * 课程关联：规则先匹配。匹配不上不留空 —— 待办照常存在，
      * 只是不带课程标签；拿不准的由下一次抽取（见 buildMemoryExtractionMessages
      * 里的「待关联待办」）让模型判定。
+     *
+     * ⚠️ 兜底用"当前对话绑的课程"时有个前提：**标题没有点名别的课**。
+     * 用户在《文言文》的对话里说"学完 C 语言阶段一"，标题写着 C 语言，
+     * 却因为会话绑着文言文而被挂到文言文上 —— 那正是用户报的串课。
      */
     const link = matchTodoToCourse(item.title, courses, plans)
+    const named = mentionedCourse(courses, item.title)
+    const fallbackCourse = named && named.id !== options.courseId ? undefined : options.courseId
 
     drafts.push({
       title: item.title,
       date: item.date,
-      courseId: link?.courseId ?? options.courseId,
+      courseId: link?.courseId ?? fallbackCourse,
       unitId: link?.unitId,
       stageId: link?.stageId,
       planItemId: link?.planItemId,
@@ -402,7 +433,7 @@ function asObjectArray(value: unknown): Record<string, unknown>[] {
 }
 
 /**
- * 去重：归一化后比较。
+ * 去重：完全一样（归一化后）的直接丢掉。
  * 模型经常把同一件事换个说法再报一遍，不去重的话记忆面板很快就会变成一锅粥。
  */
 function isDuplicate(draft: MemoryDraft, existing: MemoryEntry[]): boolean {
@@ -413,6 +444,31 @@ function isDuplicate(draft: MemoryDraft, existing: MemoryEntry[]): boolean {
       return entry.knowledgePoint === draft.knowledgePoint
     }
     return normalize(entry.content) === normalized
+  })
+}
+
+/**
+ * 找出"说的是同一件事"的已有条目（换了个说法的那种）。
+ *
+ * 判据是最长公共子串占较短那条的比例 —— 中文里换个说法重述，
+ * 字面重合度通常仍然很高（"大三学生/在读大三"），而两件真正不同的事几乎不会
+ * 共享一长串连续文字。阈值 0.7：既能吃掉重述，又不会把两条独立事实并成一条。
+ */
+const SIMILAR_RATIO = 0.7
+
+function findSimilar(draft: MemoryDraft, existing: MemoryEntry[]): MemoryEntry | undefined {
+  const normalized = normalize(draft.content)
+  if (normalized.length < 6) return undefined
+
+  return existing.find((entry) => {
+    if (entry.layer !== draft.layer || entry.archived) return false
+    // 掌握状态按知识点对齐，不参与模糊合并（合并错知识点比重复更糟）
+    if (entry.layer === 'mastery') return false
+
+    const other = normalize(entry.content)
+    if (other.length === 0) return false
+    const overlap = longestCommonSubstring(normalized, other)
+    return overlap / Math.min(normalized.length, other.length) >= SIMILAR_RATIO
   })
 }
 

@@ -217,3 +217,47 @@ describe('applyTodoLinks：待办标题说了算，模型的猜测只能兜底',
     expect(useTodoStore.getState().todos[0]?.unitId).toBe('u1')
   })
 })
+
+describe('applyExtractedTodos：不用"当前对话的课程"兜底串课', () => {
+  const singleStage: Course = {
+    ...course,
+    id: 'c-c',
+    title: 'C语言基础入门',
+    stages: [
+      {
+        id: 's1',
+        title: '第 其他 章',
+        objective: '',
+        order: 0,
+        units: [
+          { id: 'u1', title: 'C语言简史', knowledgePoints: [], estimatedMinutes: 60, order: 0 },
+        ],
+      },
+    ],
+  }
+
+  beforeEach(() => {
+    useCourseStore.setState({ courses: [singleStage] })
+    usePlanStore.setState({ plans: {} })
+    useTodoStore.setState({ todos: [] })
+  })
+
+  it('标题写着 C 语言时，不该因为"正在《文言文》对话里"就挂到文言文上', () => {
+    // 序号超出范围（这门课只有一段）→ 规则匹配不到，此时最容易串到会话绑的那门课上
+    applyExtractedTodos(
+      { todos: [{ title: '学完C语言第九阶段', when: '今天' }] },
+      { courseId: '文言文课程 id', now: NOW },
+    )
+
+    expect(useTodoStore.getState().todos[0]?.courseId).toBeUndefined()
+  })
+
+  it('标题没点名课程时，"当前对话的课程"仍然是合理兜底', () => {
+    applyExtractedTodos(
+      { todos: [{ title: '把那节课补上', when: '今天' }] },
+      { courseId: 'c-c', now: NOW },
+    )
+
+    expect(useTodoStore.getState().todos[0]?.courseId).toBe('c-c')
+  })
+})

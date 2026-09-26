@@ -342,21 +342,6 @@
   animation-timing-function: var(--ease-glide);
 }
 
-/* 新页面从下方轻轻浮上来，而不是原地闪现 —— 与开屏的上浮是同一套语言 */
-@keyframes page-rise {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-::view-transition-new(page) {
-  animation-name: page-rise;
-}
 
 /* ---------------------------------------------------------------------------
    输入条的换页动画

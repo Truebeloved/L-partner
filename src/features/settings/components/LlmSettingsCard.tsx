@@ -147,8 +147,6 @@ export function LlmSettingsCard() {
           </div>
         </div>
 
-        <p className="hint mt-3">密钥已保存，不再显示。要换密钥或模型，点「修改配置」。</p>
-
         <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-line-soft pt-4">
           <button
             type="button"

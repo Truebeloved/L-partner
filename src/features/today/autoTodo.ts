@@ -307,6 +307,19 @@ function unitByOrdinal(course: Course, index: number, stageId?: Id): CourseLink 
 }
 
 /**
+ * 这句话**点名**了哪门课（可能没有）。
+ *
+ * 与 matchTodoToCourse 的分工：那个函数回答"这条待办该挂到哪"，
+ * 这个只回答"用户说的是哪门课"。创建待办时要用它挡一件事：
+ * 用户在《文言文》的对话里说"学完 C 语言阶段一"，标题明明写着 C 语言，
+ * 却因为"当前会话绑的是文言文"而被兜底挂到文言文上 —— 用户报的就是这个。
+ */
+export function mentionedCourse(course: Course[], title: string): Course | undefined {
+  const target = normalizeForMatch(title)
+  return course.find((item) => mentionsCourse(item, target))
+}
+
+/**
  * 课程名（或它的分段）出现在这句话里。
  *
  * 除了包含关系，还要认**部分提及**：课程叫「C语言基础入门」，

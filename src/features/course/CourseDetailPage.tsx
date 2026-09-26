@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
-import { PageHeader } from '@/components/PageHeader'
 import {
   deletePlanForCourse,
   generateUnitLesson,
@@ -11,7 +10,7 @@ import { ConfirmDialog } from '@/features/course/components/ConfirmDialog'
 import { CourseStructure } from '@/features/course/components/CourseStructure'
 import { PlanTimeline } from '@/features/course/components/PlanTimeline'
 import { courseTotals, unitTitleMap } from '@/features/course/drafts'
-import { formatDateHuman, formatMinutes, isOverdue } from '@/lib/date'
+import { formatDateHuman, formatMinutes } from '@/lib/date'
 import { createProvider } from '@/lib/llm'
 import { useCourseStore } from '@/store/courses'
 import { usePlanStore } from '@/store/plans'
@@ -19,11 +18,12 @@ import { useSettingsStore } from '@/store/settings'
 import { useTodoStore } from '@/store/todos'
 import type { Id } from '@/types/models'
 
-const SOURCE_LABEL = {
-  manual: '手动创建',
-  prompt: 'AI 生成',
-  file: '文件导入',
-} as const
+/*
+ * 这一页原来有一个 `SOURCE_LABEL`（手动创建 / AI 生成 / 文件导入）并把它渲染成徽章。
+ * 用户要求删掉它，理由很实在：课程现在一律由 AI 设计，"来源"既说不准也没人关心，
+ * 而"手动创建"这四个字摆在 AI 设计的课程上更是错的信息。
+ * （书架上的书脊小窗里还有同一个徽章，那一处等用户发话。）
+ */
 
 export function CourseDetailPage() {
   const { courseId } = useParams<{ courseId: string }>()
@@ -75,10 +75,17 @@ export function CourseDetailPage() {
   if (!course || !summary) {
     return (
       <>
-        <PageHeader title="课程不存在" description="它可能已经被删除，或链接来自另一个浏览器。" />
-        <button type="button" className="btn btn-secondary" onClick={() => navigate('/courses')}>
-          返回课程列表
-        </button>
+        <header className="pb-6">
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm -ml-3 mb-3"
+            onClick={() => navigate('/')}
+          >
+            ← 返回书架
+          </button>
+          <h1 className="page-title">课程不存在</h1>
+          <p className="muted mt-2">它可能已经被删除，或链接来自另一个浏览器。</p>
+        </header>
       </>
     )
   }
@@ -87,70 +94,37 @@ export function CourseDetailPage() {
 
   return (
     <>
-      <PageHeader
-        title={course.title}
-        description={course.description ?? '这门课程还没有简介'}
-        actions={
-          /*
-           * 这里**只有**「返回书架」。
-           *
-           * 「生成学习计划」这个按钮按用户要求去掉了（原来在右上角）。
-           * 排期这件事现在由学伴代劳：跟他说一句「帮我排一下这门课」，
-           * 走的是同一条 generatePlanForCourse（见 features/agent/execute.ts），
-           * 而且随时可重排、可删除 —— 比让用户自己猜该点哪个按钮更符合"它是 agent"这个定位。
-           * 「重新排期 / 重新生成计划」也早就删掉了，理由见那次提交的说明。
-           */
-          <button type="button" className="btn btn-ghost" onClick={() => navigate('/')}>
-            返回书架
-          </button>
-        }
-      />
+      {/*
+        ⚠️ 这一页**不用 PageHeader**，是为了让返回键和内容真正对齐。
+        
+        PageHeader 自带 `mx-auto max-w-3xl px-8`，而二级界面的容器是 `max-w-4xl px-6`
+        （见 CourseStudyPage）—— 两层容器的宽度和留白都不一样，于是标题比下面的卡片
+        多缩进了一大截，看着像"标题浮在中间、内容贴着左边"。用户的原话是
+        「所有课程的返回书架按键都要对齐，在左侧」。
+        
+        所以这里直接手写：返回键与标题都落在**内容容器自己的左边缘**上，
+        返回键在标题上方的左侧，全应用一致。
+      */}
+      <header className="pb-6">
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm -ml-3 mb-3"
+          onClick={() => navigate('/')}
+        >
+          ← 返回书架
+        </button>
+        <h1 className="page-title">{course.title}</h1>
+        {/* 学习目标比"简介"更值得占这一行：它是这门课存在的理由。
+            原来这两样都挤在下面那张介绍卡里，卡片按用户要求去掉了。 */}
+        {(course.goal ?? course.description) && (
+          <p className="muted mt-2">{course.goal ?? course.description}</p>
+        )}
+      </header>
 
       {/* 操作反馈是「说明」不是「错误」，所以用中性底纹 */}
       {feedback && (
         <p className="mb-4 rounded-sm bg-ink/5 px-4 py-2.5 text-body text-ink">{feedback}</p>
       )}
-
-      <section className="card mb-5">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="badge">{SOURCE_LABEL[course.source]}</span>
-          <span className="tabular text-small text-ink-soft">
-            {totals.stageCount} 阶段 · {totals.unitCount} 单元 · {totals.knowledgePointCount}{' '}
-            个知识点 · {formatMinutes(totals.totalMinutes)}
-          </span>
-        </div>
-
-        <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <dt className="text-small text-ink-soft">学习目标</dt>
-            <dd className="mt-0.5 text-body text-ink">{course.goal ?? '未填写'}</dd>
-          </div>
-          <div>
-            <dt className="text-small text-ink-soft">期望完成</dt>
-            <dd
-              className={`tabular mt-0.5 text-body ${
-                course.deadline && isOverdue(course.deadline) && summary.remainingMinutes > 0
-                  ? 'font-bold text-alert'
-                  : 'text-ink'
-              }`}
-            >
-              {course.deadline ? formatDateHuman(course.deadline) : '未设置'}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-small text-ink-soft">每周可投入</dt>
-            <dd className="tabular mt-0.5 text-body text-ink">
-              {course.weeklyMinutes ? formatMinutes(course.weeklyMinutes) : '未填写'}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-small text-ink-soft">已完成</dt>
-            <dd className="tabular mt-0.5 text-body text-ink">
-              {formatMinutes(summary.doneMinutes)} / {formatMinutes(summary.totalMinutes)}
-            </dd>
-          </div>
-        </dl>
-      </section>
 
       {/*
         教材在前，学习计划在后 —— 这是这一页的主次关系。

@@ -116,8 +116,8 @@ export function CourseDetailPage() {
         description={course.description ?? '这门课程还没有简介'}
         actions={
           <>
-            <button type="button" className="btn btn-ghost" onClick={() => navigate('/courses')}>
-              返回列表
+            <button type="button" className="btn btn-ghost" onClick={() => navigate('/')}>
+              返回书架
             </button>
             {plan && (
               <button

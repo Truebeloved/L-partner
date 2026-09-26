@@ -32,10 +32,9 @@ describe('路由冒烟', () => {
     expect((await screen.findAllByText('L-partner')).length).toBeGreaterThan(0)
   })
 
-  it('课程页可渲染', async () => {
+  it('旧的 /courses 路径重定向到书架 —— 课程总览页已经删掉', async () => {
     renderAt('#/courses')
-    // 用 heading 角色而不是文本匹配：「课程」在侧边栏和底部导航里也会出现
-    expect(await screen.findByRole('heading', { name: '课程' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '我的书架' })).toBeInTheDocument()
   })
 
   it('课程详情页在课程不存在时给出提示，而不是白屏', async () => {

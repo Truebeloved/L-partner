@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState } from 'react'
+import { useLayoutEffect, useState } from 'react'
 
 import { AssistantBar } from '@/features/assistant/AssistantBar'
 import { useAssistantDockState } from '@/features/assistant/dock'
@@ -41,11 +41,9 @@ export function AssistantDockHost() {
   const slot = useAssistantDockState()
   const [layout, setLayout] = useState<Layout | null>(null)
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const element = slot.element
     if (!element) return
-
-    let frame = 0
 
     const measure = () => {
       const rect = element.getBoundingClientRect()
@@ -68,8 +66,12 @@ export function AssistantDockHost() {
       }))
     }
 
-    // 首帧之后再量：挂载那一帧元素可能还没进布局
-    frame = window.requestAnimationFrame(measure)
+    /*
+     * 同步量一次：布局阶段 DOM 已经在位，getBoundingClientRect 能直接拿到真实矩形。
+     * 这里**不能**丢进 requestAnimationFrame —— 那样这一帧还是旧位置，
+     * 用户会看到输入条"先闪一下再跳过去"。
+     */
+    measure()
 
     /*
      * jsdom（单测环境）里没有 ResizeObserver，没有它就跳过"跟随尺寸变化"这一档能力 ——
@@ -85,7 +87,6 @@ export function AssistantDockHost() {
     window.addEventListener('scroll', measure, true)
 
     return () => {
-      window.cancelAnimationFrame(frame)
       observer?.disconnect()
       window.removeEventListener('resize', measure)
       window.removeEventListener('scroll', measure, true)
@@ -123,15 +124,19 @@ export function AssistantDockHost() {
         width: box.width,
         minHeight: box.height,
         /*
-         * view-transition-name 让换页时浏览器"认得出这是同一个元素"。
+         * view-transition-name 让换页时浏览器"认得出这是同一个元素"，
+         * 于是它能做"一级 ↔ 二级"之间的生长（左右撑开、略微变高）。
          *
-         * ⚠️ 这正是"对话框平滑变成对话区域"那段动画的来源，而且**自己写的过渡关掉也没用**：
-         * 换页时浏览器会拿旧位置与新位置各拍一张，然后自动把整条输入条（连同两个气泡）
-         * 从旧位置演到新位置 —— 自己不写一行过渡，它也会动。
-         * 所以这里必须显式关掉：见下面 html[data-dock-motion='none'] 那组规则
-         * （由 useLayoutEffect 在换页那一帧之前就把属性写上去）。
+         * ⚠️ 但**只要这次换页涉及对话页底部，就绝对不要这个名字**。
+         *
+         * 给了名字，浏览器就会拿旧位置与新位置各拍一张，然后自动把整条输入条
+         * 从页面顶部演到页面底部 —— 那正是用户反复要求删掉的"对话框平滑移动"。
+         * 之前是靠 html[data-dock-motion] 那组 CSS 去关它，实测**关不掉**
+         * （逐帧截图里能看到输入条正停在屏幕中间飞过去），所以改成从源头处理：
+         * 不给名字，它就只是一块普通内容，跟着页面一起淡入淡出，不会有位移。
+         * 一级 ↔ 二级两边都在顶部时仍然给名字，"生长"照旧。
          */
-        viewTransitionName: 'assistant-bar',
+        viewTransitionName: involvesBottom ? 'none' : 'assistant-bar',
         /*
          * 生长与位移用两套缓动：
          * - 尺寸（width / min-height）走 spring，末段有一点回弹 —— "长出来"的感觉就在这点回弹上；

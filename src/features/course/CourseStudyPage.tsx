@@ -11,7 +11,7 @@ import { useEscapeKey } from '@/lib/useEscapeKey'
  * 按约定**全屏覆盖**整个应用，连同左侧导航栏一起盖掉 ——
  * 进入课程是「翻开这本书开始读」的状态，侧栏那套索引此时是干扰。
  *
- * 返回入口只有一个（页面标题右侧的「返回列表」，由 CourseDetailPage 提供）；
+ * 返回入口只有一个（页面标题右侧的「返回书架」，由 CourseDetailPage 提供）；
  * 这里原本还有一条「← 返回书架 + 课程名」的横条，和它做的是同一件事，
  * 顺带把已经显示在下面的课程标题又抄了一遍，用户要求删掉。
  *
@@ -22,10 +22,10 @@ export function CourseStudyPage() {
   const navigate = useNavigate()
   const dockRef = useAssistantDock('top-wide')
 
-  // Esc = 返回列表，和其他桌面软件一致。
+  // Esc = 回书架，和其他桌面软件一致。
   // 用冒泡阶段：页面上的弹窗（表单、确认框）是内层，它们在捕获阶段先吃掉 Esc，
   // 于是这里不会再跟着退页（见 useEscapeKey 的说明）。
-  const goBack = useCallback(() => navigate('/courses'), [navigate])
+  const goBack = useCallback(() => navigate('/'), [navigate])
   useEscapeKey(goBack)
 
   return (
@@ -35,7 +35,7 @@ export function CourseStudyPage() {
         两处的高度不同（48 / 40），但 top 差正好补回来 —— 输入条的中轴始终在 36px 处，
         从书架点进课程时它不会上下跳，只是左右撑开、略微变高，也就是"生长"。
       */}
-      <header className="sticky top-0 z-20 border-b border-line-soft bg-surface/95 px-6 pt-3 backdrop-blur">
+      <header className="sticky top-0 z-20 bg-surface/95 px-6 pt-3 backdrop-blur">
         <div ref={dockRef} className="h-12" />
       </header>
 

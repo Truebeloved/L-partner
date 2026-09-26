@@ -8,7 +8,6 @@ import { ChatSessionProvider } from '@/features/chat/ChatSessionProvider'
 import { ChatPage } from '@/features/chat/ChatPage'
 import { CompanionPage } from '@/features/companion/CompanionPage'
 import { CourseStudyPage } from '@/features/course/CourseStudyPage'
-import { CoursesRoute } from '@/features/course/CoursesRoute'
 import { SettingsPage } from '@/features/settings/SettingsPage'
 import { ToastView } from '@/features/reminder/components/ToastView'
 import { ShelfPage } from '@/features/shelf/ShelfPage'
@@ -158,8 +157,9 @@ function AppRoutes({ splashDone }: { splashDone: boolean }) {
         <Route path="memory" element={<Navigate to="/companion" replace />} />
         <Route path="personas" element={<Navigate to="/companion" replace />} />
         <Route path="settings" element={<SettingsPage />} />
-        {/* 过渡期：添加/编辑课程的表单页，等导航栏定稿后会改成弹窗入口 */}
-        <Route path="courses" element={<CoursesRoute />} />
+        {/* 课程总览页已经删掉：书架就是课程列表，新建课程是书架上的一个按钮。
+            旧路径保留重定向，避免旧书签直接白屏 */}
+        <Route path="courses" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

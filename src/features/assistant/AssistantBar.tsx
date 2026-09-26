@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
 import { Icon } from '@/components/Icon'
@@ -218,6 +219,9 @@ export function AssistantBar({ placement }: AssistantBarProps) {
             onChange={setDraft}
             onSubmit={submit}
             onStop={session.stop}
+            /* 只有在对话页才给"切换性格"：那是整页对话的地方，
+               一级界面上那一条是随手问一句的入口，塞进一个选择器只会挤掉输入空间 */
+            personaSwitch={inputOnly ? <PersonaSwitch /> : null}
           />
         ) : (
           <>
@@ -315,6 +319,41 @@ export function AssistantBar({ placement }: AssistantBarProps) {
  * 只有它带背景 —— 长条本身要看起来"可以打字"，而气泡不需要外框。
  * 流式输出时把发送键换成「停止」，对话页尤其需要：那一页本来就有停止按钮的位置。
  */
+/**
+ * 输入框里的「切换性格」。
+ *
+ * 用户要求把它从对话页顶栏挪到输入框里 —— 对话页现在只有两样东西：
+ * 上面是对话、下面是输入框。角色是"派谁去回答"的属性，跟着输入框走最自然。
+ *
+ * 用原生 select 而不是自定义菜单：它自带键盘可达、滚动与移动端行为，
+ * 而这里只需要一个"选一个"的动作。样式上保持无底色，融进输入框那条胶囊里。
+ */
+function PersonaSwitch() {
+  const personas = usePersonaStore((state) => state.personas)
+  const activeId = useSettingsStore((state) => state.settings.activePersonaId)
+  const update = useSettingsStore((state) => state.update)
+
+  if (personas.length === 0) return null
+
+  return (
+    <label className="flex shrink-0 items-center">
+      <span className="sr-only">切换性格</span>
+      <select
+        className="max-w-28 cursor-pointer truncate rounded-pill bg-transparent py-1 pr-1 text-small text-ink-soft outline-none transition-colors duration-200 hover:text-ink"
+        value={activeId}
+        onChange={(event) => update({ activePersonaId: event.target.value })}
+        title="换一个角色来回答 —— 记忆是跨角色共享的，换了老师它依然了解你"
+      >
+        {personas.map((persona) => (
+          <option key={persona.id} value={persona.id}>
+            {persona.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
 function Composer({
   draft,
   height,
@@ -323,6 +362,7 @@ function Composer({
   onChange,
   onSubmit,
   onStop,
+  personaSwitch,
 }: {
   draft: string
   height: number
@@ -331,10 +371,11 @@ function Composer({
   onChange: (value: string) => void
   onSubmit: () => void
   onStop: () => void
+  personaSwitch?: ReactNode
 }) {
   return (
     <div
-      className="flex w-full items-center rounded-pill bg-raised pl-5 pr-1.5 transition-shadow duration-200 ease-out focus-within:shadow-lift"
+      className="flex w-full items-center gap-1 rounded-pill bg-raised pl-5 pr-1.5 transition-shadow duration-200 ease-out focus-within:shadow-lift"
       style={{ height }}
     >
       <input
@@ -350,6 +391,7 @@ function Composer({
           }
         }}
       />
+      {personaSwitch}
       {streaming ? (
         <button
           type="button"

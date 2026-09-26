@@ -21,7 +21,7 @@
     "shots:course": "node scripts/capture-course.mjs",
     "inspect:storage": "node scripts/inspect-storage.mjs",
     "import:lessons": "node scripts/import-lessons.mjs",
-    "repair:video-links": "node scripts/repair-video-links.mjs",
+    "repair:video-links": "node scripts/repair-video-links.mjs",`n    "demo:record": "node scripts/record-demo.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",

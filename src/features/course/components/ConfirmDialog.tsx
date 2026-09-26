@@ -35,7 +35,9 @@ export function ConfirmDialog({
         className="w-full max-w-sm rounded-card bg-raised p-5 shadow-pop"
       >
         <h2 className="card-title">{title}</h2>
-        <p className="muted mt-2 leading-relaxed">{message}</p>
+        {/* whitespace-pre-line：调用方用换行把 message 分点写（"会删掉什么 / 会保留什么"），
+            没有它时 HTML 会把换行折成空格，几条并列的信息会挤成一坨 */}
+        <p className="muted mt-2 leading-relaxed whitespace-pre-line">{message}</p>
         <div className="mt-5 flex justify-end gap-2">
           <button type="button" className="btn btn-secondary" onClick={onCancel}>
             取消

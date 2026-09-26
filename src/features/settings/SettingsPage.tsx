@@ -1,12 +1,14 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 
 import { PageHeader } from '@/components/PageHeader'
+import { ConfirmDialog } from '@/features/course/components/ConfirmDialog'
 import { installSeedCourses } from '@/features/course/seedInstall'
+import { applyBackup, backupFileName, collectBackup, parseBackup } from '@/features/settings/backup'
+import type { BackupPayload, BackupSummary } from '@/features/settings/backup'
 import { useDesktopReminderState } from '@/features/reminder/context'
 import { LlmSettingsCard } from '@/features/settings/components/LlmSettingsCard'
 import { SettingRow } from '@/features/settings/components/SettingRow'
 import { Toggle } from '@/features/settings/components/Toggle'
-import { todayKey } from '@/lib/date'
 import { BUILTIN_PERSONAS } from '@/lib/seed/personas'
 import { useChatStore } from '@/store/chat'
 import { useCourseStore } from '@/store/courses'
@@ -25,6 +27,11 @@ export function SettingsPage() {
   const desktop = useDesktopReminderState()
   const [clearConfirm, setClearConfirm] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  /** 等待确认的导入：解析成功后先给用户看清楚要覆盖什么，再落库 */
+  const [pendingImport, setPendingImport] = useState<
+    { payload: BackupPayload; summary: BackupSummary } | null
+  >(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   async function requestNotificationPermission() {
     if (typeof Notification === 'undefined') {
@@ -36,26 +43,35 @@ export function SettingsPage() {
   }
 
   function exportData() {
-    const payload = {
-      version: 1,
-      exportedAt: new Date().toISOString(),
-      settings: useSettingsStore.getState().settings,
-      personas: usePersonaStore.getState().personas,
-      courses: useCourseStore.getState().courses,
-      plans: usePlanStore.getState().plans,
-      todos: useTodoStore.getState().todos,
-      memories: useMemoryStore.getState().entries,
-      conversations: useChatStore.getState().conversations,
-    }
+    const payload = collectBackup()
 
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
     anchor.href = url
-    anchor.download = `l-partner-backup-${todayKey()}.json`
+    anchor.download = backupFileName()
     anchor.click()
     URL.revokeObjectURL(url)
     setNotice('已导出备份文件')
+  }
+
+  /**
+   * 读文件并**先解析、再确认**。
+   *
+   * 导入是覆盖全部数据的动作，所以中间必须有一步"让用户看到这份备份里到底有什么"。
+   * 解析失败时直接说明哪里不对（选错文件、版本更新、备份是空的），
+   * 而不是弹一个"导入失败"就完事。
+   */
+  async function handleImportFile(file: File | undefined) {
+    if (!file) return
+    const text = await file.text()
+    const result = parseBackup(text)
+    if (!result.ok) {
+      setNotice(result.error)
+      return
+    }
+    setNotice(null)
+    setPendingImport({ payload: result.payload, summary: result.summary })
   }
 
   function clearAllData() {
@@ -249,12 +265,36 @@ export function SettingsPage() {
         <section className="card">
           <SettingRow
             title="数据"
-            hint="导出备份或清空本地数据"
+            hint="导出备份、从备份恢复，或清空本地数据"
             control={
               <>
                 <button type="button" className="btn btn-secondary btn-sm" onClick={exportData}>
                   导出备份
                 </button>
+                {/*
+                  导入用隐藏的 file input：Electron 里它会拉起系统文件选择框，
+                  不需要为了这一件事单独走主进程的 dialog IPC
+                */}
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  导入备份
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  aria-label="选择备份文件"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0]
+                    // 先清空 value：同一个文件连选两次也要能触发 change
+                    event.target.value = ''
+                    void handleImportFile(file)
+                  }}
+                />
                 <button
                   type="button"
                   className="btn btn-danger btn-sm"
@@ -289,6 +329,46 @@ export function SettingsPage() {
           <SettingRow title="关于" hint="纯前端 · 数据本地存储 · 无服务端" />
         </section>
       </div>
+
+      {/*
+        导入的二次确认放在最后：它要说清"这份备份里有什么"和"现在的什么会被覆盖"。
+        只说"确定要导入吗"等于什么都没说 —— 用户没法核对这是不是他要的那一份。
+      */}
+      {pendingImport && (
+        <ConfirmDialog
+          title="用这份备份覆盖当前数据？"
+          message={[
+            `备份导出时间：${
+              pendingImport.summary.exportedAt
+                ? new Date(pendingImport.summary.exportedAt).toLocaleString()
+                : '未标注'
+            }`,
+            `包含：${[
+              `${pendingImport.summary.courses} 门课程`,
+              `${pendingImport.summary.plans} 份学习计划`,
+              `${pendingImport.summary.todos} 条待办`,
+              `${pendingImport.summary.memories} 条记忆`,
+              `${pendingImport.summary.conversations} 场对话`,
+              // 设置里含 API 密钥，必须点名 —— 用户不会想到"导入备份"会换掉自己的模型配置
+              pendingImport.summary.hasSettings ? '大模型接入配置' : null,
+            ]
+              .filter(Boolean)
+              .join('、')}`,
+            '当前设备上的课程、计划、待办、记忆、对话与设置都会被这份备份整份替换，无法撤销。',
+          ].join('\n')}
+          confirmText="导入并覆盖"
+          danger
+          onConfirm={() => {
+            const { summary } = pendingImport
+            applyBackup(pendingImport.payload)
+            setPendingImport(null)
+            setNotice(
+              `已从备份恢复：${summary.courses} 门课程、${summary.todos} 条待办、${summary.memories} 条记忆、${summary.conversations} 场对话`,
+            )
+          }}
+          onCancel={() => setPendingImport(null)}
+        />
+      )}
     </>
   )
 }

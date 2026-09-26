@@ -232,11 +232,16 @@ export function TodayPage() {
           <div className="mt-3 rounded-card border border-dashed border-line-soft bg-raised/60 px-6 py-10 text-center">
             <p className="text-body font-bold text-ink">今天还没有安排</p>
             <p className="mx-auto mt-2 max-w-md text-small leading-relaxed text-ink-faint">
-              去「课程」页生成一份学习计划，计划会按天拆成待办自动出现在这里；
-              也可以直接用上面的输入框手写一条。
+              直接用上面的输入框手写一条；或者跟学伴说一句「帮我排一下这门课」，
+              它会按课程内容把任务铺到日历上，到日子自动出现在这里。
             </p>
-            <Link to="/courses" className="btn btn-primary mt-5">
-              去课程页生成学习计划
+            {/*
+              这里原来是一个跳去「课程」页的按钮，让用户自己去点「生成学习计划」——
+              那个按钮已经按用户要求去掉了，而且 `/courses` 这条路由现在重定向回书架，
+              所以它是一条死链（点了等于没点）。排期现在由学伴代劳，文案与入口都对齐这一点。
+            */}
+            <Link to="/chat" className="btn btn-secondary mt-5">
+              去跟学伴说
             </Link>
           </div>
         ) : (

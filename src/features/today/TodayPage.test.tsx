@@ -34,11 +34,13 @@ function renderTodayPage() {
 }
 
 describe('TodayPage', () => {
-  it('没有待办时引导去课程页，并如实说明提醒的运行限制', () => {
+  it('没有待办时引导去找学伴排期，并如实说明提醒的运行限制', () => {
     renderTodayPage()
 
     expect(screen.getByText('今天还没有安排')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /去课程页生成学习计划/ })).toBeInTheDocument()
+    // 「生成学习计划」按钮已按要求从课程页去掉，这里不该再指着一个不存在的按钮；
+    // `/courses` 也早就重定向回书架了，指过去就是一条死链
+    expect(screen.getByRole('link', { name: '去跟学伴说' })).toBeInTheDocument()
     // 「彻底退出后不会提醒」这件事必须写在界面上，不能只写在文档里。
     // 注意措辞：收进托盘不等于退出，应用还在后台跑，提醒照常
     expect(screen.getByText(/收进托盘仍会提醒/)).toBeInTheDocument()

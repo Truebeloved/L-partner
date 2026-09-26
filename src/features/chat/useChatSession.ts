@@ -6,6 +6,7 @@ import {
   planSummary,
   summarizeConversation,
 } from '@/features/memory/extract'
+import { detectIntent } from '@/features/today/intent'
 import { retrieveMemories } from '@/features/memory/retrieve'
 import { createProvider } from '@/lib/llm'
 import { assembleMessages, clampText, estimateMessagesTokens } from '@/lib/llm/context'
@@ -207,11 +208,20 @@ export function useChatSession(): ChatSession {
       // ---- 按策略抽取记忆 ----
       // 放在 finally 之后：即使这轮失败也不影响后续；抽取本身失败也只是静默跳过
       const after = useChatStore.getState().getById(targetId)
-      if (
-        after &&
-        settings.autoExtractMemory &&
-        after.messages.length % EXTRACTION_INTERVAL === 0
-      ) {
+      if (!after || !settings.autoExtractMemory) return
+
+      /*
+       * 触发条件有两条，而且都指向同一件事 —— **别让用户觉得"我说了它没记住"**：
+       *
+       * 1. **这一句里有要做的事**（本地规则判定，零成本）：立刻抽一次。
+       *    原来只有周期触发（每 8 条消息），于是"我今天想把第一章看完"这种话
+       *    说完什么都不发生，用户得再聊三四个来回才可能见到待办 ——
+       *    他报的正是这个："只会分析出待办任务但不会添加到待办区域"。
+       * 2. **攒够了一个周期**：兜底那些不像"要做的事"、但其实值得记的对话。
+       */
+      const eager = detectIntent(trimmed)
+      const periodic = after.messages.length % EXTRACTION_INTERVAL === 0
+      if (eager || periodic) {
         void extractMemories({
           provider: createProvider(settings.llm),
           messages: after.messages,
@@ -230,7 +240,7 @@ export function useChatSession(): ChatSession {
        * 所以跟着「自动抽取记忆」这个开关一起走 —— 用户关掉自动抽取时，
        * 不该有另一个后台调用偷偷花钱。
        */
-      if (after && settings.autoExtractMemory) {
+      if (settings.autoExtractMemory) {
         const plan = planSummary({
           messageCount: after.messages.length,
           summaryUpTo: after.summaryUpTo ?? 0,

@@ -44,7 +44,13 @@ export async function generateCoursePlan(request: AiPlanRequest): Promise<Course
     raw = await provider.chat(buildCoursePlanMessages(describeRequest(request)), {
       // 结构设计需要一点灵活性，但不能太发散，否则阶段划分会不合理
       temperature: 0.4,
-      maxTokens: 4096,
+      /*
+       * 放宽到 8000：一份完整方案是 3~5 个阶段、10~16 个单元，每个单元还要写标题、
+       * 知识点与时长 —— 4096 很容易写到一半被截断，而**被截断的 JSON 根本解析不出来**，
+       * 用户看到的是"生成失败"，试几次都失败。这里的取舍和讲义一样：
+       * 宁可多花一次钱，也要拿到能用的方案。
+       */
+      maxTokens: 8000,
     })
   } catch (error) {
     // 网络与鉴权错误已经在适配层翻译成人话了，这里只补一句「这一步失败了」的语境

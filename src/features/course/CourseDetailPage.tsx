@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { PageHeader } from '@/components/PageHeader'
 import {
   generatePlanForCourse,
+  generateUnitLesson,
   materializeTodos,
   rescheduleCourse,
   summarizePlan,
@@ -13,8 +14,10 @@ import { CourseStructure } from '@/features/course/components/CourseStructure'
 import { PlanTimeline } from '@/features/course/components/PlanTimeline'
 import { courseTotals, unitTitleMap } from '@/features/course/drafts'
 import { formatDateHuman, formatMinutes, isOverdue } from '@/lib/date'
+import { createProvider } from '@/lib/llm'
 import { useCourseStore } from '@/store/courses'
 import { usePlanStore } from '@/store/plans'
+import { useSettingsStore } from '@/store/settings'
 import { useTodoStore } from '@/store/todos'
 import type { Id } from '@/types/models'
 
@@ -36,6 +39,26 @@ export function CourseDetailPage() {
 
   const [feedback, setFeedback] = useState<string | null>(null)
   const [askReschedule, setAskReschedule] = useState(false)
+  const settings = useSettingsStore((state) => state.settings)
+
+  /**
+   * 让学伴写某一节的正文。
+   *
+   * provider 由这里创建（它才知道用哪套模型配置），课程结构那边只管"点一下"。
+   * 没有可用配置时直接抛错 —— 界面会把这句话显示在按钮下面，
+   * 比"点了没反应"清楚得多。
+   */
+  async function handleWriteLesson(unitId: Id) {
+    if (!courseId) return
+    if (!settings.llm.baseUrl || !settings.llm.apiKey || !settings.llm.model) {
+      throw new Error('还没有接入大模型，先到「设置」里填上 API 地址与密钥。')
+    }
+    await generateUnitLesson({
+      courseId,
+      unitId,
+      provider: createProvider(settings.llm),
+    })
+  }
 
   const summary = useMemo(
     () => (course ? summarizePlan(course, plan, todos) : null),
@@ -215,7 +238,7 @@ export function CourseDetailPage() {
       <section className="card">
         <h2 className="section-title">课程结构</h2>
         <div className="mt-3">
-          <CourseStructure course={course} />
+          <CourseStructure course={course} onWriteLesson={handleWriteLesson} />
         </div>
       </section>
 

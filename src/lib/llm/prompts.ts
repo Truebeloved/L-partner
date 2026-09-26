@@ -256,6 +256,8 @@ export const MEMORY_EXTRACTION_SYSTEM_PROMPT = `你是一个记忆抽取器。�
 - 每条都要简短。宁可少记，也不要记废话。
 - **todos 只收他明确表达了"我要做/我打算做/得做"的具体事情**，而且必须是可执行的动作，
   不要把他问的问题、想了解的知识点当成待办。「我想学 Rust」属于兴趣，进 facts 而不是 todos。
+- **一句话里说了几件事就拆成几条 todos**。"今天想把第一章看完，再把作业交了" 是两条，
+  不要合并成一条、也不要只取第一件 —— 漏掉的那件，用户会以为系统没听见。
 - todos 里的 when 用**原话里的时间说法**（"明天""下周三"都行），没提时间就留空字符串 ——
   系统会自己解析成日期，不要你去算。
 - **weekly 只收"这一周"这种跨天的笼统目标**（"这周把英语单词过完"）。
@@ -386,5 +388,45 @@ export function buildCoursePlanMessages(request: string): LlmMessage[] {
   return [
     { role: 'system', content: COURSE_PLAN_SYSTEM_PROMPT },
     { role: 'user', content: request },
+  ]
+}
+
+// ---------------------------------------------------------------------------
+// 单元讲义：让课程里真的有东西可学
+// ---------------------------------------------------------------------------
+
+export const LESSON_SYSTEM_PROMPT = `你是一位把教材写成"能直接读"的讲师。学生点开了某一节，你要写出这一节的**正文**，
+而不是这一节的提纲、也不是学习建议。
+
+用 Markdown 写，结构随意但必须讲透，要求：
+- **直接开讲**。不要「本节将介绍…」这类开场白，也不要结尾的「希望对你有所帮助」。
+- 讲清三件事：为什么需要它、它到底是怎么运作的、什么时候会用到它。
+- 关键处给**具体例子**（代码、公式、真实场景都行）。例子要能跑、能算、能对照。
+- 常见的坑要写出来：初学者最容易误解的地方、看起来对其实错的写法。
+- 术语第一次出现时用一句话解释清楚，不要假设他已经懂。
+- 篇幅跟着内容走：简单的一节一千字左右，复杂的两三千字也可以。宁可写透，不要写完。
+- 只写这一节的内容。不要替别的单元写，也不要列整门课的大纲。
+- 不要输出 JSON，直接输出正文 Markdown。`
+
+export function buildLessonMessages(input: {
+  courseTitle: string
+  courseGoal?: string
+  stageTitle: string
+  unitTitle: string
+  knowledgePoints: string[]
+}): LlmMessage[] {
+  const lines = [
+    `课程：${input.courseTitle}`,
+    input.courseGoal ? `学习目标：${input.courseGoal}` : '',
+    `所属阶段：${input.stageTitle}`,
+    `本节标题：${input.unitTitle}`,
+    input.knowledgePoints.length > 0
+      ? `本节要讲到的知识点：${input.knowledgePoints.join('、')}`
+      : '',
+  ].filter(Boolean)
+
+  return [
+    { role: 'system', content: LESSON_SYSTEM_PROMPT },
+    { role: 'user', content: `${lines.join('\n')}\n\n请写这一节的正文。` },
   ]
 }

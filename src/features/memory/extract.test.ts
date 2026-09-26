@@ -119,6 +119,22 @@ describe('applyExtractedTodos', () => {
     expect(todo?.unitId).toBeUndefined()
   })
 
+  it('模型把多件事合成一条时，本地也会切开', () => {
+    // 提示词里要求模型自己拆，但合并成一条的概率不低 —— 这里兜住
+    applyExtractedTodos(
+      { todos: [{ title: '今天看完第一章，然后写作业，还有复习单词', when: '今天' }] },
+      { now: NOW },
+    )
+
+    const titles = useTodoStore
+      .getState()
+      .todos.map((todo) => todo.title)
+      .sort()
+    expect(titles).toHaveLength(3)
+    expect(titles.join('|')).toContain('第一章')
+    expect(titles.join('|')).toContain('单词')
+  })
+
   it('空标题、空数组都不会造出垃圾数据', () => {
     expect(applyExtractedTodos({}, { now: NOW })).toBe(0)
     expect(applyExtractedTodos({ todos: [{ title: '   ' }], weekly: [''] }, { now: NOW })).toBe(0)

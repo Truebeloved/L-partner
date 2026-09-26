@@ -1,4 +1,5 @@
 import { matchTodoToCourse, normalizeForMatch, resolveWhen, weekStartOf } from '@/features/today/autoTodo'
+import { splitIntent } from '@/features/today/intent'
 import { extractJson } from '@/lib/llm'
 import { buildMemoryExtractionMessages, buildSummaryMessages } from '@/lib/llm/prompts'
 import type { LlmProvider } from '@/lib/llm/types'
@@ -168,6 +169,9 @@ export async function extractMemories(input: {
 /** 请模型判定的待办条数上限：清单越长，模型越容易乱挂 */
 export const PENDING_LINK_LIMIT = 5
 
+/** 一条抽取结果最多切成几条：防止模型返回一句超长的话被切成十几条 */
+const MAX_SPLIT_PER_ITEM = 4
+
 /**
  * 应用模型给出的「待办 → 单元」归属。
  *
@@ -240,18 +244,28 @@ export function applyExtractedTodos(
     const when = typeof item.when === 'string' ? item.when : ''
     const resolved = resolveWhen(when, now)
 
-    if (resolved.kind === 'week') {
-      /*
-       * 周目标：date 与 weekStart 都落在本周一。
-       *
-       * ⚠️ 这里必须用它自己的日期，不能兜底成 today ——
-       * 否则它会同时出现在「本周」和「今日」两处，用户会以为有两件事要做。
-       */
-      pending.push({ title, date: resolved.weekStart, weekStart: resolved.weekStart })
-      continue
-    }
+    /*
+     * 本地再切一刀：提示词里已经要求模型"一句话里几件事就拆几条"，
+     * 但那是最好情况。用户一口气说三件事时，模型合并成一条的概率不低 ——
+     * 切多了最多是多一条可以删的待办，切少了就是"我说了它没记住"，
+     * 两者的代价不对称，所以宁可多切。
+     */
+    const parts = splitIntent(title).slice(0, MAX_SPLIT_PER_ITEM)
 
-    pending.push({ title, date: resolved.kind === 'day' ? resolved.date : today })
+    for (const part of parts) {
+      if (resolved.kind === 'week') {
+        /*
+         * 周目标：date 与 weekStart 都落在本周一。
+         *
+         * ⚠️ 这里必须用它自己的日期，不能兜底成 today ——
+         * 否则它会同时出现在「本周」和「今日」两处，用户会以为有两件事要做。
+         */
+        pending.push({ title: part, date: resolved.weekStart, weekStart: resolved.weekStart })
+        continue
+      }
+
+      pending.push({ title: part, date: resolved.kind === 'day' ? resolved.date : today })
+    }
   }
 
   for (const goal of asStringArray(parsed.weekly)) {

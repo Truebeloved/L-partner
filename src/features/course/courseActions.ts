@@ -1,3 +1,5 @@
+import { buildLessonMessages } from '@/lib/llm/prompts'
+import type { LlmProvider } from '@/lib/llm/types'
 import { buildSchedule } from '@/features/plan/schedule'
 import type { SchedulableUnit, ScheduleResult } from '@/features/plan/schedule'
 import { dayjs, todayKey } from '@/lib/date'
@@ -6,7 +8,7 @@ import { useCourseStore } from '@/store/courses'
 import { useMemoryStore } from '@/store/memory'
 import { usePlanStore } from '@/store/plans'
 import { useTodoStore } from '@/store/todos'
-import type { Course, CourseSource, DateKey, Id, Plan, PlanItem, Todo } from '@/types/models'
+import type { Course, CourseSource, DateKey, Id, Plan, PlanItem, Todo, Unit } from '@/types/models'
 
 import { buildStages, flattenUnits, unitTitleMap } from './drafts'
 import type { CoursePlanDraft } from './drafts'
@@ -16,6 +18,15 @@ export interface NewCourseInput extends CoursePlanDraft {
   /** 不传按手动创建处理；AI 生成传 'prompt'，文件导入传 'file' */
   source?: CourseSource
 }
+
+/**
+ * 教学正文的生成上限。
+ *
+ * 刻意比日常对话宽得多（对话默认 2048）：讲义要写透一节内容，
+ * 卡在两千 token 上会写到一半断掉 —— 那样的"课程"比空壳更糟，
+ * 用户会以为是自己没看懂。这里的取舍是**宁可多花一次钱，也要拿到能用的内容**。
+ */
+export const LESSON_MAX_TOKENS = 8000
 
 /**
  * 创建课程。
@@ -67,6 +78,55 @@ export interface PlanGenerationResult {
   schedule: ScheduleResult
   /** 计划整体（含保留的历史）的概览，界面直接用它渲染 */
   summary: CoursePlanSummary
+}
+
+/**
+ * 让学伴写一节的正文。
+ *
+ * 这是"课程不再是空壳"的那一步：只有阶段与单元名的课程，点进去其实没东西可学。
+ * 按**单元**生成而不是整门课一次写完，有三个理由：
+ * 1. 一次写完 10~16 个单元会超长、容易被截断，断在中间比不写更糟；
+ * 2. 用户多数时候只看当前这一节，把整门课的钱先花掉不划算；
+ * 3. 写好的正文会落库，下次打开直接读，不会重复生成。
+ *
+ * 失败时返回 false 并把错误原样抛出交给界面显示 —— 这是用户主动点的动作，
+ * 静默失败等于"点了没反应"。
+ */
+export async function generateUnitLesson(input: {
+  courseId: Id
+  unitId: Id
+  provider: LlmProvider
+}): Promise<string> {
+  const { courseId, unitId, provider } = input
+  const course = useCourseStore.getState().getById(courseId)
+  if (!course) throw new Error('课程不存在')
+
+  let found: { stageTitle: string; unit: Unit } | null = null
+  for (const stage of course.stages) {
+    const unit = stage.units.find((candidate) => candidate.id === unitId)
+    if (unit) {
+      found = { stageTitle: stage.title, unit }
+      break
+    }
+  }
+  if (!found) throw new Error('这一节不存在')
+
+  const content = await provider.chat(
+    buildLessonMessages({
+      courseTitle: course.title,
+      courseGoal: course.goal,
+      stageTitle: found.stageTitle,
+      unitTitle: found.unit.title,
+      knowledgePoints: found.unit.knowledgePoints,
+    }),
+    // 讲义不设日常对话那道上限：写不满一节的内容等于没写
+    { maxTokens: LESSON_MAX_TOKENS },
+  )
+
+  const text = content.trim()
+  if (!text) throw new Error('模型没有返回内容')
+  useCourseStore.getState().setUnitContent(courseId, unitId, text)
+  return text
 }
 
 /**

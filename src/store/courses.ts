@@ -13,6 +13,13 @@ interface CourseState {
   getById: (id: Id) => Course | undefined
   add: (draft: CourseDraft) => Id
   update: (id: Id, patch: Partial<CourseDraft>) => void
+  /**
+   * 写入某个单元的教学正文。
+   *
+   * 单独一个 action 而不是让调用方拼 stages 数组：单元藏在 阶段 → 单元 两层里，
+   * 手写这层不可变更新很容易把别的阶段弄丢（改一门课却把另一阶段清空了）。
+   */
+  setUnitContent: (courseId: Id, unitId: Id, content: string) => void
   remove: (id: Id) => void
 }
 
@@ -34,6 +41,26 @@ export const useCourseStore = create<CourseState>()(
         set((state) => ({
           courses: state.courses.map((c) =>
             c.id === id ? { ...c, ...patch, updatedAt: new Date().toISOString() } : c,
+          ),
+        })),
+
+      setUnitContent: (courseId, unitId, content) =>
+        set((state) => ({
+          courses: state.courses.map((course) =>
+            course.id === courseId
+              ? {
+                  ...course,
+                  updatedAt: new Date().toISOString(),
+                  stages: course.stages.map((stage) => ({
+                    ...stage,
+                    units: stage.units.map((unit) =>
+                      unit.id === unitId
+                        ? { ...unit, content, contentGeneratedAt: new Date().toISOString() }
+                        : unit,
+                    ),
+                  })),
+                }
+              : course,
           ),
         })),
 

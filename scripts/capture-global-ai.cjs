@@ -63,6 +63,24 @@ const COURSE = {
           knowledgePoints: ['Vite 项目脚手架', 'React 应用的入口文件'],
           estimatedMinutes: 60,
           order: 0,
+          // 这一节已经写过正文：用来验证"打开课程真的有东西可读"
+          content: [
+            '## 为什么需要脚手架',
+            '',
+            'React 本身只是一个库，但一个能跑的项目还需要打包器、开发服务器、类型检查。',
+            '每次从零搭这些，你会把时间花在配置上，而不是写组件。Vite 把这些收进一条命令。',
+            '',
+            '```bash',
+            'npm create vite@latest my-app -- --template react-ts',
+            '```',
+            '',
+            '## 入口文件到底做了什么',
+            '',
+            '`main.tsx` 只做三件事：找到 `#root` 这个挂载点、创建 React 根、把 `<App />` 渲染进去。',
+            '理解这一点之后，「改了组件页面没变」这类问题就有了排查方向 ——',
+            '要么是组件没被渲染进这棵树，要么是热更新没生效。',
+          ].join('\n'),
+          contentGeneratedAt: NOW,
         },
         {
           id: 'g-u2',
@@ -215,6 +233,21 @@ app.whenReady().then(async () => {
     )
     await sleep(700)
     await shoot(window, 'g3-course-done-unit')
+
+    // 展开已写好的那一节正文 —— "打开课程真的有东西可读"
+    const opened = await window.webContents.executeJavaScript(`
+      (() => {
+        const button = [...document.querySelectorAll('button')].find((node) =>
+          node.textContent.includes('读这一节'),
+        )
+        if (!button) return 'not-found'
+        button.click()
+        return 'clicked'
+      })()
+    `)
+    console.log(`  展开讲义：${opened}`)
+    await sleep(900)
+    await shoot(window, 'g4-course-lesson')
   } catch (error) {
     console.error(`\n截图过程出错：${String(error)}`)
     app.exit(1)

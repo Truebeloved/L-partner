@@ -1,13 +1,17 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 
+import { MarkdownLite } from '@/features/chat/components/MarkdownLite'
 import { doneUnitIds } from '@/features/today/autoTodo'
 import { formatMinutes } from '@/lib/date'
 import { usePlanStore } from '@/store/plans'
+import { useSettingsStore } from '@/store/settings'
 import { useTodoStore } from '@/store/todos'
-import type { Course } from '@/types/models'
+import type { Course, Id } from '@/types/models'
 
 interface CourseStructureProps {
   course: Course
+  /** 让学伴写某一节的正文；由课程页注入（它才知道用哪个 provider） */
+  onWriteLesson?: (unitId: Id) => Promise<void>
 }
 
 /**
@@ -15,11 +19,14 @@ interface CourseStructureProps {
  * 知识点单独列出来而不是收在 tooltip 里，是因为它是掌握状态的挂载点：
  * 用户想核对「我的学伴记得我学到哪」时，需要看到的就是这一串名词。
  *
+ * 每个单元还能**读到正文**（`unit.content`）—— 只有目录的课程点进去是空的，
+ * 这一块才是"书里真的有字"。
+ *
  * 完成的单元（计划项全部完成，或关联到它的待办全部勾掉）显示为灰态 + 删除线 ——
  * 这条链路是「全局 AI」把待办和课程内容接起来之后用户唯一看得见的结果：
  * 在待办栏勾掉一件事，这里对应的那一行就划掉了。
  */
-export function CourseStructure({ course }: CourseStructureProps) {
+export function CourseStructure({ course, onWriteLesson }: CourseStructureProps) {
   const plan = usePlanStore((state) => state.plans[course.id])
   const todos = useTodoStore((state) => state.todos)
 
@@ -49,7 +56,12 @@ export function CourseStructure({ course }: CourseStructureProps) {
 
             <ul className="mt-3 space-y-3">
               {stage.units.map((unit) => (
-                <UnitRow key={unit.id} unit={unit} done={done.has(unit.id)} />
+                <UnitRow
+                  key={unit.id}
+                  unit={unit}
+                  done={done.has(unit.id)}
+                  onWriteLesson={onWriteLesson}
+                />
               ))}
             </ul>
           </section>
@@ -62,10 +74,32 @@ export function CourseStructure({ course }: CourseStructureProps) {
 function UnitRow({
   unit,
   done,
+  onWriteLesson,
 }: {
   unit: Course['stages'][number]['units'][number]
   done: boolean
+  onWriteLesson?: (unitId: Id) => Promise<void>
 }) {
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const settings = useSettingsStore((state) => state.settings)
+
+  const hasLesson = Boolean(unit.content)
+
+  async function writeLesson() {
+    setBusy(true)
+    setError(null)
+    try {
+      await onWriteLesson?.(unit.id)
+      setOpen(true)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <li>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -80,15 +114,59 @@ function UnitRow({
       {unit.knowledgePoints.length > 0 && (
         <div className="mt-1.5 flex flex-wrap gap-1.5">
           {unit.knowledgePoints.map((point) => (
-            <span
-              key={point}
-              className={done ? 'badge text-ink-faint line-through' : 'badge'}
-            >
+            <span key={point} className={done ? 'badge text-ink-faint line-through' : 'badge'}>
               {point}
             </span>
           ))}
         </div>
       )}
+
+      {/*
+        正文：这是"课程不是空壳"的地方。
+        没写过就给一个按钮让学伴写；写过就直接能读，不再重复花钱生成。
+      */}
+      <div className="mt-2">
+        {hasLesson ? (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => setOpen((value) => !value)}
+            aria-expanded={open}
+          >
+            {open ? '收起这一节' : '读这一节'}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => void writeLesson()}
+            disabled={busy}
+            title={
+              settings.llm.apiKey
+                ? '让学伴写出这一节的正文，写完会存在本地'
+                : '需要先在设置里接入大模型'
+            }
+          >
+            {busy ? '正在写这一节…' : '让学伴写这一节'}
+          </button>
+        )}
+
+        {error && <p className="mt-1 text-small text-alert">{error}</p>}
+
+        {hasLesson && open && (
+          <div className="mt-3 rounded-card border border-line-soft bg-surface px-4 py-3">
+            <MarkdownLite source={unit.content ?? ''} />
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm mt-3"
+              onClick={() => void writeLesson()}
+              disabled={busy}
+            >
+              {busy ? '正在重写…' : '重写这一节'}
+            </button>
+          </div>
+        )}
+      </div>
     </li>
   )
 }

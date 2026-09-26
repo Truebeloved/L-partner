@@ -88,7 +88,7 @@ export function ChatPage() {
             </Link>
           </div>
           <p className="mt-5 border-t border-line-soft pt-4 text-small text-ink-faint">
-            没有 API Key 也不影响使用：课程、学习计划、每日待办和提醒都可以正常工作。
+            没有 API Key 时，课程、计划、待办和提醒照常可用。
           </p>
         </div>
       </div>

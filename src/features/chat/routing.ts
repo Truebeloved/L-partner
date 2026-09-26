@@ -1,4 +1,5 @@
 import { normalizeForMatch } from '@/features/today/autoTodo'
+import { longestCommonSubstring } from '@/lib/text'
 import type { Course, Id } from '@/types/models'
 
 /** 命中的依据 —— 界面上要能如实说出"凭什么判断这句话跟这门课有关" */
@@ -140,27 +141,4 @@ function courseAliases(course: Course): CourseAlias[] {
   }
 
   return aliases
-}
-
-/**
- * 两个串的最长公共子串长度（只要长度，不要位置）。
- *
- * 只用来判断"够不够像"，所以用滚动数组的一维 DP：字符串都很短
- * （课程里的词十几个字、用户这一句话几十个字），开销可以忽略。
- */
-function longestCommonSubstring(a: string, b: string): number {
-  let best = 0
-  let previous = new Array<number>(b.length + 1).fill(0)
-
-  for (let i = 1; i <= a.length; i += 1) {
-    const current = new Array<number>(b.length + 1).fill(0)
-    for (let j = 1; j <= b.length; j += 1) {
-      if (a[i - 1] !== b[j - 1]) continue
-      current[j] = previous[j - 1]! + 1
-      if (current[j]! > best) best = current[j]!
-    }
-    previous = current
-  }
-
-  return best
 }

@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { ReminderPanel } from '@/features/reminder/components/ReminderPanel'
 import { useReminder } from '@/features/reminder/context'
 import { syncMasteryForCourse } from '@/features/memory/mastery'
+import { matchTodoToCourse } from '@/features/today/autoTodo'
 import { TodoItem } from '@/features/today/TodoItem'
 import { TodoMenuPopup } from '@/features/today/TodoMenuPopup'
 import { useTodoMenu } from '@/features/today/useTodoMenu'
@@ -35,6 +36,7 @@ export function TodayPage() {
   const removeTodo = useTodoStore((state) => state.remove)
 
   const courses = useCourseStore((state) => state.courses)
+  const plans = usePlanStore((state) => state.plans)
   const updatePlanItemStatus = usePlanStore((state) => state.updateItemStatus)
 
   // 提醒开关与时刻都由「设置」页维护，这里只读出来展示，避免同一个设置项两处显示不一致
@@ -145,7 +147,21 @@ export function TodayPage() {
     event.preventDefault()
     const title = draft.trim()
     if (!title) return
-    addTodo({ title, date: today })
+    /*
+     * 手输的待办也走一次课程匹配 —— 与侧栏那个输入框同一套规则。
+     * 少了这一步，"学完 C 语言阶段一"就只是一条孤立待办，
+     * 之后只能靠模型去猜归属（而它常常猜成那一段里的第一节）。
+     */
+    const link = matchTodoToCourse(title, courses, plans)
+    addTodo({
+      title,
+      date: today,
+      courseId: link?.courseId,
+      unitId: link?.unitId,
+      stageId: link?.stageId,
+      planItemId: link?.planItemId,
+      source: 'manual',
+    })
     setDraft('')
   }
 

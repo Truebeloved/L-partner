@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { applyExtractedTodos } from '@/features/memory/extract'
+import { applyExtractedTodos, applyTodoLinks } from '@/features/memory/extract'
 import { useCourseStore } from '@/store/courses'
 import { usePlanStore } from '@/store/plans'
 import { useTodoStore } from '@/store/todos'
@@ -139,5 +139,81 @@ describe('applyExtractedTodos', () => {
     expect(applyExtractedTodos({}, { now: NOW })).toBe(0)
     expect(applyExtractedTodos({ todos: [{ title: '   ' }], weekly: [''] }, { now: NOW })).toBe(0)
     expect(useTodoStore.getState().todos).toHaveLength(0)
+  })
+})
+
+describe('applyTodoLinks：待办标题说了算，模型的猜测只能兜底', () => {
+  /** 两段、每段两节，够验证"阶段 vs 段内第一节"的区别 */
+  const multiStage: Course = {
+    ...course,
+    stages: [
+      {
+        id: 's1',
+        title: '第 1 章',
+        objective: '',
+        order: 0,
+        units: [
+          { id: 'u1', title: 'C语言简史', knowledgePoints: [], estimatedMinutes: 60, order: 0 },
+          { id: 'u2', title: '第一个程序', knowledgePoints: [], estimatedMinutes: 60, order: 1 },
+        ],
+      },
+      {
+        id: 's2',
+        title: '第 2 章',
+        objective: '',
+        order: 1,
+        units: [
+          { id: 'u3', title: '变量', knowledgePoints: [], estimatedMinutes: 60, order: 0 },
+        ],
+      },
+    ],
+  }
+
+  beforeEach(() => {
+    useCourseStore.setState({ courses: [multiStage] })
+    usePlanStore.setState({ plans: {} })
+    useTodoStore.setState({
+      todos: [
+        {
+          id: 't1',
+          title: '学完 C语言 阶段一',
+          date: '2026-09-23',
+          done: false,
+          createdAt: '2026-09-23T00:00:00.000Z',
+          source: 'ai-extract',
+        },
+      ],
+    })
+  })
+
+  it('模型把"阶段一"细化成第一节课时，仍然按标题里的阶段整段关联', () => {
+    // 用户报的正是这个：模型好心细化成"C语言简史"，结果只勾掉了第一课
+    const applied = applyTodoLinks({
+      todoLinks: [{ todo: '学完 C语言 阶段一', unit: 'C语言简史' }],
+    })
+
+    expect(applied).toBe(1)
+    const todo = useTodoStore.getState().todos[0]!
+    expect(todo.stageId).toBe('s1')
+    expect(todo.unitId).toBeUndefined()
+  })
+
+  it('标题里认不出课程时，才用模型给的提示兜底', () => {
+    useTodoStore.setState({
+      todos: [
+        {
+          id: 't2',
+          title: '把那节课补上',
+          date: '2026-09-23',
+          done: false,
+          createdAt: '2026-09-23T00:00:00.000Z',
+        },
+      ],
+    })
+
+    const applied = applyTodoLinks({ todoLinks: [{ todo: '把那节课补上', unit: 'C语言简史' }] })
+
+    expect(applied).toBe(1)
+    expect(useTodoStore.getState().todos[0]?.unitId).toBe('u1')
   })
 })

@@ -207,8 +207,17 @@ export function applyTodoLinks(parsed: RawExtraction): number {
     )
     if (!target) continue
 
-    // 用标题再走一遍规则匹配：模型给的说法能不能落到真的阶段/单元上，由本地说了算
-    const resolved = matchTodoToCourse(unitTitle, courses, plans)
+    /*
+     * 先拿**待办标题本身**过一遍规则，再轮到模型给的那个词。
+     *
+     * 顺序很关键：用户自己写的就是最可靠的依据。模型常常把"学完阶段一"
+     * 好心细化成它看到的第一节（"C语言简史"），照着它关联就会只勾掉那一节 ——
+     * 用户报的正是这个。标题里明说了阶段，就以阶段为准；标题认不出来时，
+     * 才退回去看模型给的提示（"待关联的待办"那一轮专门干这个）。
+     */
+    const fromTitle = matchTodoToCourse(todoTitle, courses, plans)
+    const fromHint = matchTodoToCourse(unitTitle, courses, plans)
+    const resolved = fromTitle ?? fromHint
     if (!resolved) continue
 
     useTodoStore.getState().update(target.id, {

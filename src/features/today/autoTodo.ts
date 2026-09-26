@@ -1,5 +1,9 @@
 import { planItemState } from '@/features/course/courseActions'
 import { dayjs, todayKey, toDateKey } from '@/lib/date'
+import { longestCommonSubstring } from '@/lib/text'
+import { useCourseStore } from '@/store/courses'
+import { usePlanStore } from '@/store/plans'
+import { useTodoStore } from '@/store/todos'
 import type { Course, DateKey, Id, Plan, Todo } from '@/types/models'
 
 /**
@@ -172,13 +176,65 @@ export function parseOrdinal(raw: string): number | null {
 }
 
 /**
+ * 「第 N 个什么」的两种量词：整段（阶段/章）与一节（单元/讲/课/节）。
+ *
+ * 用户说话不会只挑一种说法："阶段一""阶段1""第一阶段""第 1 章""第一章"
+ * 指的都是同一件事；网课里还会说"第 3 讲"。这些都是**同义**的，
+ * 全局 AI 必须自己转过来 —— 转不过来就会退化成"只勾了第一课"。
+ */
+const STAGE_WORDS = '阶段|章|部分|单元组|part'
+const UNIT_WORDS = '单元|讲|课|节|课时|lesson'
+
+/** 一句话里点名的序号：阶段序号与节序号分开记，两者可以同时出现（"第 1 章第 3 讲"） */
+export interface OrdinalRef {
+  /** 第几段（1 起始） */
+  stage?: number
+  /** 第几节（1 起始）。给了 stage 时表示"那一段里的第几节" */
+  unit?: number
+}
+
+/**
+ * 把一句话里的序号说法全解析出来。
+ *
+ * 四种语序都认，中英文数字都认：
+ * - 「第一阶段」「第1阶段」「第 2 章」（数在前）
+ * - 「阶段一」「阶段1」「章三」（数在后）
+ * - 「part 2」「lesson 3」
+ */
+export function parseOrdinalRef(text: string): OrdinalRef {
+  const normalized = text.toLowerCase()
+  const ref: OrdinalRef = {}
+
+  const number = '([0-9]+|[一二三四五六七八九十]+)'
+  const patterns: { word: string; scope: keyof OrdinalRef }[] = [
+    { word: STAGE_WORDS, scope: 'stage' },
+    { word: UNIT_WORDS, scope: 'unit' },
+  ]
+
+  for (const { word, scope } of patterns) {
+    // 数在前：「第 1 章」「第2阶段」
+    const before = new RegExp(`第\\s*${number}\\s*个?\\s*(?:${word})`).exec(normalized)
+    // 数在后：「阶段一」「章三」「lesson 3」
+    const after = new RegExp(`(?:${word})\\s*${number}`).exec(normalized)
+
+    const raw = before?.[1] ?? after?.[1]
+    if (!raw) continue
+    const index = parseOrdinal(raw)
+    if (index !== null && index >= 1) ref[scope] = index
+  }
+
+  return ref
+}
+
+/**
  * 把一段自由文本匹配到课程内容上。
  *
- * 两条依据，优先级不同：
- * 1. **明说了第几阶段/第几章** → 整个阶段（"我要学完阶段一"）。
- *    除非同一句话里还精确点名了某一节，那时以那一节为准。
- * 2. 否则按**单元标题与知识点**匹配：整段包含或整体被包含，且至少 2 个字 ——
- *    单字匹配（"学""做"）几乎必然误伤，宁可不匹配。
+ * 依据按具体程度从高到低：
+ * 1. **明说了第几节**（单元标题/知识点，或"第 3 讲"）→ 那一节；
+ * 2. **明说了第几段**（"学完阶段一""第一章"）→ 整个阶段；
+ *    除非同一句话里还点名了这一段里的某一节，那时以那一节为准。
+ *
+ * ⚠️ 段与节的序号都是**从 1 开始的序号**，不是数组下标。
  */
 export function matchTodoToCourse(
   title: string,
@@ -188,29 +244,40 @@ export function matchTodoToCourse(
   const target = normalizeForMatch(title)
   if (target.length < 2) return null
 
+  const ref = parseOrdinalRef(target)
   let best: CourseLink | null = null
 
   for (const course of courses) {
-    const unitMatch = matchUnit(course, target)
-    const namedStage = namedStageOf(course, target)
-
     /*
-     * 同一句话里既点了阶段、又点了阶段内的某一节 → 以那一节为准（更精确）。
-     * 点了阶段但没点到节 → 整个阶段。
+     * 明说了课程名的那门课优先。这一条不是锦上添花：
+     * 好几门课都有"第一阶段"，只说"阶段一"时只能靠课程名分辨归属，
+     * 少了它就会按数组顺序落到第一门课上。
      */
-    const unitInsideNamedStage =
-      unitMatch && namedStage && course.stages.some((stage) =>
-        stage.id === namedStage.id && stage.units.some((unit) => unit.id === unitMatch.unitId),
-      )
+    const boost = mentionsCourse(course, target) ? 8 : 0
+
+    const stage = ref.stage ? stageByOrdinal(course, ref.stage) : namedStageByTitle(course, target)
+    const unit = ref.unit
+      ? unitByOrdinal(course, ref.unit, stage?.id)
+      : matchUnitByTitle(course, target)
+
+    // 同一句里既点了段、又点了段内的节 → 以节为准（更精确）
+    const unitInsideStage =
+      unit && stage
+        ? course.stages
+            .find((item) => item.id === stage.id)
+            ?.units.some((item) => item.id === unit.unitId) === true
+        : false
 
     const candidate: CourseLink | null =
-      unitMatch && (!namedStage || unitInsideNamedStage)
-        ? unitMatch
-        : namedStage
-          ? { courseId: course.id, stageId: namedStage.id, score: namedStage.score }
-          : unitMatch
+      unit && (!stage || unitInsideStage)
+        ? unit
+        : stage
+          ? { courseId: course.id, stageId: stage.id, score: stage.score }
+          : unit
 
-    if (candidate && (!best || candidate.score > best.score)) best = candidate
+    if (!candidate) continue
+    const scored: CourseLink = { ...candidate, score: candidate.score + boost }
+    if (!best || scored.score > best.score) best = scored
   }
 
   if (!best) return null
@@ -221,8 +288,43 @@ export function matchTodoToCourse(
   return item ? { ...best, planItemId: item.id } : best
 }
 
+/** 按序号取某一段 */
+function stageByOrdinal(course: Course, index: number): { id: Id; score: number } | null {
+  // 越界就当没点名（说"第九阶段"而课程只有三段时，不该硬套到某一段上）
+  const stage = course.stages[index - 1]
+  return stage ? { id: stage.id, score: 5 } : null
+}
+
+/**
+ * 按序号取某一节。给了 stageId 就只在那一整段里数 ——
+ * "第 1 章第 3 讲"里的 3 是段内序号，不是全课程第 3 节。
+ */
+function unitByOrdinal(course: Course, index: number, stageId?: Id): CourseLink | null {
+  const stages = stageId ? course.stages.filter((stage) => stage.id === stageId) : course.stages
+  const units = stages.flatMap((stage) => stage.units)
+  const unit = units[index - 1]
+  return unit ? { courseId: course.id, unitId: unit.id, score: 4 } : null
+}
+
+/**
+ * 课程名（或它的分段）出现在这句话里。
+ *
+ * 除了包含关系，还要认**部分提及**：课程叫「C语言基础入门」，
+ * 用户只会说"C语言"。少了这一层，好几门课都有"第一阶段"时，
+ * 归属就只能按课程在数组里的顺序决定 —— 那等于随机。
+ */
+function mentionsCourse(course: Course, target: string): boolean {
+  const segments = [course.title, ...course.title.split(/[\s·、：:，,。!！?？\-—_/|（）()[\]]+/)]
+  return segments.some((segment) => {
+    const candidate = normalizeForMatch(segment)
+    if (candidate.length < 3) return false
+    if (target.includes(candidate)) return true
+    return longestCommonSubstring(target, candidate) >= 3
+  })
+}
+
 /** 逐单元比对标题与知识点 */
-function matchUnit(course: Course, target: string): CourseLink | null {
+function matchUnitByTitle(course: Course, target: string): CourseLink | null {
   let best: CourseLink | null = null
 
   for (const stage of course.stages) {
@@ -244,34 +346,12 @@ function matchUnit(course: Course, target: string): CourseLink | null {
 }
 
 /**
- * 这句话点名的阶段。
+ * 直接写出阶段名的说法（「先把字词句读通」「分支与循环」）。
  *
- * 两种说法都要认：
- * - **序号**：「阶段一」「第 2 章」「第三部分」—— 序号从 1 开始，取 stages[n - 1]；
- * - **标题**：用户直接把阶段名写出来（「先把字词句读通」）。
- *   标题匹配要求至少 4 个字：阶段名常常是「起步」这种两字词，两字全课程撞车的概率太高。
+ * 序号由 parseOrdinalRef 负责，这里只管标题。标题匹配要求至少 4 个字：
+ * 阶段名常常是「起步」这种两字词，两字在全课程里撞车的概率太高。
  */
-function namedStageOf(course: Course, target: string): { id: Id; score: number } | null {
-  /*
-   * 两种语序都要认：
-   * - 序号在前：「第一阶段」「第 2 章」「第三部分」
-   * - 序号在后：「阶段一」「章三」（口语里更常说"学完阶段一"）
-   * 只认前一种的话，"我要学完阶段一"会被判成没点名任何阶段。
-   */
-  const ordinal =
-    /第\s*([一二三四五六七八九十\d]+)\s*个?\s*(?:阶段|章|部分|单元组)/.exec(target) ??
-    /(?:阶段|单元组|章|部分)\s*([一二三四五六七八九十\d]+)/.exec(target)
-
-  if (ordinal) {
-    const index = parseOrdinal(ordinal[1] ?? '')
-    // 序号越界就当没点名（说"第九阶段"而课程只有三段时，不该硬套到某一段上）
-    if (index !== null && index >= 1 && index <= course.stages.length) {
-      const stage = course.stages[index - 1]!
-      // 得分加上序号本身的长度：明说"阶段一"比撞上一个长标题更可信
-      return { id: stage.id, score: (ordinal[1] ?? '').length + 4 }
-    }
-  }
-
+function namedStageByTitle(course: Course, target: string): { id: Id; score: number } | null {
   let best: { id: Id; score: number } | null = null
   for (const stage of course.stages) {
     const candidate = normalizeForMatch(stage.title)
@@ -286,6 +366,73 @@ function namedStageOf(course: Course, target: string): { id: Id; score: number }
 /** 某个单元属于哪个阶段（完成判定要用） */
 export function stageIdOfUnit(course: Course, unitId: Id): Id | undefined {
   return course.stages.find((stage) => stage.units.some((unit) => unit.id === unitId))?.id
+}
+
+/**
+ * 修正历史数据：标题里明说了整段、却只挂在某一节上的待办。
+ *
+ * 为什么要修而不是等用户重加：这类待办是**上一版**写坏的（那时还没有 stageId，
+ * 只能落到某一节），而它们已经带着 unitId 落库了 —— 关联修正只在"还没有关联"时才跑，
+ * 于是这些旧数据永远不会自愈，用户会看到"你说改了，我这条还是只划掉第一课"。
+ *
+ * 只在**这一节确实属于那一段**时才改：用户手动调过的关联不该被覆盖。
+ * 幂等：修过的待办已经有 stageId，再跑一次不会动它。
+ */
+export function repairStageLinks(): number {
+  const { todos } = useTodoStore.getState()
+  const { courses } = useCourseStore.getState()
+  const { plans } = usePlanStore.getState()
+  let changed = 0
+
+  for (const todo of todos) {
+    if (todo.weekStart) continue
+    const target = normalizeForMatch(todo.title)
+
+    /*
+     * ① 已经挂着整段，但挂到了**别的课**上。
+     *
+     * 这是上一版留下的坑：只说"阶段一"时几门课都成立，按课程数组顺序就落到了
+     * 第一门课上（"学完C语言阶段一"当时被挂进了《文言文阅读》）。
+     * 只在标题**明确提到另一门课**时才纠正 —— 认不出来就别动，那可能是用户的关联。
+     */
+    if (todo.stageId) {
+      const mentioned = courses.find((course) => mentionsCourse(course, target))
+      if (!mentioned || mentioned.id === todo.courseId) continue
+
+      const link = matchTodoToCourse(todo.title, [mentioned], plans)
+      if (!link?.stageId) continue
+
+      useTodoStore.getState().update(todo.id, {
+        courseId: link.courseId,
+        stageId: link.stageId,
+        unitId: undefined,
+        planItemId: undefined,
+      })
+      changed += 1
+      continue
+    }
+
+    // ② 只挂在某一节上 → 升级成整段（在**本课程内**解析，避免串到别的课）
+    if (!todo.unitId) continue
+
+    const known = todo.courseId ? courses.filter((course) => course.id === todo.courseId) : []
+    const link = matchTodoToCourse(todo.title, known.length > 0 ? known : courses, plans)
+    if (!link?.stageId) continue
+
+    const stage = courses
+      .find((course) => course.id === todo.courseId)
+      ?.stages.find((item) => item.id === link.stageId)
+    if (!stage?.units.some((unit) => unit.id === todo.unitId)) continue
+
+    useTodoStore.getState().update(todo.id, {
+      stageId: link.stageId,
+      unitId: undefined,
+      planItemId: undefined,
+    })
+    changed += 1
+  }
+
+  return changed
 }
 
 /** 归一化：去掉空白与标点、统一小写，只留下用来比对的字 */

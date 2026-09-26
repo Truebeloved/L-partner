@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 
 import {
   doneUnitIds,
@@ -6,10 +6,14 @@ import {
   matchTodoToCourse,
   normalizeForMatch,
   parseOrdinal,
+  repairStageLinks,
   resolveWhen,
   stageIdOfUnit,
   weekStartOf,
 } from '@/features/today/autoTodo'
+import { useCourseStore } from '@/store/courses'
+import { usePlanStore } from '@/store/plans'
+import { useTodoStore } from '@/store/todos'
 import type { Course, Plan, Todo } from '@/types/models'
 
 /** 2026-09-23 是周三 —— 固定住"今天"，周几的解析才有确定的答案 */
@@ -273,9 +277,70 @@ describe('待办 → 课程：说"阶段一"就该落到第一阶段', () => {
     expect(link?.unitId).toBeUndefined()
   })
 
+  it('同义说法一个都不能漏：阶段一 = 阶段1 = 第一阶段 = 第 1 章 = 第一章', () => {
+    const course = makeCourse()
+    for (const phrase of [
+      '学完阶段一',
+      '学完阶段1',
+      '学完第一阶段',
+      '学完第 1 阶段',
+      '学完第1章',
+      '学完第一章',
+      '学完第 1 章',
+      '学完第一部分',
+    ]) {
+      const link = matchTodoToCourse(phrase, [course], NO_PLANS)
+      expect(link?.stageId, phrase).toBe('s1')
+      expect(link?.unitId, phrase).toBeUndefined()
+    }
+  })
+
   it('「第二章」命中第二阶段', () => {
     const link = matchTodoToCourse('把第二章过一遍', [makeCourse()], NO_PLANS)
     expect(link?.stageId).toBe('s2')
+  })
+
+  it('课程名决定归属：两门课都有第一阶段时，看用户说了哪门课', () => {
+    const other: Course = {
+      ...makeCourse(),
+      id: 'c2',
+      title: '文言文阅读',
+      stages: [
+        {
+          id: 'w1',
+          title: '先把字词句读通',
+          order: 0,
+          units: [
+            { id: 'w1u1', title: '一词多义', knowledgePoints: [], estimatedMinutes: 60, order: 0 },
+          ],
+        },
+        {
+          id: 'w2',
+          title: '篇目精读',
+          order: 1,
+          units: [
+            { id: 'w2u1', title: '劝学', knowledgePoints: [], estimatedMinutes: 60, order: 0 },
+          ],
+        },
+      ],
+    }
+
+    const courses = [other, makeCourse()]
+    expect(matchTodoToCourse('学完 C语言程序设计 阶段一', courses, NO_PLANS)?.stageId).toBe('s1')
+    expect(matchTodoToCourse('学完文言文阅读 阶段一', courses, NO_PLANS)?.stageId).toBe('w1')
+  })
+
+  it('课程名只提一半也算（「C语言」指的是《C语言基础入门》）', () => {
+    const c: Course = { ...makeCourse(), id: 'c-c', title: 'C语言基础入门' }
+    const other: Course = {
+      ...makeCourse(),
+      id: 'c-w',
+      title: '文言文阅读 · 中高考贯通',
+    }
+    // 文言文排在前面：不认部分提及的话，第一条会按数组顺序落到它身上
+    const courses = [other, c]
+    expect(matchTodoToCourse('学完C语言阶段一', courses, NO_PLANS)?.courseId).toBe('c-c')
+    expect(matchTodoToCourse('学完C语言阶段一', courses, NO_PLANS)?.stageId).toBe('s1')
   })
 
   it('序号超出范围时不硬套：说"第九章"而只有三章 → 不匹配', () => {
@@ -293,6 +358,16 @@ describe('待办 → 课程：说"阶段一"就该落到第一阶段', () => {
     const link = matchTodoToCourse('学完第 1 章的 1.2 变量与类型', [makeCourse()], NO_PLANS)
     expect(link?.stageId).toBeUndefined()
     expect(link?.unitId).toBe('s1u2')
+  })
+
+  it('「第 3 讲」按序号落到第三节；网课用户就是这么说的', () => {
+    expect(matchTodoToCourse('看完第 3 讲', [makeCourse()], NO_PLANS)?.unitId).toBe('s1u3')
+    expect(matchTodoToCourse('看完第三讲', [makeCourse()], NO_PLANS)?.unitId).toBe('s1u3')
+  })
+
+  it('「第 2 章第 1 讲」里的序号是**段内**序号，不是全课程序号', () => {
+    // 全课程第 1 节是 s1u1；段内第 1 节应该是 s2u1
+    expect(matchTodoToCourse('学完第 2 章第 1 讲', [makeCourse()], NO_PLANS)?.unitId).toBe('s2u1')
   })
 })
 
@@ -334,5 +409,51 @@ describe('完成整段待办 → 这一段每一节都算完成', () => {
     const course = makeCourse()
     expect(stageIdOfUnit(course, 's2u1')).toBe('s2')
     expect(stageIdOfUnit(course, '不存在')).toBeUndefined()
+  })
+})
+
+describe('修正历史数据：只挂在某一节上的"整段"待办', () => {
+  const todo = (overrides: Partial<Todo>): Todo => ({
+    id: 't1',
+    title: '学完 C语言 阶段一',
+    date: '2026-09-25',
+    done: false,
+    createdAt: '2026-09-25T00:00:00.000Z',
+    ...overrides,
+  })
+
+  beforeEach(() => {
+    useCourseStore.setState({ courses: [makeCourse()] })
+    usePlanStore.setState({ plans: {} })
+    useTodoStore.setState({ todos: [] })
+  })
+
+  it('标题说了整段、却挂在这一段的第一节上 → 升级成整段', () => {
+    useTodoStore.setState({
+      todos: [todo({ courseId: 'c1', unitId: 's1u1', planItemId: 'p1' })],
+    })
+
+    expect(repairStageLinks()).toBe(1)
+    const fixed = useTodoStore.getState().todos[0]!
+    expect(fixed.stageId).toBe('s1')
+    expect(fixed.unitId).toBeUndefined()
+    expect(fixed.planItemId).toBeUndefined()
+  })
+
+  it('幂等：修过之后再跑不会重复计数', () => {
+    useTodoStore.setState({ todos: [todo({ courseId: 'c1', unitId: 's1u1' })] })
+    expect(repairStageLinks()).toBe(1)
+    expect(repairStageLinks()).toBe(0)
+  })
+
+  it('挂的是别的段里的某一节时不动它（用户手动调过的关联不该被覆盖）', () => {
+    useTodoStore.setState({ todos: [todo({ courseId: 'c1', unitId: 's2u1' })] })
+    expect(repairStageLinks()).toBe(0)
+    expect(useTodoStore.getState().todos[0]?.unitId).toBe('s2u1')
+  })
+
+  it('标题里认不出阶段时不碰', () => {
+    useTodoStore.setState({ todos: [todo({ title: '随便一件事', unitId: 's1u1' })] })
+    expect(repairStageLinks()).toBe(0)
   })
 })

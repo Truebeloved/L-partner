@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 
-import { isWeeklyTodo, matchTodoToCourse } from '@/features/today/autoTodo'
+import { isWeeklyTodo, matchTodoToCourse, repairStageLinks } from '@/features/today/autoTodo'
 import { syncMasteryForCourse } from '@/features/memory/mastery'
 import { formatDateHuman, isOverdue, todayKey } from '@/lib/date'
 import { useCourseStore } from '@/store/courses'
@@ -42,6 +42,15 @@ export function TodaySidebarWidget() {
    */
   const todoMenu = useTodoMenu()
   const handleRemove = (todo: Todo) => removeTodo(todo.id)
+
+  /*
+   * 一次性修正历史数据：上一版把"学完阶段一"这类待办挂到了某一节上，
+   * 而那些待办已经带着 unitId，永远不会再走"关联修正"这条路。
+   * 这个面板是常驻的，借它跑一次；函数本身幂等，跑多少次都安全。
+   */
+  useEffect(() => {
+    repairStageLinks()
+  }, [])
 
   // 必须订阅 courses 而不是 getState()：新建或删除课程后这里要跟着变，
   // 用 getState() 只在首次计算时取一次，之后课程名会一直显示旧值

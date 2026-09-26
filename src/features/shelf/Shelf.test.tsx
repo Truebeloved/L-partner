@@ -166,16 +166,16 @@ describe('Shelf 交互', () => {
     expect(buttons[0]).toHaveAccessibleName('React')
   })
 
-  it('一本课程都没有时也撑出一排空白书脊，并给出真正的添加入口', () => {
+  it('一本课程都没有时也撑出一排空白书脊，并给出两个走得通的入口', () => {
     renderShelf()
 
     expect(screen.getByText('书架还是空的')).toBeInTheDocument()
     /*
-     * 入口必须是「新建课程」本身，不能是一个跳去课程列表的链接 ——
-     * 课程总览页早就删掉了，那个链接点下去只会回到书架自己（等于没反应）。
+     * 两个入口缺一不可 —— 这是踩过一次才补的：
+     * 「新建课程」需要先配好大模型，而"载入示例课程"是零配置下唯一的出路。
+     * 只有前者时，没配 key 的用户会站在空书架前，哪个都走不通。
      */
-    const buttons = screen.getAllByRole('button')
-    expect(buttons).toHaveLength(1)
-    expect(buttons[0]).toHaveAccessibleName('新建课程')
+    expect(screen.getByRole('button', { name: '新建课程' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '载入示例课程' })).toBeInTheDocument()
   })
 })

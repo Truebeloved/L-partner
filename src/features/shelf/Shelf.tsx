@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { deleteCourseCompletely, planItemState } from '@/features/course/courseActions'
 import { ConfirmDialog } from '@/features/course/components/ConfirmDialog'
 import { NewCourseButton } from '@/features/course/components/NewCourseButton'
+import { installSeedCourses } from '@/features/course/seedInstall'
 import { BlankSpine } from '@/features/shelf/BlankSpine'
 import { BookDetailPopup } from '@/features/shelf/BookDetailPopup'
 import type { AnchorRect } from '@/features/shelf/BookDetailPopup'
@@ -210,11 +211,23 @@ export function Shelf() {
             <p className="font-display text-h3 font-bold text-ink">书架还是空的</p>
             <p className="hint mt-2">建立第一门课程，它就会成为这里的一本书</p>
             {/*
-              这里必须是**新建课程本身**，不能是一个跳去"课程列表"的链接 ——
-              课程总览页早就删掉了，那个链接只会把用户送回书架自己（点了跟没点一样）。
+              两个入口缺一不可，这是踩过一次才补的：
+              「示例课程」只在首次启动自动上架一次（见 seedInstall），用户把课程删光之后
+              它就不会再回来 —— 而「新建课程」需要先配好大模型。只有前者时，
+              一个没配 key 的用户会站在空书架前，两个按钮都走不通。
+
+              必须用 NewCourseButton 而不是跳去"课程列表"的链接：课程总览页早就删掉了，
+              那个链接只会把用户送回书架自己（点了跟没点一样）。
             */}
-            <div className="mt-4 flex justify-center">
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
               <NewCourseButton />
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => installSeedCourses({ force: true })}
+              >
+                载入示例课程
+              </button>
             </div>
           </div>
         </div>

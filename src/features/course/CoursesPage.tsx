@@ -11,8 +11,9 @@ import { AiPlanDialog } from '@/features/course/components/AiPlanDialog'
 import { ConfirmDialog } from '@/features/course/components/ConfirmDialog'
 import { CourseCard } from '@/features/course/components/CourseCard'
 import { CourseFormDialog } from '@/features/course/components/CourseFormDialog'
+import { SeedCourseDialog } from '@/features/course/components/SeedCourseDialog'
 import type { AiPlanRequest, CoursePlanDraft } from '@/features/course/drafts'
-import { buildDemoCourseDraft } from '@/lib/seed/demoCourse'
+import type { SeedCourse } from '@/lib/seed/courses'
 import { useCourseStore } from '@/store/courses'
 import { usePlanStore } from '@/store/plans'
 import { useTodoStore } from '@/store/todos'
@@ -46,6 +47,7 @@ export function CoursesPage({ onGenerateWithAi }: CoursesPageProps = {}) {
   const [formInitial, setFormInitial] = useState<CoursePlanDraft | null>(null)
   const [formFromAi, setFormFromAi] = useState(false)
   const [aiOpen, setAiOpen] = useState(false)
+  const [seedOpen, setSeedOpen] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<Course | null>(null)
 
   const aiReady = Boolean(onGenerateWithAi)
@@ -73,9 +75,10 @@ export function CoursesPage({ onGenerateWithAi }: CoursesPageProps = {}) {
     navigate(`/courses/${id}`)
   }
 
-  function handleLoadDemo() {
+  function handleLoadSeed(seed: SeedCourse) {
     // 示例课程是随仓库一起交付的真实教学方案，来源如实记成「手动创建」，不冒充 AI 生成
-    const id = createCourse({ ...buildDemoCourseDraft(), source: 'manual' })
+    const id = createCourse({ ...seed.build(), source: 'manual' })
+    setSeedOpen(false)
     navigate(`/courses/${id}`)
   }
 
@@ -107,6 +110,11 @@ export function CoursesPage({ onGenerateWithAi }: CoursesPageProps = {}) {
             >
               让 AI 帮我生成方案
             </button>
+            {/* 已经有课程之后，"示例课程"就不再是主路径，降级成次要入口：
+                留着它是为了让用户随时能看到随仓库交付的完整教学方案（比如文言文那份） */}
+            <button type="button" className="btn btn-secondary" onClick={() => setSeedOpen(true)}>
+              示例课程
+            </button>
             <button type="button" className="btn btn-primary" onClick={openManualForm}>
               新建课程
             </button>
@@ -126,7 +134,7 @@ export function CoursesPage({ onGenerateWithAi }: CoursesPageProps = {}) {
             {/* 顶部栏已经有「新建课程」和「让 AI 帮我生成方案」，这里不再重复一遍 ——
                 同一个动作在一屏里出现两次，用户反而不知道该点哪个 */}
             <div className="mt-6 flex flex-wrap items-center justify-center gap-4">
-              <button type="button" className="btn btn-primary" onClick={handleLoadDemo}>
+              <button type="button" className="btn btn-primary" onClick={() => setSeedOpen(true)}>
                 载入示例课程
               </button>
               <button type="button" className="btn btn-secondary" onClick={openManualForm}>
@@ -170,6 +178,10 @@ export function CoursesPage({ onGenerateWithAi }: CoursesPageProps = {}) {
             setFormOpen(true)
           }}
         />
+      )}
+
+      {seedOpen && (
+        <SeedCourseDialog onPick={handleLoadSeed} onCancel={() => setSeedOpen(false)} />
       )}
 
       {pendingDelete && (

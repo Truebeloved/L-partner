@@ -20,6 +20,14 @@ export interface UnitDraft {
   /** 这一节对应的公开课视频（AI 给的一讲，不是合集首页）；没有就留空 */
   resourceUrl?: string
   resourceLabel?: string
+  /**
+   * 随课程一起交付的教学正文（Markdown）。
+   *
+   * 存在的理由：并不是每一份好教材都要等模型现写。随仓库交付的示例课程
+   * （如文言文篇目精读）本身就带着原文、考点解析与设问链 —— 打开就能读，
+   * 不依赖 API Key。所以草稿层必须能携带它，否则这类课程落库后只剩一个目录。
+   */
+  content?: string
 }
 
 export interface StageDraft {
@@ -96,6 +104,8 @@ export function buildStages(drafts: StageDraft[]): Stage[] {
         ...(unit.resourceUrl?.trim()
           ? { resourceUrl: unit.resourceUrl.trim(), resourceLabel: unit.resourceLabel?.trim() }
           : {}),
+        // 同理：没有正文就不要写一个空串，界面上「有没有讲义」靠它判断
+        ...(unit.content?.trim() ? { content: unit.content } : {}),
       }
     }),
   }))

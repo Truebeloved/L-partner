@@ -28,6 +28,14 @@ interface UnitForm {
    */
   resourceUrl?: string
   resourceLabel?: string
+  /**
+   * 单元正文（Markdown）。
+   *
+   * 表单里不编辑它，但必须**原样穿过表单**：示例课程（文言文篇目精读）自带讲义，
+   * 用户改一次课程标题再点保存，如果这里不带着它，讲义就被清空了 ——
+   * 和当初 resourceUrl 被表单吃掉是同一类问题。
+   */
+  content?: string
 }
 
 interface StageForm {
@@ -424,6 +432,8 @@ function toForm(draft?: CoursePlanDraft | null): FormState {
                     // 视频链接要原样带过来，否则「保存」就等于把链接删了
                     resourceUrl: unit.resourceUrl,
                     resourceLabel: unit.resourceLabel,
+                    // 讲义同理：表单不编辑它，但不能弄丢它
+                    content: unit.content,
                   }))
                 : [emptyUnitForm()],
           }))
@@ -454,6 +464,7 @@ function toDraft(form: FormState): CoursePlanDraft {
           ...(unit.resourceUrl
             ? { resourceUrl: unit.resourceUrl, resourceLabel: unit.resourceLabel }
             : {}),
+          ...(unit.content ? { content: unit.content } : {}),
         }
       }),
     })),

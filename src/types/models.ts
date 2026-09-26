@@ -287,6 +287,13 @@ export interface AppSettings {
   desktopReminderMaxPerDay: number
   /** 是否在生成记忆前征求确认（控制 token 消耗） */
   autoExtractMemory: boolean
+  /**
+   * 省流模式：在**不降低回答质量**的前提下压掉冗余上下文。
+   *
+   * 关掉它不是"更好"，而是"更贵"：同一轮对话会多带上整棵课程大纲、
+   * 更长的历史尾巴和更多记忆条目。默认开启，因为 API 费用是用户自己付的。
+   */
+  efficientMode: boolean
 }
 
 // ---------------------------------------------------------------------------

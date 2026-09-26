@@ -3,9 +3,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { extractMemories, EXTRACTION_INTERVAL } from '@/features/memory/extract'
 import { retrieveMemories } from '@/features/memory/retrieve'
 import { createProvider } from '@/lib/llm'
-import { buildSystemPrompt } from '@/lib/llm/prompts'
+import { assembleMessages, clampText, estimateMessagesTokens } from '@/lib/llm/context'
+import { buildStablePrompt, buildVolatilePrompt } from '@/lib/llm/prompts'
 import { LlmError } from '@/lib/llm/types'
-import type { LlmMessage } from '@/lib/llm/types'
 import { useChatStore } from '@/store/chat'
 import { useCourseStore } from '@/store/courses'
 import { useMemoryStore } from '@/store/memory'
@@ -15,14 +15,13 @@ import { useSettingsStore } from '@/store/settings'
 import { useTodoStore } from '@/store/todos'
 import { todayKey } from '@/lib/date'
 
-/** 送入模型的历史消息条数上限。更早的内容靠会话摘要承载 */
-const HISTORY_WINDOW = 12
-
 export interface ChatSession {
   streaming: boolean
   error: { message: string; hint?: string } | null
   /** 本轮回答实际带上了几条记忆 —— 在界面上如实展示，让「记忆」不是黑盒 */
   usedMemoryCount: number
+  /** 本轮请求的上下文估算 token 数 —— 让"花了多少"可见，而不是月底看账单 */
+  contextTokens: number
   send: (text: string) => Promise<void>
   stop: () => void
   rememberNow: () => Promise<number>
@@ -31,7 +30,7 @@ export interface ChatSession {
 /**
  * 对话会话逻辑。
  *
- * 一次 send 做四件事：检索记忆 → 组装 system prompt → 流式请求 → 按策略抽取新记忆。
+ * 一次 send 做四件事：检索记忆 → 组装上下文（省流）→ 流式请求 → 按策略抽取新记忆。
  * 抽出来单独放，是为了让 ChatPage 只关心渲染。
  */
 export function useChatSession(): ChatSession {
@@ -41,6 +40,7 @@ export function useChatSession(): ChatSession {
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<ChatSession['error']>(null)
   const [usedMemoryCount, setUsedMemoryCount] = useState(0)
+  const [contextTokens, setContextTokens] = useState(0)
   const abortRef = useRef<AbortController | null>(null)
 
   // 卸载时中断在途请求，避免往已卸载的 store 里写状态
@@ -101,29 +101,45 @@ export function useChatSession(): ChatSession {
         .map((message) => message.content)
         .join(' ')
 
+      // 省流模式下少带几条记忆、每条也短一些 —— 记忆是"辅助"，不该喧宾夺主
+      const efficient = settings.efficientMode
       const memories = retrieveMemories({
         entries: useMemoryStore.getState().entries,
         courseId,
         query,
-        limit: 8,
+        limit: efficient ? 5 : 8,
       })
       setUsedMemoryCount(memories.length)
       // 记录「被使用过」，这是记忆演化（常用加权 / 长期不用降权）的数据来源
       useMemoryStore.getState().touch(memories.map((memory) => memory.id))
 
-      const system = buildSystemPrompt({ persona, course, plan, todayTodos, memories })
+      const promptContext = {
+        persona,
+        course,
+        plan,
+        todayTodos,
+        memories: efficient
+          ? memories.map((memory) => ({
+              ...memory,
+              content: clampText(memory.content, 80),
+            }))
+          : memories,
+        efficient,
+      }
 
-      const llmMessages: LlmMessage[] = [
-        { role: 'system', content: system },
-        ...(before?.summary
-          ? [{ role: 'system' as const, content: `之前对话的摘要：\n${before.summary}` }]
-          : []),
-        ...history.slice(-HISTORY_WINDOW).map((message) => ({
-          role: message.role,
-          content: message.content,
-        })),
-        { role: 'user', content: trimmed },
-      ]
+      /*
+       * 组装消息：稳定前缀（人设 + 准则）在最前，易变部分（课程进度、今日安排、记忆）其后。
+       * 顺序决定缓存能否命中，见 lib/llm/context.ts 的说明。
+       */
+      const llmMessages = assembleMessages({
+        systemStable: buildStablePrompt(persona),
+        systemVolatile: buildVolatilePrompt(promptContext),
+        summary: before?.summary,
+        history,
+        question: trimmed,
+        efficient,
+      })
+      setContextTokens(estimateMessagesTokens(llmMessages))
 
       // ---- 流式请求 ----
       const controller = new AbortController()
@@ -205,8 +221,8 @@ export function useChatSession(): ChatSession {
   }, [conversationId, settings.llm])
 
   return useMemo(
-    () => ({ streaming, error, usedMemoryCount, send, stop, rememberNow }),
-    [streaming, error, usedMemoryCount, send, stop, rememberNow],
+    () => ({ streaming, error, usedMemoryCount, contextTokens, send, stop, rememberNow }),
+    [streaming, error, usedMemoryCount, contextTokens, send, stop, rememberNow],
   )
 }
 

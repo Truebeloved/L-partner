@@ -28,6 +28,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   desktopReminderTo: '21:30',
   desktopReminderMaxPerDay: 4,
   autoExtractMemory: true,
+  // 默认开启：省流模式压掉的是冗余上下文（整棵课程大纲、超长历史尾巴、多余记忆条目），
+  // 不是回答本身。费用由用户自己承担，默认值就该是省钱的那一个。
+  efficientMode: true,
 }
 
 interface SettingsState {

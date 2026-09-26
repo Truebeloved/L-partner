@@ -1,5 +1,6 @@
 import { useNavigate, useParams } from 'react-router-dom'
 
+import { AssistantBar } from '@/features/assistant/AssistantBar'
 import { CourseDetailPage } from '@/features/course/CourseDetailPage'
 import { useCourseStore } from '@/store/courses'
 
@@ -30,6 +31,12 @@ export function CourseStudyPage() {
           ← 返回书架
         </button>
         <span className="min-w-0 flex-1 truncate text-small text-ink-soft">{title ?? '课程'}</span>
+        {/*
+          二级界面同样是「顶部 + 右对齐」，只是面积更大一档。
+          右内边距与一级界面一致（都是 24px），所以从书架点进课程时，
+          输入条的右边缘停在原处不动 —— 换页时位置跳一下是很廉价的感觉。
+        */}
+        <AssistantBar variant="secondary" />
       </header>
 
       <div className="mx-auto max-w-4xl px-6 py-6">

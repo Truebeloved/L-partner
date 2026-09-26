@@ -30,6 +30,9 @@ export type IconName =
   | 'close'
   | 'alert'
   | 'archive'
+  | 'send'
+  | 'chevronDown'
+  | 'chevronUp'
 
 const ICONS: Record<IconName, ReactNode> = {
   // 一排书立在一道隔板上 —— 与「书架」这个隐喻直接对应
@@ -116,6 +119,10 @@ const ICONS: Record<IconName, ReactNode> = {
       <path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4" />
     </>
   ),
+  // 向上的箭头：输入条的发送键。用箭头而不是纸飞机，是为了和「收起 / 展开」这套方向语义一致
+  send: <path d="M12 19V5M6 11l6-6 6 6" />,
+  chevronDown: <path d="m6 9 6 6 6-6" />,
+  chevronUp: <path d="m6 15 6-6 6 6" />,
 }
 
 interface IconProps extends Omit<SVGProps<SVGSVGElement>, 'name'> {

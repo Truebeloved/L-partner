@@ -2,6 +2,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 
 import { Icon } from '@/components/Icon'
 import type { IconName } from '@/components/Icon'
+import { AssistantBar } from '@/features/assistant/AssistantBar'
 import { ReminderProvider } from '@/features/reminder/ReminderProvider'
 import { TodaySidebarWidget } from '@/features/today/TodaySidebarWidget'
 
@@ -83,6 +84,19 @@ export function AppLayout() {
           <header className="flex items-center gap-2 border-b border-line-soft px-4 py-3 md:hidden">
             <span className="font-display text-h3 font-bold text-ink">L-partner</span>
           </header>
+
+          {/*
+            学伴输入条的位置：内容区顶部一条**专属条带**，右对齐。
+            为什么占位而不是悬浮：悬浮会盖住页面右上角的内容（标题、操作按钮都在那一带）。
+            占位只让正文下移几十像素，而回答展开时它才向下覆盖内容 ——
+            "平时不碍事、需要时才铺开"正是这条输入条的定位。
+            右内边距 24px 与二级界面（course 页）一致，两处切换时右边缘在同一条竖线上。
+          */}
+          <div className="relative z-30 shrink-0 px-6 pt-4 pb-1">
+            <div className="flex justify-end">
+              <AssistantBar variant="primary" />
+            </div>
+          </div>
 
           <main className="min-h-0 flex-1 overflow-y-auto">
             <Outlet />

@@ -5,7 +5,9 @@ import { Icon } from '@/components/Icon'
 import { PersonaAvatar } from '@/components/PersonaAvatar'
 import { Composer } from '@/features/chat/components/Composer'
 import { MessageBubble } from '@/features/chat/components/MessageBubble'
-import { useActiveConversation, useChatSession } from '@/features/chat/useChatSession'
+import { useChatSessionContext } from '@/features/chat/context'
+import { useActiveConversation } from '@/features/chat/useChatSession'
+import { formatTokens } from '@/lib/llm/context'
 import { useChatStore } from '@/store/chat'
 import { useCourseStore } from '@/store/courses'
 import { useMemoryStore } from '@/store/memory'
@@ -37,7 +39,12 @@ export function ChatPage() {
   const memoryCount = useMemoryStore((state) => state.entries.length)
 
   const conversation = useActiveConversation()
-  const session = useChatSession()
+  /**
+   * 会话状态来自应用外壳的 ChatSessionProvider，而不是在这里现起一份：
+   * 顶部输入条和这一页看的是同一场对话，两份状态必然会对不上
+   * （页面上点了发送，输入条却不知道正在流式输出）。
+   */
+  const session = useChatSessionContext()
 
   const [notice, setNotice] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -140,6 +147,19 @@ export function ChatPage() {
           {session.usedMemoryCount > 0 && (
             <span className="badge" title="本轮回答注入的记忆条数，可在「记忆」页查看和修改">
               <Icon name="layers" size={12} /> 引用 {session.usedMemoryCount} 条记忆
+            </span>
+          )}
+          {/* 上下文规模明码标价：API 费用是用户自己付的，"花了多少"不该等到月底看账单才知道 */}
+          {session.contextTokens > 0 && (
+            <span
+              className="badge hidden border-transparent bg-ink/5 text-ink-soft tabular sm:inline-flex"
+              title={
+                settings.efficientMode
+                  ? '本轮请求的上下文估算值（省流模式已开启）'
+                  : '本轮请求的上下文估算值（省流模式已关闭）'
+              }
+            >
+              约 {formatTokens(session.contextTokens)} tokens
             </span>
           )}
           {/* 计数标签做成无边框浅底：它和上面的引用标签不是同级信息，

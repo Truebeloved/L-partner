@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 
 import { AppLayout } from '@/components/AppLayout'
+import { ChatSessionProvider } from '@/features/chat/ChatSessionProvider'
 import { ChatPage } from '@/features/chat/ChatPage'
 import { CompanionPage } from '@/features/companion/CompanionPage'
 import { CourseStudyPage } from '@/features/course/CourseStudyPage'
@@ -69,33 +70,36 @@ export default function App() {
         ))}
 
       <HashRouter>
-        <Routes>
-          {/*
-            提醒小窗：一个独立、极小、无外壳的表面。
-            必须在 AppLayout 之外 —— 它没有侧栏、没有导航，只有一条提示。
-          */}
-          <Route path="toast" element={<ToastView />} />
+        {/* 会话宿主：一级界面的输入条、二级界面的输入条、对话页共用同一场对话 */}
+        <ChatSessionProvider>
+          <Routes>
+            {/*
+              提醒小窗：一个独立、极小、无外壳的表面。
+              必须在 AppLayout 之外 —— 它没有侧栏、没有导航，只有一条提示。
+            */}
+            <Route path="toast" element={<ToastView />} />
 
-          {/* 二级界面：全屏，不带侧栏 */}
-          <Route path="courses/:courseId" element={<CourseStudyPage />} />
+            {/* 二级界面：全屏，不带侧栏 */}
+            <Route path="courses/:courseId" element={<CourseStudyPage />} />
 
-          {/* 一级界面 */}
-          <Route element={<AppLayout />}>
-            <Route index element={<ShelfPage />} />
-            {/* 今日待办在侧栏有常驻的紧凑视图；这个页面是它的完整版
-                （逾期分区、提醒状态、手动添加）。侧栏里放「查看全部」入口。 */}
-            <Route path="today" element={<TodayPage />} />
-            <Route path="chat" element={<ChatPage />} />
-            {/* 角色与记忆合并为「学伴」，旧路径保留重定向，避免旧书签直接白屏 */}
-            <Route path="companion" element={<CompanionPage />} />
-            <Route path="memory" element={<Navigate to="/companion" replace />} />
-            <Route path="personas" element={<Navigate to="/companion" replace />} />
-            <Route path="settings" element={<SettingsPage />} />
-            {/* 过渡期：添加/编辑课程的表单页，等导航栏定稿后会改成弹窗入口 */}
-            <Route path="courses" element={<CoursesRoute />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Route>
-        </Routes>
+            {/* 一级界面 */}
+            <Route element={<AppLayout />}>
+              <Route index element={<ShelfPage />} />
+              {/* 今日待办在侧栏有常驻的紧凑视图；这个页面是它的完整版
+                  （逾期分区、提醒状态、手动添加）。侧栏里放「查看全部」入口。 */}
+              <Route path="today" element={<TodayPage />} />
+              <Route path="chat" element={<ChatPage />} />
+              {/* 角色与记忆合并为「学伴」，旧路径保留重定向，避免旧书签直接白屏 */}
+              <Route path="companion" element={<CompanionPage />} />
+              <Route path="memory" element={<Navigate to="/companion" replace />} />
+              <Route path="personas" element={<Navigate to="/companion" replace />} />
+              <Route path="settings" element={<SettingsPage />} />
+              {/* 过渡期：添加/编辑课程的表单页，等导航栏定稿后会改成弹窗入口 */}
+              <Route path="courses" element={<CoursesRoute />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Route>
+          </Routes>
+        </ChatSessionProvider>
       </HashRouter>
     </>
   )

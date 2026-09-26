@@ -1,4 +1,5 @@
 import { dayjs } from '@/lib/date'
+import { clampText } from '@/lib/llm/context'
 import type { LlmMessage } from '@/lib/llm/types'
 import type { ChatMessage, Course, MemoryEntry, Persona, Plan, Todo } from '@/types/models'
 
@@ -10,22 +11,22 @@ export interface PromptContext {
   todayTodos?: Todo[]
   /** 已检索出的相关记忆（见 features/memory/retrieve.ts） */
   memories?: MemoryEntry[]
+  /** 省流模式：课程只给当前阶段、记忆条目更少更短 */
+  efficient?: boolean
 }
 
 /**
- * 组装 system prompt。
+ * 稳定前缀：**只有人设与准则**。
  *
- * 这是整个「学伴感」的来源，刻意分成四段而不是把信息混在一起：
- *   1. 角色 —— 决定「它是谁、怎么说话」
- *   2. 情境 —— 决定「它在帮你学什么、进度到哪」
- *   3. 记忆 —— 决定「它认识你多久了」（这是和通用聊天框拉开差距的地方）
- *   4. 准则 —— 约束行为边界
+ * 为什么把它单独拆出来：厂商的上下文缓存按**前缀**匹配，命中部分只收 1/10 的价格。
+ * 人设和准则是整场对话里唯一不变的两段，把它们放在最前面、且不掺任何会变的字，
+ * 同一段文字就能在几十轮里反复命中缓存。反过来（把课程进度、记忆夹在人设后面）
+ * 等于每轮都为同一段人设付全价 —— 这是最容易被忽略、也最容易省下的一笔钱。
+ *
+ * ⚠️ 这个函数的输出必须是**字节稳定**的：不要在这里加时间、进度、随机内容。
  */
-export function buildSystemPrompt(context: PromptContext): string {
-  const { persona, course, plan, todayTodos = [], memories = [] } = context
-  const sections: string[] = []
-
-  sections.push(
+export function buildStablePrompt(persona: Persona): string {
+  return [
     [
       '你是一位学习伙伴，不是通用问答机器人。请始终以上面这个人设说话。',
       '',
@@ -39,10 +40,31 @@ export function buildSystemPrompt(context: PromptContext): string {
     ]
       .filter(Boolean)
       .join('\n'),
-  )
+    [
+      '## 回答准则',
+      '- 用中文回答，除非他明确要求其他语言。',
+      '- 不确定的事就说「我不确定」，不要编造事实、论文、版本号或 API。',
+      '- 回答长度跟着问题走：简单问题就短答，别把「这是什么」答成一篇文章。',
+      '- 讲到他薄弱的知识点时，可以顺着提一句，但不要每次都硬拉回学习话题。',
+      '- 如果他只是在吐槽、焦虑或闲聊，先正常回应他这个人，再谈学习。',
+    ].join('\n'),
+  ].join('\n\n')
+}
+
+/**
+ * 易变部分：课程进度、今天的安排、相关记忆。
+ *
+ * 它们每轮都会变，所以只能放在稳定前缀**之后**，让缓存尽量多地覆盖前面那段。
+ * 顺带一提，「今天几号」也属于易变信息，一并放在这里。
+ */
+export function buildVolatilePrompt(context: PromptContext): string {
+  const { course, plan, todayTodos = [], memories = [], efficient = false } = context
+  const sections: string[] = []
+
+  sections.push(`## 现在\n今天是 ${dayjs().format('YYYY年M月D日 dddd')}。`)
 
   if (course) {
-    sections.push(buildCourseSection(course, plan))
+    sections.push(buildCourseSection(course, plan, efficient))
   }
 
   if (todayTodos.length > 0) {
@@ -66,21 +88,27 @@ export function buildSystemPrompt(context: PromptContext): string {
     sections.push(buildMemorySection(memories))
   }
 
-  sections.push(
-    [
-      '## 回答准则',
-      '- 用中文回答，除非他明确要求其他语言。',
-      '- 不确定的事就说「我不确定」，不要编造事实、论文、版本号或 API。',
-      '- 回答长度跟着问题走：简单问题就短答，别把「这是什么」答成一篇文章。',
-      '- 讲到他薄弱的知识点时，可以顺着提一句，但不要每次都硬拉回学习话题。',
-      '- 如果他只是在吐槽、焦虑或闲聊，先正常回应他这个人，再谈学习。',
-    ].join('\n'),
-  )
-
   return sections.join('\n\n')
 }
 
-function buildCourseSection(course: Course, plan?: Plan): string {
+/**
+ * 完整 system prompt = 稳定前缀 + 易变部分。
+ *
+ * 现在实际发送时是拆成两条 system 消息的（见 lib/llm/context.ts 的 assembleMessages），
+ * 这个合并版留给单测与需要"一整块 prompt"的调用方。
+ */
+export function buildSystemPrompt(context: PromptContext): string {
+  return `${buildStablePrompt(context.persona)}\n\n${buildVolatilePrompt(context)}`
+}
+
+/**
+ * 课程段。
+ *
+ * 省流模式下**不再列出整棵大纲** —— 那是课程页该展示的东西，而每轮对话都带上
+ * 「16 个单元的名字」是纯粹的浪费：模型真要讲某个单元时，用户会说出来。
+ * 留下的是回答「我现在该学什么」真正需要的那几项：目标、期限、进度、当前阶段、下一个未完成单元。
+ */
+function buildCourseSection(course: Course, plan: Plan | undefined, efficient: boolean): string {
   const units = course.stages.flatMap((stage) => stage.units)
   const lines = [`## 你正在帮他学的东西`, `课程：${course.title}`]
 
@@ -104,15 +132,49 @@ function buildCourseSection(course: Course, plan?: Plan): string {
     lines.push(`计划进度：${plan.items.length} 个任务中已完成 ${done} 个`)
   }
 
-  if (units.length > 0) {
-    lines.push(`内容结构：${course.stages.length} 个阶段、${units.length} 个单元`)
+  if (units.length === 0) return lines.join('\n')
+
+  lines.push(`内容结构：${course.stages.length} 个阶段、${units.length} 个单元`)
+
+  if (!efficient) {
     const outline = course.stages
       .map((stage) => `- ${stage.title}：${stage.units.map((unit) => unit.title).join('、')}`)
       .join('\n')
     lines.push(outline)
+    return lines.join('\n')
+  }
+
+  // 省流：只给"当前阶段"和"下一个没完成的单元"，够回答"我该学什么"，又不烧大纲的钱
+  const current = findCurrentPosition(course, plan)
+  if (current) {
+    lines.push(`当前阶段：${current.stageTitle}`)
+    if (current.unitTitle) lines.push(`下一个要学的单元：${current.unitTitle}`)
   }
 
   return lines.join('\n')
+}
+
+/** 从计划里找出第一个未完成的排期项，映射回它所属的阶段与单元 */
+function findCurrentPosition(
+  course: Course,
+  plan: Plan | undefined,
+): { stageTitle: string; unitTitle?: string } | null {
+  if (!plan || plan.items.length === 0) return null
+
+  const pending = plan.items
+    .filter((item) => item.status === 'todo')
+    .sort((a, b) => a.date.localeCompare(b.date))[0]
+
+  if (pending) {
+    for (const stage of course.stages) {
+      const unit = stage.units.find((candidate) => candidate.id === pending.unitId)
+      if (unit) return { stageTitle: stage.title, unitTitle: unit.title }
+    }
+  }
+
+  // 计划全部完成：至少告诉模型它已经走到哪一阶段了
+  const lastStage = course.stages[course.stages.length - 1]
+  return lastStage ? { stageTitle: `${lastStage.title}（已完成）` } : null
 }
 
 function buildMemorySection(memories: MemoryEntry[]): string {
@@ -174,25 +236,42 @@ export const MEMORY_EXTRACTION_SYSTEM_PROMPT = `你是一个记忆抽取器。�
 - 每条都要简短。宁可少记，也不要记废话。
 - 没有任何值得记的内容时，三个字段都返回空数组。`
 
+/**
+ * 记忆抽取的输入。
+ *
+ * 两处封顶都是必须的，否则这个请求会随对话增长而无限变贵：
+ * - `conversation` 只该是**自上次抽取以来的增量**（调用方负责切），这里再对单条与整体做截断；
+ * - `existing` 是"不要重复"的参照，但记忆越攒越多，全列出来等于每 8 条消息就重发一遍全部记忆。
+ *   只带最近的若干条就够了 —— 更早的记忆要么已经重复过，要么本来就不相关。
+ */
 export function buildMemoryExtractionMessages(
   conversation: ChatMessage[],
   existing: MemoryEntry[],
 ): LlmMessage[] {
   const transcript = conversation
-    .map((message) => `${message.role === 'user' ? '学生' : '学伴'}：${message.content}`)
+    .map(
+      (message) =>
+        `${message.role === 'user' ? '学生' : '学伴'}：${clampText(message.content, 600)}`,
+    )
     .join('\n')
 
+  const recent = existing.slice(-EXTRACTION_KNOWN_LIMIT)
   const known =
-    existing.length > 0 ? existing.map((memory) => `- ${memory.content}`).join('\n') : '（暂无）'
+    recent.length > 0
+      ? recent.map((memory) => `- ${clampText(memory.content, 80)}`).join('\n')
+      : '（暂无）'
 
   return [
     { role: 'system', content: MEMORY_EXTRACTION_SYSTEM_PROMPT },
     {
       role: 'user',
-      content: `## 已知记忆（不要重复）\n${known}\n\n## 本次对话\n${transcript}\n\n请抽取新记忆。`,
+      content: `## 已知记忆（不要重复，只列了最近 ${recent.length} 条）\n${known}\n\n## 新增对话\n${transcript}\n\n请抽取新记忆。`,
     },
   ]
 }
+
+/** 「不要重复」参照里最多列多少条已有记忆 */
+export const EXTRACTION_KNOWN_LIMIT = 40
 
 // ---------------------------------------------------------------------------
 // 会话摘要（记忆第 1 层）

@@ -14,6 +14,14 @@ import type { ChatMessage, Id, MasteryLevel, MemoryEntry } from '@/types/models'
  */
 export const EXTRACTION_INTERVAL = 8
 
+/**
+ * 单次抽取最多回看多少条消息。
+ *
+ * 与 EXTRACTION_INTERVAL 的关系：正常节奏下增量就是 8 条左右，这个上限只在
+ * 「手动点了记住这个」「关了自动抽取很久之后又打开」这类情况下兜底。
+ */
+export const EXTRACTION_WINDOW = 24
+
 const VALID_LEVELS: MasteryLevel[] = ['unknown', 'learning', 'weak', 'mastered']
 
 interface RawExtraction {
@@ -46,11 +54,20 @@ export async function extractMemories(input: {
   const { provider, messages, courseId, conversationId } = input
   if (messages.length === 0) return 0
 
+  /*
+   * 只发**自上次抽取以来的增量**，而不是整段对话。
+   *
+   * 原来每一轮抽取都把全部历史重发一遍：对话到 100 条时，每 8 条消息就要重发一次全部内容 ——
+   * 抽取本意是"省着点花"，结果成了最贵的一个调用。截取最近 EXTRACTION_WINDOW 条就够了：
+   * 更早的内容早就抽过了。
+   */
+  const recent = messages.slice(-EXTRACTION_WINDOW)
+
   const existing = useMemoryStore.getState().entries
 
   let parsed: RawExtraction
   try {
-    const raw = await provider.chat(buildMemoryExtractionMessages(messages, existing), {
+    const raw = await provider.chat(buildMemoryExtractionMessages(recent, existing), {
       // 抽取任务要的是稳定输出，不是创造力
       temperature: 0,
       maxTokens: 1024,

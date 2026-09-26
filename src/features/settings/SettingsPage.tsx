@@ -206,6 +206,20 @@ export function SettingsPage() {
 
         <section className="card">
           <SettingRow
+            title="省流模式"
+            hint="压缩上下文，减少 token 消耗"
+            control={
+              <Toggle
+                checked={settings.efficientMode}
+                label="省流模式"
+                onChange={(next) => update({ efficientMode: next })}
+              />
+            }
+          />
+        </section>
+
+        <section className="card">
+          <SettingRow
             title="自动抽取记忆"
             hint="从对话里积累对你的了解"
             control={

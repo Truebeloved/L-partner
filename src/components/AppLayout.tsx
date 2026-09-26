@@ -112,8 +112,13 @@ export function AppLayout() {
           )}
 
           {/* 内容区带 view-transition-name="page"：换页时淡出淡入的是它。
-              侧栏与输入条各自有名字，所以它们稳在原地不动。 */}
-          <main className="min-h-0 flex-1 overflow-y-auto" style={{ viewTransitionName: 'page' }}>
+              侧栏与输入条各自有名字，所以它们稳在原地不动。
+              scroll-stable 给滚动条永久留位：否则"有没有滚动条"会改变可用宽度，
+              居中的标题在换页时会左右偏几像素（见 styles/index.css）。 */}
+          <main
+            className="scroll-stable min-h-0 flex-1 overflow-y-auto"
+            style={{ viewTransitionName: 'page' }}
+          >
             <Outlet />
           </main>
 

@@ -94,8 +94,15 @@ async function fetchBilibiliCollection(rawUrl) {
       nodeIntegration: false,
       // 独立分区：不和主窗口共用 cookie，抓取行为与用户自己的浏览互不干扰
       partition: 'persist:bilibili-crawl',
+      // 抓取窗口只用来读数据，绝不该出声。B 站视频页会自动起播，
+      // 用户因此会听到零点几秒的视频开头 —— 让它连自动播放都不允许。
+      autoplayPolicy: 'document-user-activation-required',
     },
   })
+
+  // 双保险：即使页面已经在播放，也强制静音这一整个 WebContents（只影响这个抓取窗口，
+  // 与用户自己浏览器里的播放无关）。
+  window.webContents.setAudioMuted(true)
 
   try {
     await Promise.race([

@@ -19,6 +19,15 @@ interface UnitForm {
   /** 一行一个知识点，批量粘贴讲义目录比逐条点加号顺手 */
   knowledgePoints: string
   estimatedMinutes: string
+  /**
+   * 这一讲对应的外部视频地址。
+   *
+   * ⚠️ 这个字段必须**穿过表单**：从 B 站抓来的课程，每一讲的标题就是视频标题，
+   * 点标题要能跳到那一集。表单如果只认 标题/知识点/时长 这三样，
+   * 用户点一次「保存」就会把一百个链接全丢掉 —— 那正是"标题点不动"的真正原因。
+   */
+  resourceUrl?: string
+  resourceLabel?: string
 }
 
 interface StageForm {
@@ -312,19 +321,30 @@ export function CourseFormDialog({
                           />
                         </div>
                       </div>
-                      <div className="mt-3">
-                        <label className="label">知识点（一行一个）</label>
-                        <textarea
-                          className="input h-20 resize-y"
-                          value={unit.knowledgePoints}
-                          placeholder={'useState\n事件处理\n受控表单'}
-                          onChange={(event) =>
-                            patchUnit(stageIndex, unitIndex, {
-                              knowledgePoints: event.target.value,
-                            })
-                          }
-                        />
-                      </div>
+                      {/*
+                        视频导入的单元（标题就是视频标题）不显示知识点编辑框：
+                        它们本来就没有知识点，而留一个空框只会让人以为"这里该填点什么"。
+                        改为显示这一讲会带上的链接，用户能确认自己没把它弄丢。
+                      */}
+                      {unit.resourceUrl ? (
+                        <p className="mt-3 truncate text-small text-ink-faint">
+                          这一讲会带上视频链接：{unit.resourceLabel ?? unit.resourceUrl}
+                        </p>
+                      ) : (
+                        <div className="mt-3">
+                          <label className="label">知识点（一行一个）</label>
+                          <textarea
+                            className="input h-20 resize-y"
+                            value={unit.knowledgePoints}
+                            placeholder={'useState\n事件处理\n受控表单'}
+                            onChange={(event) =>
+                              patchUnit(stageIndex, unitIndex, {
+                                knowledgePoints: event.target.value,
+                              })
+                            }
+                          />
+                        </div>
+                      )}
                       {stage.units.length > 1 && (
                         <div className="mt-2 text-right">
                           <button
@@ -401,6 +421,9 @@ function toForm(draft?: CoursePlanDraft | null): FormState {
                     title: unit.title,
                     knowledgePoints: unit.knowledgePoints.join('\n'),
                     estimatedMinutes: unit.estimatedMinutes ? String(unit.estimatedMinutes) : '',
+                    // 视频链接要原样带过来，否则「保存」就等于把链接删了
+                    resourceUrl: unit.resourceUrl,
+                    resourceLabel: unit.resourceLabel,
                   }))
                 : [emptyUnitForm()],
           }))
@@ -427,6 +450,10 @@ function toDraft(form: FormState): CoursePlanDraft {
           knowledgePoints: splitKnowledgePoints(unit.knowledgePoints),
           // 留空就是「让程序估」：传 undefined 而不是 0，语义才不会被误解成「预计 0 分钟」
           estimatedMinutes: Number.isFinite(minutes) && minutes > 0 ? minutes : undefined,
+          // 只有真有时才写字段：空字符串会让"有没有链接"变得含糊
+          ...(unit.resourceUrl
+            ? { resourceUrl: unit.resourceUrl, resourceLabel: unit.resourceLabel }
+            : {}),
         }
       }),
     })),

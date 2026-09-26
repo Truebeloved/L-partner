@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 
+import { Icon } from '@/components/Icon'
 import { MarkdownLite } from '@/features/chat/components/MarkdownLite'
 import { doneUnitIds } from '@/features/today/autoTodo'
 import { formatMinutes } from '@/lib/date'
@@ -101,11 +102,13 @@ function UnitRow({
   }
 
   return (
-    <li>
-      {/* 双击整行 = 打开这一讲的视频：链接是给人看的，双击是给人顺手用的 */}
+    <li className="rounded-sm px-2 py-2 transition-colors duration-200 hover:bg-ink/5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         {/*
-          标题本身就是链接：用户的第一反应就是点标题，而不是去找旁边那行小字。
+          标题按**章节标题**的规格来做（原来是与正文同级的 14px 常规字重，读起来像注释），
+          而它其实是用户在这门课里唯一要读的那一行。
+          有视频链接时标题本身就是链接，并且带一个 ▶ 标记 ——
+          只靠"悬停才出现的下划线"，用户根本不知道这里能点。
           target=_blank 交给主进程的 setWindowOpenHandler 用默认浏览器打开。
         */}
         {unit.resourceUrl ? (
@@ -114,15 +117,22 @@ function UnitRow({
             target="_blank"
             rel="noreferrer"
             className={[
-              'underline-offset-2 transition-colors duration-200 hover:text-ink hover:underline',
-              done ? 'text-body text-ink-faint line-through' : 'text-body text-ink',
+              'inline-flex min-w-0 items-baseline gap-1.5 text-h3 font-bold transition-colors duration-200',
+              done ? 'text-ink-faint line-through' : 'text-ink hover:underline',
             ].join(' ')}
             title="用默认浏览器打开这一讲"
           >
+            <span aria-hidden="true" className="text-small text-ink-faint">
+              ▶
+            </span>
             {unit.title}
           </a>
         ) : (
-          <span className={done ? 'text-body text-ink-faint line-through' : 'text-body text-ink'}>
+          <span
+            className={
+              done ? 'text-h3 font-bold text-ink-faint line-through' : 'text-h3 font-bold text-ink'
+            }
+          >
             {unit.title}
           </span>
         )}
@@ -163,19 +173,21 @@ function UnitRow({
 
       {/*
         正文：这是"课程不是空壳"的地方。
-        但**已经有视频链接的节不提供"让学伴写"** —— 那门课本身讲得比模型现写的更好，
+        但**已经有视频链接的节不提供定制教材** —— 那门课本身讲得比模型现写的更好，
         再让模型写一遍纯属浪费 token（用户明确要求）。视频才是这一节的主路径，
         正文只在"没有外部好课可用"时才是选项。
       */}
       <div className="mt-2">
         {hasLesson ? (
+          /* 展开/收起做成明确的箭头 + 文字：只有文字按钮时，用户找不到"怎么收起来" */
           <button
             type="button"
-            className="btn btn-ghost btn-sm"
+            className="inline-flex items-center gap-1 text-small text-ink-soft transition-colors duration-200 hover:text-ink"
             onClick={() => setOpen((value) => !value)}
             aria-expanded={open}
           >
-            {open ? '收起这一节' : '读这一节'}
+            <Icon name={open ? 'chevronUp' : 'chevronDown'} size={14} />
+            {open ? '收起这一节' : '展开这一节'}
           </button>
         ) : unit.resourceUrl ? null : (
           <button
@@ -185,11 +197,11 @@ function UnitRow({
             disabled={busy}
             title={
               settings.llm.apiKey
-                ? '让学伴写出这一节的正文，写完会存在本地'
+                ? '让学伴按这一节的内容写一份专属教材，写完存在本地'
                 : '需要先在设置里接入大模型'
             }
           >
-            {busy ? '正在写这一节…' : '让学伴写这一节'}
+            {busy ? '正在定制…' : '定制个性化教材'}
           </button>
         )}
 
@@ -198,14 +210,24 @@ function UnitRow({
         {hasLesson && open && (
           <div className="mt-3 rounded-card border border-line-soft bg-surface px-4 py-3">
             <MarkdownLite source={unit.content ?? ''} />
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm mt-3"
-              onClick={() => void writeLesson()}
-              disabled={busy}
-            >
-              {busy ? '正在重写…' : '重写这一节'}
-            </button>
+            <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-line-soft pt-3">
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => void writeLesson()}
+                disabled={busy}
+              >
+                {busy ? '正在重写…' : '重新定制'}
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 text-small text-ink-soft transition-colors duration-200 hover:text-ink"
+                onClick={() => setOpen(false)}
+              >
+                <Icon name="chevronUp" size={14} />
+                收起这一节
+              </button>
+            </div>
           </div>
         )}
       </div>

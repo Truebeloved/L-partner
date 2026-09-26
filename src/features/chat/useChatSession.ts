@@ -7,6 +7,7 @@ import {
   summarizeConversation,
 } from '@/features/memory/extract'
 import { detectIntent } from '@/features/today/intent'
+import { matchCourseForMessage } from '@/features/chat/routing'
 import { retrieveMemories } from '@/features/memory/retrieve'
 import { createProvider } from '@/lib/llm'
 import { assembleMessages, clampText, estimateMessagesTokens } from '@/lib/llm/context'
@@ -72,8 +73,31 @@ export function useChatSession(): ChatSession {
       setError(null)
 
       const chat = useChatStore.getState()
-      // 没有会话就现开一个，用的是当前选中的角色
-      const targetId = chat.activeId ?? chat.create(settings.activePersonaId)
+      const courses = useCourseStore.getState().courses
+      const active = chat.activeId ? chat.getById(chat.activeId) : undefined
+
+      /*
+       * ---- 自动分类 ----
+       *
+       * 用户定的口径：与课程内容有关 → 进那门课的对话；无关 → 留在主对话。
+       * 实现上只有一条规则：**认出某门课才切换**，认不出来就留在当前这一场。
+       *
+       * 「认不出就留下」而不是「认不出就丢回主对话」是有意的：课程对话里的
+       * 追问（"再讲一遍""为什么"）本来就不会重复课名，按内容判它一定认不出，
+       * 此时把它挪回主对话，等于把一段连贯的讨论拆成两半 —— 那正是这次要修的问题。
+       */
+      const match = matchCourseForMessage(trimmed, courses)
+      const targetCourseId = match?.courseId ?? active?.courseId
+      const targetCourse = targetCourseId
+        ? courses.find((course) => course.id === targetCourseId)
+        : undefined
+
+      const targetId = chat.ensureConversation({
+        personaId: settings.activePersonaId,
+        courseId: targetCourseId,
+        title: targetCourse?.title,
+      })
+      if (chat.activeId !== targetId) chat.setActive(targetId)
 
       const before = useChatStore.getState().getById(targetId)
       const history = before?.messages ?? []

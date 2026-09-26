@@ -9,7 +9,7 @@ import { MessageBubble } from '@/features/chat/components/MessageBubble'
 import { useChatSessionContext } from '@/features/chat/context'
 import { useActiveConversation } from '@/features/chat/useChatSession'
 import { formatTokens } from '@/lib/llm/context'
-import { useChatStore } from '@/store/chat'
+import { MAIN_CONVERSATION_TITLE, useChatStore } from '@/store/chat'
 import { useCourseStore } from '@/store/courses'
 import { useMemoryStore } from '@/store/memory'
 import { usePersonaStore } from '@/store/personas'
@@ -33,9 +33,8 @@ export function ChatPage() {
   const personas = usePersonaStore((state) => state.personas)
   const courses = useCourseStore((state) => state.courses)
   const conversations = useChatStore((state) => state.conversations)
-  const createConversation = useChatStore((state) => state.create)
+  const ensureConversation = useChatStore((state) => state.ensureConversation)
   const setActive = useChatStore((state) => state.setActive)
-  const setCourse = useChatStore((state) => state.setCourse)
   const setConversationPersona = useChatStore((state) => state.setPersona)
   const memoryCount = useMemoryStore((state) => state.entries.length)
 
@@ -61,6 +60,15 @@ export function ChatPage() {
   const messages = conversation?.messages ?? []
   const lastContentLength = messages.at(-1)?.content.length ?? 0
 
+  const activeCourse = conversation?.courseId
+    ? courses.find((course) => course.id === conversation.courseId)
+    : undefined
+  /** 课程 id → 课程名：列表里要把「课程对话」显示成课程名 */
+  const courseTitles = useMemo(
+    () => new Map(courses.map((course) => [course.id, course.title])),
+    [courses],
+  )
+
   // 流式输出时内容会持续变化，所以除了条数还要盯着最后一条的长度
   useEffect(() => {
     const element = scrollRef.current
@@ -73,7 +81,7 @@ export function ChatPage() {
    *
    * activeId 不参与持久化，所以刷新后它一定是空的。原来的表现是：
    * 左边列着一堆历史，右边却是一张"我是耐心学长"的空欢迎页 ——
-   * 此时输入一句话，handleSend 会**新建**一场对话，等于把原本那场悄悄留在背后。
+   * 此时输入一句话会**新建**一场对话，等于把原本那场悄悄留在背后。
    * 微信/豆包打开就是最近一场，这里对齐同一个预期。
    */
   useEffect(() => {
@@ -82,10 +90,19 @@ export function ChatPage() {
     if (latest) setActive(latest.id)
   }, [conversation, conversations, setActive])
 
+  /**
+   * 一次都没有主对话时（全新用户、或清空过数据）先建出来。
+   *
+   * 「主对话」是这个应用里唯一恒定的那一场：与课程无关的话都归它，
+   * 所以打开对话页就该看见它，而不是一片空白等着用户去"新对话"。
+   */
+  useEffect(() => {
+    if (conversations.some((item) => !item.courseId)) return
+    ensureConversation({ personaId: settings.activePersonaId })
+  }, [conversations, ensureConversation, settings.activePersonaId])
+
   function handleSend(text: string) {
-    if (!conversation) {
-      createConversation(settings.activePersonaId)
-    }
+    // 归到哪一场由 useChatSession 里的自动分类决定，这里不再自己开对话
     void session.send(text)
   }
 
@@ -140,13 +157,22 @@ export function ChatPage() {
       <ConversationList
         conversations={conversations}
         activeId={conversation?.id ?? null}
+        courseTitles={courseTitles}
         onSelect={setActive}
-        onCreate={() => createConversation(settings.activePersonaId, conversation?.courseId)}
       />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        {/* 顶栏：角色、课程、记忆状态。会话切换已经在左侧列表里，这里不再放下拉框 */}
+        {/* 顶栏：这场对话属于谁、用什么角色、记忆状态。
+            课程不再手动绑定 —— 说话内容里认出哪门课就归到哪门课，
+            这里只如实显示分类结果 */}
         <div className="flex flex-wrap items-center gap-2 border-b border-line-soft px-3 py-2.5">
+          <span
+            className="badge"
+            title="对话按内容自动分类：与某门课程有关就进那门课的对话，其余都留在主对话里（上下文连续）"
+          >
+            {activeCourse ? `《${activeCourse.title}》对话` : MAIN_CONVERSATION_TITLE}
+          </span>
+
           <select
             className="input w-auto py-1.5"
             value={settings.activePersonaId}
@@ -161,23 +187,6 @@ export function ChatPage() {
               // 头像在各处已经有了，这里不缺那一个字形
               <option key={persona.id} value={persona.id}>
                 {persona.name}
-              </option>
-            ))}
-          </select>
-
-          <select
-            className="input w-auto py-1.5"
-            value={conversation?.courseId ?? ''}
-            onChange={(event) => {
-              const courseId = event.target.value || undefined
-              if (conversation) setCourse(conversation.id, courseId)
-            }}
-            title="绑定一门课程，回答时会带上这门课的进度与今日任务"
-          >
-            <option value="">不绑定课程</option>
-            {courses.map((course) => (
-              <option key={course.id} value={course.id}>
-                {course.title}
               </option>
             ))}
           </select>

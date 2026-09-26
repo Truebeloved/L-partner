@@ -20,6 +20,13 @@ app.commandLine.appendSwitch('force-device-scale-factor', '1')
 const BASE_URL = process.env.CAPTURE_URL || 'http://localhost:5173'
 const OUT_DIR = process.env.CAPTURE_OUT || path.join(__dirname, '..', '.ui-shots')
 const COURSE_KEYWORD = process.env.COURSE || ''
+/**
+ * 可选：只截一个路由（`ROUTE=chat`），不做课程相关的那些统计。
+ *
+ * 用途是**在真实 profile 上验证数据迁移**：比如"历史对话合并成主对话"这件事，
+ * 只有拿用户自己那份数据跑一遍才算数，塞假数据是看不出来的。
+ */
+const ROUTE = process.env.ROUTE || ''
 
 app.on('window-all-closed', () => {})
 
@@ -235,6 +242,17 @@ app.whenReady().then(async () => {
     }
     console.log(`\n已载入示例课程：${loaded.title}`)
     await sleep(1200)
+  }
+
+  // 只截一个路由：用来在真实 profile 上验证数据迁移（比如对话合并）之后界面长什么样
+  if (ROUTE) {
+    await window.webContents.executeJavaScript(`location.hash = '#/${ROUTE}'`)
+    await sleep(1400)
+    const name = `route-${ROUTE.replace(/\W+/g, '-')}`
+    await capture(window, path.join(OUT_DIR, `${name}.png`))
+    console.log(`\n${ROUTE} 截图：${path.join(OUT_DIR, `${name}.png`)}`)
+    app.exit(0)
+    return
   }
 
   const courses = await window.webContents.executeJavaScript(READ_COURSES)

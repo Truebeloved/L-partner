@@ -125,7 +125,7 @@ export function MemorySection() {
       <section className="card">
         <h2 className="section-title">知识点掌握情况</h2>
         <p className="hint mb-4 mt-2">
-          「已掌握」与「薄弱」由学伴判断或你手动修正，任务完成只会进入「学习中」。
+          「已掌握」与「薄弱」由学伴判断或手动修正；完成任务只进入「学习中」。
         </p>
 
         {masteryGroups.size === 0 ? (
@@ -225,7 +225,7 @@ export function MemorySection() {
         {visible.length === 0 ? (
           <p className="py-6 text-center text-body text-ink-faint">
             {entries.length === 0
-              ? '还没有任何记忆。和学伴聊几次，或者在上面手动添加一条试试。'
+              ? '还没有记忆。和学伴聊聊，或手动添加一条。'
               : '没有符合条件的记忆'}
           </p>
         ) : (

@@ -40,7 +40,9 @@ let mainWindow = null
 let tray = null
 let toastWindow = null
 let toastTimer = null
-/** 记下弹出时刻，用来在日志里核对"是否真的只停留了 3 秒" */
+/** 退场通知的定时器，与 toastTimer 一起清理，避免关掉之后还发消息 */
+let exitTimer = null
+/** 记下弹出时刻，用来在日志里核对"是否真的只存活了 3 秒" */
 let toastShownAt = null
 /** 区分「关窗收进托盘」与「真的退出」——只有后者才允许窗口关闭 */
 let isQuitting = false
@@ -176,18 +178,21 @@ function createTray() {
   tray.on('click', showMainWindow)
 }
 
-/** 第一次收进托盘时说明一次，否则用户会以为"关不掉" */
+/**
+ * 第一次收进托盘时说明一次，否则用户会以为"关不掉"，只能去任务管理器结束。
+ *
+ * 这里刻意**不用** `tray.displayBalloon`（系统托盘气泡）：它的显示时长完全由
+ * Windows 决定（通常 5~15 秒，且不给程序任何控制接口），而 Windows 11 起
+ * 气泡已被系统 toast 取代，行为更不可控。改用应用自己的小窗之后，
+ * 时长精确到 3 秒，外观也和随机提醒完全一致。
+ *
+ * force 是必须的：用户刚点了关闭按钮，主窗口此刻正是聚焦状态，
+ * 而 showToast 默认会因为"应用在前台"而拒绝弹出 —— 这条提示恰好必须弹。
+ */
 function showTrayHintOnce() {
-  if (trayHintShown || !tray) return
+  if (trayHintShown) return
   trayHintShown = true
-  try {
-    tray.displayBalloon({
-      title: 'L-partner 仍在后台运行',
-      content: '这样才能按时提醒你学习。右键托盘图标可以退出。',
-    })
-  } catch {
-    // Windows 11 起气泡通知被系统 toast 取代，可能不显示 —— 无害，忽略
-  }
+  showToast({ title: '已收进托盘，仍在后台运行', body: '右键托盘图标可以退出' }, { force: true })
 }
 
 /* ---------------------------------------------------------------------------
@@ -197,8 +202,19 @@ function showTrayHintOnce() {
 /** 窗口比卡片略大一圈，多出来的边距是留给 CSS 阴影的（透明窗口里阴影不会被裁掉） */
 const TOAST_WIDTH = 372
 const TOAST_HEIGHT = 136
-/** 停留时长：用户要求 3 秒后自动关闭 */
-const TOAST_DURATION = 3000
+/**
+ * 小窗的**总**存活时长：从显示出来的那一刻算起，到彻底消失为止。
+ * 这 3 秒里包含了出现动画、停留、消失动画三部分 ——
+ * 也就是说用户感知到的"存在感"恰好是 3 秒，而不是"停 3 秒后突然消失"。
+ */
+const TOAST_TOTAL_MS = 3000
+/**
+ * 消失动画时长。主进程提前这么久通知渲染层开始退场，剩下的时间刚好放完动画。
+ *
+ * ⚠️ 必须与 ToastView.tsx 里退场过渡的 duration 一致 ——
+ * 不一致的话，要么动画被切断（提前销毁），要么黑屏干等（销毁太晚）。
+ */
+const TOAST_EXIT_MS = 220
 const TOAST_MARGIN = 18
 
 function closeToast() {
@@ -206,12 +222,16 @@ function closeToast() {
     clearTimeout(toastTimer)
     toastTimer = null
   }
+  if (exitTimer) {
+    clearTimeout(exitTimer)
+    exitTimer = null
+  }
   if (toastWindow && !toastWindow.isDestroyed()) {
     toastWindow.destroy()
   }
   if (toastShownAt !== null) {
-    // 打出实际停留时长，方便核对"是不是真的 3 秒"
-    console.log(`[toast] 已关闭，停留 ${Date.now() - toastShownAt}ms`)
+    // 打出实际存活时长，方便核对"是不是真的 3 秒"
+    console.log(`[toast] 已消失，总存活 ${Date.now() - toastShownAt}ms`)
     toastShownAt = null
   }
   toastWindow = null
@@ -287,15 +307,27 @@ function showToast(payload, { force = false } = {}) {
     console.log(
       `[toast] 弹出于 ${x},${y}（${TOAST_WIDTH}×${TOAST_HEIGHT}）· ${payload?.title ?? ''}`,
     )
-    // 3 秒计时从"真正显示出来"开始，否则加载耗时会把停留时间吃掉
-    toastTimer = setTimeout(closeToast, TOAST_DURATION)
+
+    /*
+     * 计时从"真正显示出来"才开始，否则加载耗时会把 3 秒吃掉。
+     * 时序：显示 → （出现动画）→ 提前 220ms 通知退场 → 3 秒整销毁。
+     * 退场由主进程发起、渲染层执行动画，这样"总时长"只有一个权威来源。
+     */
+    toastTimer = setTimeout(closeToast, TOAST_TOTAL_MS)
+    exitTimer = setTimeout(() => {
+      if (!window.isDestroyed()) window.webContents.send('toast:dismiss')
+    }, TOAST_TOTAL_MS - TOAST_EXIT_MS)
   })
 
   // 保险：万一 ready-to-show 没触发（透明窗口偶发），也不能让它永远不显示或永远不关
   setTimeout(() => {
     if (window.isDestroyed() || toastTimer) return
     window.showInactive()
-    toastTimer = setTimeout(closeToast, TOAST_DURATION)
+    toastShownAt = Date.now()
+    toastTimer = setTimeout(closeToast, TOAST_TOTAL_MS)
+    exitTimer = setTimeout(() => {
+      if (!window.isDestroyed()) window.webContents.send('toast:dismiss')
+    }, TOAST_TOTAL_MS - TOAST_EXIT_MS)
   }, 2000)
 
   toastWindow = window

@@ -25,6 +25,7 @@ interface LpartnerBridge {
   isDesktop?: boolean
   getAppInfo: () => Promise<AppInfo>
   showToast: (payload: ToastPayload) => Promise<boolean>
+  onToastDismiss: (callback: () => void) => () => void
 }
 
 declare global {
@@ -67,5 +68,20 @@ export async function showDesktopToast(payload: ToastPayload): Promise<boolean> 
   } catch (error) {
     console.warn('[L-partner] 弹出桌面提醒失败：', error)
     return false
+  }
+}
+
+/**
+ * 订阅"开始退场"。只在提醒小窗里用得上：总时长由主进程掌握，
+ * 它会在销毁窗口前提前通知，让这里有机会把消失动画放完。
+ * 浏览器环境下返回一个空的取消订阅函数，调用方不必做额外判断。
+ */
+export function onToastDismiss(callback: () => void): () => void {
+  if (typeof window === 'undefined' || !window.lpartner?.onToastDismiss) return () => {}
+  try {
+    return window.lpartner.onToastDismiss(callback)
+  } catch (error) {
+    console.warn('[L-partner] 订阅提醒退场失败：', error)
+    return () => {}
   }
 }

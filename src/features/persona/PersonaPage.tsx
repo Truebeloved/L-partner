@@ -74,9 +74,7 @@ export function PersonaSection() {
           操作按钮留在本区块内 —— 它只属于角色，不该出现在记忆那一栏 */}
       <div className="flex items-center justify-between gap-4">
         <p className="text-body leading-relaxed text-ink-soft">
-          记忆是<strong className="font-bold text-ink">跟着你</strong>的，角色只决定
-          <strong className="font-bold text-ink">现在是谁在教你</strong>
-          。随时切换角色都不会丢记忆。
+          记忆<strong className="font-bold text-ink">跟着你</strong>，换角色不会丢。
         </p>
         <button type="button" className="btn btn-primary btn-sm shrink-0" onClick={startCreate}>
           新建角色
@@ -125,7 +123,7 @@ export function PersonaSection() {
               <Field
                 id="persona-identity"
                 label="身份背景"
-                hint="它是谁？这个设定会明显影响它的表达方式"
+                hint="它是谁"
                 value={draft.identity}
                 placeholder="例如：带过三届考研的计算机讲师"
                 onChange={(value) => setDraft({ ...draft, identity: value })}
@@ -149,7 +147,7 @@ export function PersonaSection() {
               <Field
                 id="persona-strategy"
                 label="教学方式"
-                hint="这是最能拉开差距的一项：先讲原理还是先给例子？会不会反问你？"
+                hint="先讲原理还是先给例子"
                 value={draft.teachingStrategy}
                 placeholder="例如：先给一个具体例子建立直觉，再讲原理；讲完让我复述一遍"
                 onChange={(value) => setDraft({ ...draft, teachingStrategy: value })}

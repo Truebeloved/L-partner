@@ -34,13 +34,14 @@ function renderTodayPage() {
 }
 
 describe('TodayPage', () => {
-  it('没有待办时引导去课程页，并如实说明提醒的浏览器限制', () => {
+  it('没有待办时引导去课程页，并如实说明提醒的运行限制', () => {
     renderTodayPage()
 
     expect(screen.getByText('今天还没有安排')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /去课程页生成学习计划/ })).toBeInTheDocument()
-    // 应用关掉后不会提醒这件事必须写在界面上，不能只写在文档里
-    expect(screen.getByText(/应用运行时/)).toBeInTheDocument()
+    // 「彻底退出后不会提醒」这件事必须写在界面上，不能只写在文档里。
+    // 注意措辞：收进托盘不等于退出，应用还在后台跑，提醒照常
+    expect(screen.getByText(/收进托盘仍会提醒/)).toBeInTheDocument()
   })
 
   it('回车即可添加待办，勾选后进度条走满并给出完成反馈', async () => {

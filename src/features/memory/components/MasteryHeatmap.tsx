@@ -38,7 +38,7 @@ export function MasteryHeatmap({ entries, courseTitle }: MasteryHeatmapProps) {
       <div className="rounded-card border border-dashed border-line-soft px-4 py-6 text-center">
         <p className="text-body text-ink-soft">还没有掌握状态记录</p>
         <p className="mt-1 text-small text-ink-faint">
-          完成学习计划里的任务后，这里会自动出现进度；和学伴聊过之后，它会进一步判断你哪里薄弱。
+          完成学习计划里的任务后会出现进度；和学伴聊过之后，它还会判断你哪里薄弱。
         </p>
       </div>
     )

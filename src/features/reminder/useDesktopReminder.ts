@@ -123,6 +123,8 @@ export function useDesktopReminder(): DesktopReminderState {
     const activeFrom = settings.desktopReminderFrom
     const activeTo = settings.desktopReminderTo
     const maxPerDay = settings.desktopReminderMaxPerDay ?? 4
+    // 只有固定提醒真的开着时才需要避让；关着的时刻不该在时间轴上挖洞
+    const dailyReminderTime = settings.reminderEnabled ? settings.dailyReminderTime : null
 
     let cancelled = false
 
@@ -147,6 +149,7 @@ export function useDesktopReminder(): DesktopReminderState {
         maxGapMinutes: MAX_GAP_MINUTES,
         firedToday: counter.count,
         maxPerDay,
+        dailyReminderTime,
         random: Math.random,
       })
 
@@ -227,6 +230,9 @@ export function useDesktopReminder(): DesktopReminderState {
     settings.desktopReminderFrom,
     settings.desktopReminderTo,
     settings.desktopReminderMaxPerDay,
+    // 固定提醒的时刻变了也要重排：否则已经排好的随机时刻可能正好压在它上面
+    settings.reminderEnabled,
+    settings.dailyReminderTime,
     /*
      * buildContext 用 useCallback 钉住了身份（只随 name 变化），所以放进依赖是安全的。
      * 如果它是个普通函数，加进来会让 effect 每次渲染都重跑、定时器不停重建 ——

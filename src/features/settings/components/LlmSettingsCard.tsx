@@ -68,12 +68,11 @@ export function LlmSettingsCard() {
 
   return (
     <section className="card">
-      <div className="mb-4">
-        <h2 className="section-title">大模型接入</h2>
-        <p className="muted mt-2">
-          L-partner 不内置任何密钥。你填自己的
-          API，配置只保存在这台设备的浏览器里，不会上传到任何服务器。
-        </p>
+      {/* 与其他设置区块保持同一种排版语言：标题 + 一行灰字说明。
+          原来那两行"不内置密钥、只存在本地…"在下面密钥字段处已经说过一次了 */}
+      <div className="mb-4 flex min-w-0 items-baseline gap-3">
+        <h2 className="shrink-0 text-h3 font-bold text-ink">大模型接入</h2>
+        <span className="truncate text-small text-ink-faint">密钥只存本地，不上传</span>
       </div>
 
       <div className="mb-4 flex flex-wrap gap-2">
@@ -106,8 +105,7 @@ export function LlmSettingsCard() {
             onChange={(event) => updateLlm({ baseUrl: event.target.value })}
           />
           <p className="hint mt-1">
-            多数厂商需要以 <code className="rounded-sm bg-ink/5 px-1 font-mono">/v1</code>{' '}
-            结尾。填错会返回 404。
+            多数厂商需要以 <code className="rounded-sm bg-ink/5 px-1 font-mono">/v1</code> 结尾
           </p>
         </div>
 
@@ -146,10 +144,6 @@ export function LlmSettingsCard() {
               {showKey ? '隐藏' : '显示'}
             </button>
           </div>
-          <p className="hint mt-1">
-            以 <code className="rounded-sm bg-ink/5 px-1 font-mono">sk-</code> 开头的密钥只存在本地
-            IndexedDB 里。共用电脑时请记得清除。
-          </p>
         </div>
 
         <details className="rounded-sm bg-ink/5 px-4 py-3">

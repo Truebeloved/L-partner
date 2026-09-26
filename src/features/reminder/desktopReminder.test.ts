@@ -70,6 +70,70 @@ describe('planNextToast', () => {
   })
 })
 
+describe('planNextToast 与每日固定提醒的避让', () => {
+  /** 10:00 出发、间隔 60 分钟 → 随机结果恒定落在 11:00 */
+  const NOW = new Date('2026-09-25T10:00:00')
+
+  it('没开固定提醒时不避让', () => {
+    const next = planNextToast(NOW, { ...BASE, dailyReminderTime: null, random: fixedRandom(0) })
+    expect(next?.toISOString()).toBe(new Date('2026-09-25T11:00:00').toISOString())
+  })
+
+  it('随机时刻离固定提醒足够远时照常安排', () => {
+    const next = planNextToast(NOW, { ...BASE, dailyReminderTime: '20:00', random: fixedRandom(0) })
+    expect(next?.toISOString()).toBe(new Date('2026-09-25T11:00:00').toISOString())
+  })
+
+  it('随机时刻撞进固定提醒前后 10 分钟时重抽', () => {
+    // 固定提醒 11:00，正好压住随机出来的 11:00 —— 第二次抽到上限 12:00，躲开了
+    const next = planNextToast(NOW, {
+      ...BASE,
+      dailyReminderTime: '11:00',
+      random: fixedRandom(0, 1),
+    })
+    expect(next?.toISOString()).toBe(new Date('2026-09-25T12:00:00').toISOString())
+  })
+
+  it('重抽也躲不开时让到固定提醒之后，而不是今天不提醒', () => {
+    // 随机源恒定返回 0（永远 11:00，永远撞上），只能靠退让
+    const next = planNextToast(NOW, {
+      ...BASE,
+      dailyReminderTime: '11:00',
+      random: fixedRandom(0),
+    })
+    expect(next?.toISOString()).toBe(new Date('2026-09-25T11:10:00').toISOString())
+  })
+
+  it('避让窗口的边界是"前后各 10 分钟"，正好 10 分钟不算撞上', () => {
+    // 固定提醒 11:10 → 11:00 恰好在窗口边缘（差 10 分钟），不该避让
+    const edge = planNextToast(NOW, {
+      ...BASE,
+      dailyReminderTime: '11:10',
+      random: fixedRandom(0),
+    })
+    expect(edge?.toISOString()).toBe(new Date('2026-09-25T11:00:00').toISOString())
+
+    // 固定提醒 11:09 → 差 9 分钟，属于撞上
+    const inside = planNextToast(NOW, {
+      ...BASE,
+      dailyReminderTime: '11:09',
+      random: fixedRandom(0),
+    })
+    expect(inside?.toISOString()).toBe(new Date('2026-09-25T11:19:00').toISOString())
+  })
+
+  it('让到固定提醒之后会超出活跃时段时，退回原时刻而不是今天不提醒', () => {
+    // 20:20 + 60 分钟 = 21:20，固定提醒 21:25（差 5 分钟算撞上）；
+    // 让到 21:35 就出了活跃时段（21:30），所以只能接受 21:20 这一点点重叠
+    const next = planNextToast(new Date('2026-09-25T20:20:00'), {
+      ...BASE,
+      dailyReminderTime: '21:25',
+      random: fixedRandom(0),
+    })
+    expect(next?.toISOString()).toBe(new Date('2026-09-25T21:20:00').toISOString())
+  })
+})
+
 const RICH: ToastContext = {
   name: '休伯利安',
   todayTotal: 5,

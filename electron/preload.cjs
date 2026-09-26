@@ -11,8 +11,21 @@ contextBridge.exposeInMainWorld('lpartner', {
   /** 取本机信息（计算机名 / 用户名），供开屏问候与提醒文案使用 */
   getAppInfo: () => ipcRenderer.invoke('app:info'),
   /**
-   * 在右下角弹一条桌面提醒小窗，3 秒后由主进程自动关闭。
+   * 在右下角弹一条桌面提醒小窗。总存活 3 秒（含出现与消失动画），
+   * 由主进程统一计时并负责销毁。
    * 返回是否真的弹了 —— 主窗口在前台时主进程会拒绝，避免打扰。
    */
   showToast: (payload) => ipcRenderer.invoke('reminder:toast', payload),
+  /**
+   * 订阅"开始退场"的通知：主进程在销毁窗口前会发一次，
+   * 让渲染层有时间播放消失动画。返回取消订阅的函数。
+   *
+   * 计时放在主进程而不是渲染层，是为了让"总时长 3 秒"只有一个权威来源 ——
+   * 两边各有一个计时器的话，迟早会走偏。
+   */
+  onToastDismiss: (callback) => {
+    const listener = () => callback()
+    ipcRenderer.on('toast:dismiss', listener)
+    return () => ipcRenderer.removeListener('toast:dismiss', listener)
+  },
 })

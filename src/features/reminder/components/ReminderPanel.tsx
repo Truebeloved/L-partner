@@ -50,7 +50,7 @@ export function ReminderPanel({
         ) : (
           <>
             <span className="badge">未开启</span>
-            <span className="muted">去「设置」页开启后，每天到点会在这里提醒你开始学习。</span>
+            <span className="muted">去「设置」里开启，每天到点在这里提醒。</span>
           </>
         )}
       </div>
@@ -66,25 +66,24 @@ export function ReminderPanel({
             <button type="button" className="btn btn-secondary" onClick={onRequestPermission}>
               开启系统通知
             </button>
-            <span className="hint">授权后切到别的标签页也能看到通知，但页面内提醒才是主要方式</span>
+            <span className="hint">授权后切到别的标签页也能看到</span>
           </>
         )}
         {permission === 'denied' && (
           <>
             <span className="badge">已被系统拒绝</span>
-            <span className="hint">需要在系统的通知设置里重新允许；应用内提醒不受影响</span>
+            <span className="hint">需在系统通知设置里重新允许</span>
           </>
         )}
         {permission === 'unsupported' && <span className="badge">当前系统不支持通知</span>}
       </div>
 
       {/* 这一段原来是琥珀色警示底。按设计约束，红色只能用于逾期 / 错误 / 破坏性操作，
-          而「应用关掉后不会提醒」是一条功能限制说明，不是错误，所以用中性底纹。
-          限制本身必须写明，但不必写成一段说明文 —— 掐掉解释、只留事实 */}
+          而「应用退出后不会提醒」是一条功能限制说明，不是错误，所以用中性底纹。
+          限制本身必须写明，但不必写成一段说明文 —— 掐掉解释、只留事实。
+          注意措辞：收进托盘**不是**退出，应用还在跑，提醒照常 */}
       <p className="mt-4 rounded-sm bg-ink/5 px-3 py-2 text-small leading-relaxed text-ink-soft">
-        关于限制：只在
-        <strong className="font-bold text-ink">应用运行时</strong>
-        提醒。窗口关掉后不会有任何提醒；回到前台时，2 小时内错过的会立刻补上。
+        提醒依赖应用运行：收进托盘仍会提醒，彻底退出后不会。
       </p>
     </section>
   )

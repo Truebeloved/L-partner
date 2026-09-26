@@ -20,9 +20,27 @@ export interface ToastPlanOptions {
   firedToday: number
   /** 一天最多几条 —— 提醒过密会变成骚扰，上限是必须的 */
   maxPerDay: number
+  /**
+   * 每日固定提醒的时刻；null / 不传表示没开固定提醒，不需要避让。
+   *
+   * 两个提醒是各自独立的开关，但**不能在同一时刻各响一次** ——
+   * 用户收到的是"重复打扰"，而不是"两次提醒"。
+   */
+  dailyReminderTime?: TimeKey | null
   /** 注入随机源，测试里可替换成确定序列 */
   random: () => number
 }
+
+/**
+ * 随机提醒与每日固定提醒之间必须空出的时间（前后各这么多分钟）。
+ *
+ * 取 10 分钟：小于它，两条提醒在人感觉上是"同时来的"；
+ * 大于它，活跃时段里被挖掉一大块，随机提醒会显得稀少。
+ */
+export const DAILY_CLEARANCE_MINUTES = 10
+
+/** 撞上固定提醒时最多重抽几次。抽不中就退让到固定时刻之后，不会丢掉今天的额度 */
+const CLEARANCE_REDRAWS = 4
 
 /**
  * 算出下一次该弹的时刻；返回 null 表示今天不再弹。
@@ -34,6 +52,7 @@ export interface ToastPlanOptions {
 export function planNextToast(now: Date, options: ToastPlanOptions): Date | null {
   const { activeFrom, activeTo, minGapMinutes, maxGapMinutes, firedToday, maxPerDay, random } =
     options
+  const dailyTime = options.dailyReminderTime ?? null
 
   if (firedToday >= maxPerDay) return null
 
@@ -43,19 +62,45 @@ export function planNextToast(now: Date, options: ToastPlanOptions): Date | null
   // 已经出了活跃时段就不再安排今天的了；明天的日程在跨天后重新算
   if (!current.isBefore(endOfWindow)) return null
 
-  const span = Math.max(0, maxGapMinutes - minGapMinutes)
-  const gapMinutes = minGapMinutes + random() * span
-  const candidate = current.add(gapMinutes, 'minute')
-
-  // 随机出来的时刻可能越过收尾时刻 —— 那就今天不弹了，
-  // 而不是硬把它挤到收尾前（那会让最后一条提醒必然在最晚点响，反而可预测）
-  if (candidate.isAfter(endOfWindow)) return null
-
-  // 也不该早于活跃时段的开始（例如应用在凌晨启动）
   const startOfWindow = atTime(current, activeFrom)
-  if (candidate.isBefore(startOfWindow)) return startOfWindow.toDate()
+  const span = Math.max(0, maxGapMinutes - minGapMinutes)
 
-  return candidate.toDate()
+  const draw = (): dayjs.Dayjs | null => {
+    const candidate = current.add(minGapMinutes + random() * span, 'minute')
+    // 随机出来的时刻可能越过收尾时刻 —— 那就今天不弹了，
+    // 而不是硬把它挤到收尾前（那会让最后一条提醒必然在最晚点响，反而可预测）
+    if (candidate.isAfter(endOfWindow)) return null
+    // 也不该早于活跃时段的开始（例如应用在凌晨启动）
+    return candidate.isBefore(startOfWindow) ? startOfWindow : candidate
+  }
+
+  const first = draw()
+  if (!first) return null
+  if (!hitsDailyReminder(first, dailyTime)) return first.toDate()
+
+  // 正好落在固定提醒附近：重抽。重抽只在"真的撞上"时才发生，
+  // 所以绝大多数情况下这条路径的耗时为 0，随机源的调用次数也和以前一样。
+  for (let attempt = 0; attempt < CLEARANCE_REDRAWS; attempt += 1) {
+    const retry = draw()
+    if (retry && !hitsDailyReminder(retry, dailyTime)) return retry.toDate()
+  }
+
+  // 活跃时段很窄，怎么抽都躲不开：让到固定提醒之后。
+  const afterDaily = dailyTime
+    ? atTime(current, dailyTime).add(DAILY_CLEARANCE_MINUTES, 'minute')
+    : null
+  // 让不过去（已经在固定提醒之后、或让过去就出了活跃时段）就退回原时刻 ——
+  // 少一次避让总好过今天一整天不再提醒
+  if (!afterDaily || !afterDaily.isAfter(current) || !afterDaily.isBefore(endOfWindow)) {
+    return first.toDate()
+  }
+  return afterDaily.toDate()
+}
+
+/** 判断某个时刻是否落在「每日固定提醒」的避让窗口内（前后各 DAILY_CLEARANCE_MINUTES 分钟） */
+function hitsDailyReminder(at: dayjs.Dayjs, dailyTime: TimeKey | null): boolean {
+  if (!dailyTime) return false
+  return Math.abs(at.diff(atTime(at, dailyTime), 'minute')) < DAILY_CLEARANCE_MINUTES
 }
 
 function atTime(reference: dayjs.Dayjs, time: TimeKey): dayjs.Dayjs {

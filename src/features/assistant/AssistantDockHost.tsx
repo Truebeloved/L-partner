@@ -105,10 +105,17 @@ export function AssistantDockHost() {
         width: box.width,
         minHeight: box.height,
         /*
-         * 带自己的 view-transition-name：换页时页面内容交叉淡入，而输入条**不参与** ——
-         * 它的移动由下面这组过渡负责，两条动画各管各的，不会互相覆盖。
+         * view-transition-name 只在顶部两个位置给。
+         *
+         * 给了名字等于告诉浏览器"这是同一个元素换了地方"，于是换页时它会**把整条输入条
+         * 从旧位置演到新位置** —— 从一级界面进对话页，看到的就是输入条（连同两个气泡）
+         * 从顶部一路滑到底部。用户明确不要这个"变来变去"。
+         *
+         * 在对话页底部**不命名**：于是旧画面里的它淡出、新画面里的它淡入，
+         * 只剩淡入淡出，没有任何位移。而一级 ↔ 二级两边都有名字，
+         * 生长动画照旧（那正是想要的效果）。
          */
-        viewTransitionName: 'assistant-bar',
+        viewTransitionName: placement === 'bottom' ? undefined : 'assistant-bar',
         /*
          * 生长与位移用两套缓动：
          * - 尺寸（width / min-height）走 spring，末段有一点回弹 —— "长出来"的感觉就在这点回弹上；

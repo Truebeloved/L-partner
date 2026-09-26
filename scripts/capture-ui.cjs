@@ -466,8 +466,11 @@ app.whenReady().then(async () => {
    * TOAST_WIDTH / TOAST_HEIGHT 保持一致。
    */
   const toast = new BrowserWindow({
-    width: 320,
-    height: 92,
+    width: 340,
+    height: 104,
+    // 与真实小窗一样透明：否则截出来的图会带上那块方形底色
+    transparent: true,
+    backgroundColor: '#00000000',
     show: true,
     frame: false,
     transparent: true,

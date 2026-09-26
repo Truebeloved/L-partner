@@ -55,18 +55,27 @@ export function ToastView() {
   }, [])
 
   return (
-    <div className="flex h-screen w-screen items-center justify-center p-2">
+    <div data-toast-root className="flex h-screen w-screen items-center justify-center p-2">
       <div
         className={[
-          // 无边框、无图标、浅阴影：靠背景与位移表达"浮在上面"，而不是靠描边和重量
-          'w-full rounded-card bg-raised/95 px-4 py-3 shadow-lift',
+          /*
+           * 桌面小窗的卡片。
+           *
+           * 底必须是**不透明**的：窗口是透明的，卡片再半透明就会把桌面壁纸透出来，
+           * 字压在壁纸上根本读不了（以前是 bg-raised/95）。
+           * 细边 + 浅阴影是为了在浅色壁纸上也有边界 —— 两者都很轻，
+           * 它是一条"路过"的提示，不该有一块面板的重量。
+           */
+          'w-full rounded-card border border-line-soft bg-raised px-4 py-3 shadow-lift',
           'transition-[opacity,transform] ease-out',
           phase === 'shown' ? 'translate-y-0 opacity-100' : 'translate-y-1.5 opacity-0',
         ].join(' ')}
         style={{ transitionDuration: `${phase === 'leaving' ? EXIT_MS : ENTER_MS}ms` }}
       >
-        <p className="truncate text-body leading-snug text-ink">{title}</p>
-        {body && <p className="mt-0.5 truncate text-small leading-snug text-ink-faint">{body}</p>}
+        {/* 一行极小的来源标记：它是"谁在提醒你"，不是标题的一部分 */}
+        <p className="text-micro tracking-[0.08em] text-ink-faint uppercase">L-partner</p>
+        <p className="mt-1 truncate text-body leading-snug text-ink">{title}</p>
+        {body && <p className="mt-0.5 truncate text-small leading-snug text-ink-soft">{body}</p>}
       </div>
     </div>
   )

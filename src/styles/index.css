@@ -162,6 +162,18 @@
     @apply bg-surface font-sans text-body text-ink antialiased;
   }
 
+  /*
+   * 桌面小窗（/#/toast）那一条路由：整个文档必须透明。
+   *
+   * 全局 body 带 surface 底色（#d0d0d0）。在透明窗口里，那块底色不会消失 ——
+   * 它会被画成**一整块方形灰底**，圆角卡片浮在上面，
+   * 于是看起来就是"圆角弹窗的背景是方的"（用户报的正是这个）。
+   * 只有 body 透明，窗口才真的只剩下那张圆角卡片。
+   */
+  body:has([data-toast-root]) {
+    background: transparent;
+  }
+
   /* 键盘可访问性：焦点环用纯黑，与单色系统一致 */
   :focus-visible {
     outline: 2px solid var(--color-ink);

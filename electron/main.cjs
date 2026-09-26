@@ -241,8 +241,8 @@ function showTrayHintOnce() {
 --------------------------------------------------------------------------- */
 
 /** 窗口比卡片略大一圈，多出来的边距是留给 CSS 阴影的（透明窗口里阴影不会被裁掉） */
-const TOAST_WIDTH = 320
-const TOAST_HEIGHT = 92
+const TOAST_WIDTH = 340
+const TOAST_HEIGHT = 104
 /**
  * 小窗的**总**存活时长：从显示出来的那一刻算起，到彻底消失为止。
  * 这 3 秒里包含了出现动画、停留、消失动画三部分 ——
@@ -308,6 +308,8 @@ function showToast(payload, { force = false } = {}) {
     frame: false,
     transparent: true,
     hasShadow: false,
+    // 显式给一个全透明底色：Windows 上透明窗口不给它时，会先铺一层默认白/灰
+    backgroundColor: '#00000000',
     resizable: false,
     movable: false,
     minimizable: false,

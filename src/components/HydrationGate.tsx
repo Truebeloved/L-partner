@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 
+import { installSeedCourses } from '@/features/course/seedInstall'
 import { useChatStore } from '@/store/chat'
 import { useCourseStore } from '@/store/courses'
 import { useMemoryStore } from '@/store/memory'
@@ -48,6 +49,13 @@ export function HydrationGate({ children }: { children: ReactNode }) {
     let cancelled = false
 
     Promise.all(PERSISTED_STORES.map((store) => store.persist.rehydrate()))
+      .then(() => {
+        /*
+         * 数据读完**之后**才能决定要不要载入示例课程：判断依据是落盘的 seededAt，
+         * 在 rehydrate 之前读它一定是 null，那会让每次启动都重装一遍。
+         */
+        installSeedCourses()
+      })
       .catch((error: unknown) => {
         // 读不出来也要让应用可用，只是数据是空的；不要把用户卡在启动画面上
         console.error('[L-partner] 本地数据读取失败：', error)

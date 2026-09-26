@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import { PageHeader } from '@/components/PageHeader'
+import { installSeedCourses } from '@/features/course/seedInstall'
 import { useDesktopReminderState } from '@/features/reminder/context'
 import { LlmSettingsCard } from '@/features/settings/components/LlmSettingsCard'
 import { SettingRow } from '@/features/settings/components/SettingRow'
@@ -218,6 +219,29 @@ export function SettingsPage() {
                 label="自动抽取记忆"
                 onChange={(next) => update({ autoExtractMemory: next })}
               />
+            }
+          />
+        </section>
+
+        <section className="card">
+          <SettingRow
+            title="示例课程"
+            hint="随应用交付的现成教学方案，用来在零配置下走通「课程 → 计划 → 待办」"
+            control={
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  const installed = installSeedCourses({ force: true })
+                  setNotice(
+                    installed > 0
+                      ? `已把 ${installed} 门示例课程摆上书架`
+                      : '示例课程都已经在书架上了',
+                  )
+                }}
+              >
+                载入示例课程
+              </button>
             }
           />
         </section>

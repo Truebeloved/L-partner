@@ -57,18 +57,56 @@ const WEEKDAY_NAMES: Record<string, number> = {
  *
  * 认不出来时返回 unknown 而不是抛错或硬猜：调用方会兜底成"今天"，
  * 最坏结果只是提醒早了一天，而不是把任务丢进一个没人看的日期里。
+ *
+ * ⚠️ 用户说的从来不是标准写法。同一个"周五"，他会说成「周五之前」「周五前」
+ * 「周五下午」「大概周五吧」—— 上一版只认**完全相等**的字符串，于是这些说法
+ * 全部落到 unknown 兜底成"今天"，用户看到的就是"我说周五，它记成今天"。
+ * 所以这里改成：先把这句话剥掉修饰，再逐条比对；剥不动才认输。
  */
 export function resolveWhen(when: string | undefined | null, now: Date = new Date()): WhenResolution {
   const raw = (when ?? '').trim()
   if (!raw) return { kind: 'unknown' }
-  const text = raw.replace(/\s+/g, '')
-  const base = dayjs(now)
 
+  const base = dayjs(now)
+  const normalized = raw.replace(/\s+/g, '')
+
+  /*
+   * 两轮尝试，顺序不能反：
+   * 1. **原文原样比对**。"本周内""3 天内"这类说法里的「内」是语义的一部分，
+   *    先剥掉修饰就会把它们剥成"本周""3 天"，反而认不出来。
+   * 2. 认不出来才剥修饰再试一次（"周五下午""大概周五吧""周五之前"）。
+   */
+  for (const candidate of [normalized, stripTimeDecorations(normalized)]) {
+    if (!candidate) continue
+    const hit = matchWhen(candidate, base)
+    if (hit) return hit
+  }
+
+  return { kind: 'unknown' }
+}
+
+/** 剥掉时间副词、语气词与"之前/以前"这类限定，只留下时间词本身 */
+function stripTimeDecorations(text: string): string {
+  return text
+    .replace(/^(大概|可能|估计|应该|差不多|就在|定在|放在|约)/, '')
+    .replace(/(上午|下午|晚上|早上|早晨|中午|凌晨|傍晚|夜里|晚间|白天|当天)/g, '')
+    .replace(/(之前|以前|之内|以内|左右|前后)/g, '')
+    .replace(/[吧哦啊呢呀嘛了]/g, '')
+    .replace(/[，。！？、；：,.!?;:]/g, '')
+    // 单个「前」只剥结尾那一个（"周五前""月底前"）；不能全局剥，
+    // 否则「3 天前」这类会被剥成「3 天」，反倒把语义弄没了
+    .replace(/前$/, '')
+}
+
+/** 把一句话按各种"哪天"的说法比对一遍；认不出来返回 null */
+function matchWhen(text: string, base: ReturnType<typeof dayjs>): WhenResolution | null {
   // 已经是标准日期就直接用
   if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return { kind: 'day', date: text }
 
-  if (/^(今天|今日|本日)$/.test(text)) return { kind: 'day', date: toDateKey(base) }
-  if (/^(明天|明日)$/.test(text)) return { kind: 'day', date: toDateKey(base.add(1, 'day')) }
+  if (/^(今天|今日|本日|今晚|今夜)$/.test(text)) return { kind: 'day', date: toDateKey(base) }
+  if (/^(明天|明日|明晚|明早)$/.test(text)) {
+    return { kind: 'day', date: toDateKey(base.add(1, 'day')) }
+  }
   if (/^后天$/.test(text)) return { kind: 'day', date: toDateKey(base.add(2, 'day')) }
   if (/^大后天$/.test(text)) return { kind: 'day', date: toDateKey(base.add(3, 'day')) }
 
@@ -79,8 +117,8 @@ export function resolveWhen(when: string | undefined | null, now: Date = new Dat
   if (/^(下|下一)(周|星期|礼拜)$/.test(text)) {
     return { kind: 'week', weekStart: weekStartOf(toDateKey(base.add(1, 'week'))) }
   }
-  if (/^(这|本)周末$/.test(text)) {
-    // 周末按周六算：它比"本周"具体，落到一天更符合"我周末要做完"的语感
+  // 周末按周六算：它比"本周"具体，落到一天更符合"我周末要做完"的语感
+  if (/^(这|本)?(周末|双休日)$/.test(text)) {
     return { kind: 'day', date: toDateKey(base.startOf('isoWeek').add(5, 'day')) }
   }
 
@@ -96,26 +134,63 @@ export function resolveWhen(when: string | undefined | null, now: Date = new Dat
     return { kind: 'day', date: toDateKey(candidate) }
   }
 
-  // N 月 M 日 / 号
+  // N 月 M 日 / 号（"8月15号"）
   const monthDay = /^(\d{1,2})月(\d{1,2})(日|号)?$/.exec(text)
-  if (monthDay) {
-    const month = Number(monthDay[1])
-    const day = Number(monthDay[2])
-    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-      let candidate = base.month(month - 1).date(day).startOf('day')
-      if (candidate.isBefore(base.startOf('day'))) candidate = candidate.add(1, 'year')
-      return { kind: 'day', date: toDateKey(candidate) }
+  if (monthDay) return dayInMonth(Number(monthDay[1]), Number(monthDay[2]), base)
+
+  // 下个月 M 号 / 下月 M 号（月份由"下个月"给出，不再是用户写死的月份）
+  const nextMonthDay = /^(下|下个)个?月(\d{1,2})(日|号)?$/.exec(text)
+  if (nextMonthDay) {
+    const target = base.add(1, 'month')
+    const day = Number(nextMonthDay[2])
+    if (day >= 1 && day <= 31) {
+      return { kind: 'day', date: toDateKey(target.date(Math.min(day, target.daysInMonth()))) }
     }
   }
 
-  // N 天后 / N 天内
+  // 只有日子：M 号（"3 号交"）—— 按本月算，已经过了就顺延到下个月
+  const dayOnly = /^(\d{1,2})(日|号)$/.exec(text)
+  if (dayOnly) {
+    const day = Number(dayOnly[1])
+    if (day >= 1 && day <= 31) {
+      const thisMonth = base.date(Math.min(day, base.daysInMonth())).startOf('day')
+      const target = thisMonth.isBefore(base.startOf('day')) ? thisMonth.add(1, 'month') : thisMonth
+      return { kind: 'day', date: toDateKey(target) }
+    }
+  }
+
+  // 月底 / 月初 / 年底：这三类说法在待办里很常见（"月底之前把论文写完"）
+  if (text === '月底' || text === '月末') return { kind: 'day', date: toDateKey(base.endOf('month')) }
+  if (text === '月初') return { kind: 'day', date: toDateKey(base.startOf('month')) }
+  if (text === '年底' || text === '年末') return { kind: 'day', date: toDateKey(base.endOf('year')) }
+
+  // N 天后 / N 天内 / N 天以后
   const daysLater = /^(\d{1,3})天(后|内|以后)$/.exec(text)
   if (daysLater) {
     const days = Number(daysLater[1])
     if (Number.isFinite(days)) return { kind: 'day', date: toDateKey(base.add(days, 'day')) }
   }
 
-  return { kind: 'unknown' }
+  // N 周后 / N 个月后
+  const weeksLater = /^(\d{1,2})(个)?(周|星期|礼拜)(后|以后)$/.exec(text)
+  if (weeksLater) {
+    const weeks = Number(weeksLater[1])
+    if (Number.isFinite(weeks)) return { kind: 'day', date: toDateKey(base.add(weeks, 'week')) }
+  }
+
+  return null
+}
+
+/** M 月 D 日：已经过了就顺延到下一年（"3月5号"说在 9 月，指的是明年） */
+function dayInMonth(
+  month: number,
+  day: number,
+  base: ReturnType<typeof dayjs>,
+): WhenResolution | null {
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null
+  let candidate = base.month(month - 1).date(day).startOf('day')
+  if (candidate.isBefore(base.startOf('day'))) candidate = candidate.add(1, 'year')
+  return { kind: 'day', date: toDateKey(candidate) }
 }
 
 // ---------------------------------------------------------------------------

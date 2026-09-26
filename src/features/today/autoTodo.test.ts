@@ -117,6 +117,45 @@ describe('resolveWhen', () => {
       expect(resolveWhen(text, NOW)).toEqual({ kind: 'unknown' })
     }
   })
+
+  /*
+   * 用户从来不说标准写法。同一句"周五"，他会说成「周五之前」「周五下午」「大概周五吧」——
+   * 上一版只认完全相等的字符串，这些全部落到 unknown、兜底成"今天"，
+   * 用户看到的就是"我说周五，它给我记成今天"。
+   */
+  it('时间词带修饰也能认：之前 / 下午 / 语气词', () => {
+    expect(resolveWhen('周五之前', NOW)).toEqual({ kind: 'day', date: '2026-09-25' })
+    expect(resolveWhen('周五前', NOW)).toEqual({ kind: 'day', date: '2026-09-25' })
+    expect(resolveWhen('周五下午', NOW)).toEqual({ kind: 'day', date: '2026-09-25' })
+    expect(resolveWhen('大概周五吧', NOW)).toEqual({ kind: 'day', date: '2026-09-25' })
+    expect(resolveWhen('明天上午', NOW)).toEqual({ kind: 'day', date: '2026-09-24' })
+    expect(resolveWhen('明晚', NOW)).toEqual({ kind: 'day', date: '2026-09-24' })
+  })
+
+  it('「内」是语义的一部分，不能被当成修饰词剥掉', () => {
+    expect(resolveWhen('本周内', NOW)).toEqual({ kind: 'week', weekStart: '2026-09-21' })
+    expect(resolveWhen('3天内', NOW)).toEqual({ kind: 'day', date: '2026-09-26' })
+  })
+
+  it('月底 / 月初 / 周末', () => {
+    expect(resolveWhen('月底', NOW)).toEqual({ kind: 'day', date: '2026-09-30' })
+    expect(resolveWhen('月底前', NOW)).toEqual({ kind: 'day', date: '2026-09-30' })
+    expect(resolveWhen('月初', NOW)).toEqual({ kind: 'day', date: '2026-09-01' })
+    // 2026-09-21 是周一，周六即 26 号
+    expect(resolveWhen('周末', NOW)).toEqual({ kind: 'day', date: '2026-09-26' })
+    expect(resolveWhen('这周末', NOW)).toEqual({ kind: 'day', date: '2026-09-26' })
+  })
+
+  it('只说了日子：本月没到就本月，过了就顺延到下个月', () => {
+    // 今天 9-23
+    expect(resolveWhen('3号', NOW)).toEqual({ kind: 'day', date: '2026-10-03' })
+    expect(resolveWhen('28号', NOW)).toEqual({ kind: 'day', date: '2026-09-28' })
+    expect(resolveWhen('下个月3号', NOW)).toEqual({ kind: 'day', date: '2026-10-03' })
+  })
+
+  it('N 周后', () => {
+    expect(resolveWhen('3周后', NOW)).toEqual({ kind: 'day', date: '2026-10-14' })
+  })
 })
 
 describe('weekStartOf / isWeeklyTodo', () => {

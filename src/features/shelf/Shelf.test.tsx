@@ -166,11 +166,16 @@ describe('Shelf 交互', () => {
     expect(buttons[0]).toHaveAccessibleName('React')
   })
 
-  it('一本课程都没有时也撑出一排空白书脊，并给出添加入口', () => {
+  it('一本课程都没有时也撑出一排空白书脊，并给出真正的添加入口', () => {
     renderShelf()
 
     expect(screen.getByText('书架还是空的')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '添加课程' })).toBeInTheDocument()
-    expect(screen.queryAllByRole('button')).toHaveLength(0)
+    /*
+     * 入口必须是「新建课程」本身，不能是一个跳去课程列表的链接 ——
+     * 课程总览页早就删掉了，那个链接点下去只会回到书架自己（等于没反应）。
+     */
+    const buttons = screen.getAllByRole('button')
+    expect(buttons).toHaveLength(1)
+    expect(buttons[0]).toHaveAccessibleName('新建课程')
   })
 })

@@ -1,5 +1,3 @@
-import { Link } from 'react-router-dom'
-
 import { NewCourseButton } from '@/features/course/components/NewCourseButton'
 import { Shelf } from '@/features/shelf/Shelf'
 import { useCourseStore } from '@/store/courses'
@@ -24,10 +22,13 @@ export function ShelfPage() {
       <header className="mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-4 px-8 pt-8 pb-6">
         <h1 className="page-title">我的书架</h1>
         <div className="flex items-center gap-4">
+          {/*
+            这里原来是一个跳去 `/courses` 的链接。课程总览页早就删掉了，那条路由
+            现在重定向回书架本身 —— 也就是"点了跟没点一样"。数量本身是有用的，
+            所以留字、去掉那个走不通的入口。
+          */}
           {courseCount > 0 && (
-            <Link to="/courses" className="text-small text-ink-soft hover:text-ink">
-              共 {courseCount} 门课程 →
-            </Link>
+            <span className="tabular text-small text-ink-soft">共 {courseCount} 门课程</span>
           )}
           <NewCourseButton />
         </div>

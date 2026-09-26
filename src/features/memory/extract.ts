@@ -57,9 +57,23 @@ export function shouldExtractMemory(
 }
 
 /**
- * 从对话里抽取记忆并落库，返回新增条数。
+ * 一次抽取的结果。
  *
- * 失败时静默返回 0 而不是抛错：抽取记忆是**后台增强**，不该因为它失败
+ * 为什么要返回"落了哪些待办"而不只是条数：抽取是后台悄悄跑的，
+ * 用户说完"帮我记一下周五交报告"之后如果界面上什么都不出现，他只会认为"它没听懂"。
+ * 把落库的条目交给界面，才能给一句"已加入待办：…"的回执。
+ */
+export interface ExtractionOutcome {
+  /** 新落库的记忆条数（不含被合并进已有条目的那些） */
+  memories: number
+  /** 这次顺手落进待办栏的条目 */
+  todos: { title: string; date: DateKey }[]
+}
+
+/**
+ * 从对话里抽取记忆并落库。
+ *
+ * 失败时静默返回空结果而不是抛错：抽取记忆是**后台增强**，不该因为它失败
  * 就让用户眼前这次对话看起来出错了。
  */
 export async function extractMemories(input: {
@@ -67,9 +81,9 @@ export async function extractMemories(input: {
   messages: ChatMessage[]
   courseId?: Id
   conversationId?: Id
-}): Promise<number> {
+}): Promise<ExtractionOutcome> {
   const { provider, messages, courseId, conversationId } = input
-  if (messages.length === 0) return 0
+  if (messages.length === 0) return { memories: 0, todos: [] }
 
   /*
    * 只发**自上次抽取以来的增量**，而不是整段对话。
@@ -113,7 +127,7 @@ export async function extractMemories(input: {
     parsed = extractJson<RawExtraction>(raw)
   } catch (error) {
     console.warn('[L-partner] 记忆抽取失败，已跳过本次：', error)
-    return 0
+    return { memories: 0, todos: [] }
   }
 
   const drafts: MemoryDraft[] = []
@@ -184,11 +198,19 @@ export async function extractMemories(input: {
   /*
    * 同一次调用里顺手把「他说要做的事」落成待办 —— 这就是「全局 AI」的无感部分：
    * 不额外请求、不额外花钱，用户只是在聊天，待办栏里自己就多了东西。
+   *
+   * 落库前后各取一次待办 id，差集就是这一次新增的条目。这样也不必改
+   * applyExtractedTodos 的返回值（它给单测用的是条数）。
    */
-  const createdTodos = applyExtractedTodos(parsed, { courseId })
+  const beforeIds = new Set(useTodoStore.getState().todos.map((todo) => todo.id))
+  const createdCount = applyExtractedTodos(parsed, { courseId })
   const linked = applyTodoLinks(parsed)
+  const todos = useTodoStore
+    .getState()
+    .todos.filter((todo) => !beforeIds.has(todo.id))
+    .map((todo) => ({ title: todo.title, date: todo.date }))
 
-  return fresh.length + createdTodos + linked
+  return { memories: fresh.length + createdCount + linked, todos }
 }
 
 /** 请模型判定的待办条数上限：清单越长，模型越容易乱挂 */

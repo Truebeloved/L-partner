@@ -3,11 +3,13 @@ import { useNavigate, useParams } from 'react-router-dom'
 
 import { PageHeader } from '@/components/PageHeader'
 import {
+  deletePlanForCourse,
   generatePlanForCourse,
   generateUnitLesson,
   materializeTodos,
   summarizePlan,
 } from '@/features/course/courseActions'
+import { ConfirmDialog } from '@/features/course/components/ConfirmDialog'
 import { CourseStructure } from '@/features/course/components/CourseStructure'
 import { PlanTimeline } from '@/features/course/components/PlanTimeline'
 import { courseTotals, unitTitleMap } from '@/features/course/drafts'
@@ -36,6 +38,15 @@ export function CourseDetailPage() {
   const todos = useTodoStore((state) => state.todos)
 
   const [feedback, setFeedback] = useState<string | null>(null)
+  const [deletePlanOpen, setDeletePlanOpen] = useState(false)
+  /**
+   * 学习计划那一段是展开还是收起。
+   *
+   * 必须是可控的：原来写的是 `open={!plan}`（没计划时展开、显示引导文案），
+   * 后果是**刚点完「生成学习计划」它反而自己合上了** —— 用户看不到刚生成的东西，
+   * 也看不到那一段里的「删除学习计划」。生成之后要留在展开态。
+   */
+  const [planOpen, setPlanOpen] = useState(!plan)
   const settings = useSettingsStore((state) => state.settings)
 
   /**
@@ -86,6 +97,8 @@ export function CourseDetailPage() {
       return
     }
 
+    // 刚生成就把那一段展开：用户点这个按钮就是要看结果的
+    setPlanOpen(true)
     const created = materializeTodos(courseId)
     setFeedback(
       created > 0
@@ -187,7 +200,11 @@ export function CourseDetailPage() {
         </div>
       </section>
 
-      <details className="card mb-5" open={!plan}>
+      <details
+        className="card mb-5"
+        open={planOpen}
+        onToggle={(event) => setPlanOpen(event.currentTarget.open)}
+      >
         <summary className="section-title cursor-pointer">学习计划</summary>
         <div className="mt-3">
           {!plan ? (
@@ -235,10 +252,44 @@ export function CourseDetailPage() {
               <div className="mt-4">
                 <PlanTimeline items={plan.items} unitTitleById={titleById} todos={todos} />
               </div>
+
+              {/* 计划的"退场"入口。放在计划内容的最下面、和上面的统计用一道分隔线隔开 ——
+                  它是关于这份计划的动作，不该和"计划排得怎么样"抢视线 */}
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line-soft pt-3">
+                <p className="text-small text-ink-soft">
+                  删掉计划只是把安排清空，课程内容与你的掌握记录都保留。
+                </p>
+                <button
+                  type="button"
+                  className="btn btn-danger btn-sm"
+                  onClick={() => setDeletePlanOpen(true)}
+                >
+                  删除学习计划
+                </button>
+              </div>
             </>
           )}
         </div>
       </details>
+
+      {deletePlanOpen && (
+        <ConfirmDialog
+          title="删除学习计划？"
+          message="这份排期与它生成的待办会一起删除（包括已完成的），无法撤销。课程内容、手动添加的待办和掌握记录都保留。删完可以随时重新生成一份。"
+          confirmText="删除计划"
+          danger
+          onConfirm={() => {
+            const removed = deletePlanForCourse(course.id)
+            setDeletePlanOpen(false)
+            setFeedback(
+              removed > 0
+                ? `已删除学习计划，同时清掉 ${removed} 条由它生成的待办。`
+                : '已删除学习计划。',
+            )
+          }}
+          onCancel={() => setDeletePlanOpen(false)}
+        />
+      )}
 
 
     </>

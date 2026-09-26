@@ -67,6 +67,8 @@ function renderBar(messages: ChatMessage[] = []) {
     error: null,
     usedMemoryCount: 0,
     contextTokens: 0,
+    addedTodos: [],
+    dismissAddedTodos: vi.fn(),
     send,
     stop: vi.fn(),
     rememberNow: vi.fn(async () => 0),

@@ -3,11 +3,10 @@ import { useNavigate } from 'react-router-dom'
 
 import { createCourse } from '@/features/course/courseActions'
 import { AiPlanDialog } from '@/features/course/components/AiPlanDialog'
+import { ConfirmDialog } from '@/features/course/components/ConfirmDialog'
 import { CourseFormDialog } from '@/features/course/components/CourseFormDialog'
-import { SeedCourseDialog } from '@/features/course/components/SeedCourseDialog'
 import { generateCoursePlan } from '@/features/course/aiPlan'
 import type { CoursePlanDraft } from '@/features/course/drafts'
-import type { SeedCourse } from '@/lib/seed/courses'
 import { useSettingsStore } from '@/store/settings'
 
 /**
@@ -19,6 +18,11 @@ import { useSettingsStore } from '@/store/settings'
  *
  * 手动填写课程的入口已经去掉：课程一律由 AI 设计（用户明确要求），
  * 表单只保留一个职责 —— 让用户核对 AI 生成的初稿再落库。
+ *
+ * ⚠️ 这个按钮**只做"新建一门课"这一件事**：上一版在没有配置大模型时会弹「示例课程」
+ * 选择框，于是"点新建课程"和"我要挑一份现成教材"变成了同一个动作，而示例课程
+ * 本来就已经摆在书架上了（见 seedInstall）。现在没配置大模型时只如实提示去哪里配置，
+ * 不再拿示例课程顶替"新建"这个语义。
  */
 export function NewCourseButton() {
   const navigate = useNavigate()
@@ -31,26 +35,20 @@ export function NewCourseButton() {
   )
 
   const [aiOpen, setAiOpen] = useState(false)
-  const [seedOpen, setSeedOpen] = useState(false)
+  const [needLlm, setNeedLlm] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
   const [formInitial, setFormInitial] = useState<CoursePlanDraft | null>(null)
-
-  function handleLoadSeed(seed: SeedCourse) {
-    const id = createCourse({ ...seed.build(), source: 'manual' })
-    setSeedOpen(false)
-    navigate(`/courses/${id}`)
-  }
 
   return (
     <>
       <button
         type="button"
         className="btn btn-primary"
-        onClick={() => (llmReady ? setAiOpen(true) : setSeedOpen(true))}
+        onClick={() => (llmReady ? setAiOpen(true) : setNeedLlm(true))}
         title={
           llmReady
             ? '说说你想学什么，AI 会设计出阶段与单元'
-            : '还没有配置大模型：先在「设置」里接入，或先载入一份示例课程'
+            : '还没有配置大模型：课程由 AI 设计，先在「设置」里接入'
         }
       >
         新建课程
@@ -82,8 +80,22 @@ export function NewCourseButton() {
         />
       )}
 
-      {seedOpen && (
-        <SeedCourseDialog onPick={handleLoadSeed} onCancel={() => setSeedOpen(false)} />
+      {/*
+        没配置大模型：这里**不给**手动填写课程的入口（用户定过"课程一律由 AI 设计"）。
+        书架上已经有随应用交付的示例课程，所以零配置时也不是无事可做 —— 提示语里要说这一点，
+        否则用户会以为"没配 key 就什么都干不了"。
+      */}
+      {needLlm && (
+        <ConfirmDialog
+          title="先接入你的大模型"
+          message="课程由 AI 按你的目标设计，所以新建课程需要先配置模型。书架上的示例课程不受影响，现在就能直接学。"
+          confirmText="去设置"
+          onConfirm={() => {
+            setNeedLlm(false)
+            navigate('/settings')
+          }}
+          onCancel={() => setNeedLlm(false)}
+        />
       )}
     </>
   )

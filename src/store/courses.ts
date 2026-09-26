@@ -10,6 +10,16 @@ export type CourseDraft = Omit<Course, 'id' | 'createdAt' | 'updatedAt'>
 
 interface CourseState {
   courses: Course[]
+  /**
+   * 随应用交付的示例课程是否已经摆上书架。
+   *
+   * 为什么需要一个**落盘的标记**，而不是"书架为空就自动载入"：
+   * 后者在用户主动删光所有课程之后会把示例课程又塞回去 —— 他想清空，应用却认为他"还没开始"。
+   * 标记只写一次，之后书架是空是满都由用户自己决定（想恢复可以去设置里手动载入）。
+   */
+  seededAt: string | null
+  /** 标记示例课程已载入（由 seedInstall 调用，界面不要直接用） */
+  markSeeded: () => void
   getById: (id: Id) => Course | undefined
   add: (draft: CourseDraft) => Id
   update: (id: Id, patch: Partial<CourseDraft>) => void
@@ -27,6 +37,9 @@ export const useCourseStore = create<CourseState>()(
   persist(
     (set, get) => ({
       courses: [],
+      seededAt: null,
+
+      markSeeded: () => set({ seededAt: new Date().toISOString() }),
 
       getById: (id) => get().courses.find((c) => c.id === id),
 
@@ -70,7 +83,7 @@ export const useCourseStore = create<CourseState>()(
       name: `${STORAGE_PREFIX}.courses`,
       storage: createIdbJSONStorage(),
       version: 1,
-      partialize: (state) => ({ courses: state.courses }),
+      partialize: (state) => ({ courses: state.courses, seededAt: state.seededAt }),
     },
   ),
 )

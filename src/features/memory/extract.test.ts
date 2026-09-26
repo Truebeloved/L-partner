@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { applyExtractedTodos, applyTodoLinks } from '@/features/memory/extract'
+import { applyExtractedTodos, applyTodoLinks, extractMemories } from '@/features/memory/extract'
+import { dayjs, toDateKey } from '@/lib/date'
+import type { LlmProvider } from '@/lib/llm/types'
 import { useCourseStore } from '@/store/courses'
 import { usePlanStore } from '@/store/plans'
 import { useTodoStore } from '@/store/todos'
-import type { Course, Plan } from '@/types/models'
+import type { ChatMessage, Course, Plan } from '@/types/models'
 
 /**
  * 「全局 AI」最重要的一条链路：对话里说的话 → 待办栏。
@@ -259,5 +261,62 @@ describe('applyExtractedTodos：不用"当前对话的课程"兜底串课', () =
     )
 
     expect(useTodoStore.getState().todos[0]?.courseId).toBe('c-c')
+  })
+})
+
+/**
+ * 端到端：一句模糊的话 → 待办栏里真的多出一条。
+ *
+ * 上面那些用例喂的是"模型返回的 JSON"，这一组把 provider 也换成桩，
+ * 于是从**用户那句话**到**待办落库**整条路都被走了一遍 ——
+ * 用户报的"AI 不会给我添加待办"，坏的就是这一段里的任何一环。
+ */
+describe('extractMemories：模糊指令也要落成待办', () => {
+  /** 只回答一次抽取结果的桩 provider —— 这里测的是解析与落库，不是模型 */
+  function stubProvider(payload: unknown): LlmProvider {
+    return {
+      endpoint: 'stub://',
+      chat: async () => JSON.stringify(payload),
+      testConnection: async () => ({ ok: true }),
+    }
+  }
+
+  function message(content: string): ChatMessage {
+    return { id: 'm1', role: 'user', content, createdAt: '2026-09-23T10:00:00.000Z' }
+  }
+
+  it('把抽取结果里的待办交给调用方，界面才有东西可以回执', async () => {
+    const outcome = await extractMemories({
+      provider: stubProvider({ todos: [{ title: '写实验报告', when: '明天' }] }),
+      messages: [message('帮我记一下，明天之前把实验报告写完')],
+    })
+
+    expect(outcome.todos).toHaveLength(1)
+    expect(outcome.todos[0]?.title).toBe('写实验报告')
+    // extractMemories 内部用的是**真实今天**（线上没人会传 now），所以期望值也跟着算
+    expect(outcome.todos[0]?.date).toBe(toDateKey(dayjs().add(1, 'day')))
+  })
+
+  it('日常待办（不挂课程）同样落库 —— 待办栏不是"只装学习任务"', async () => {
+    await extractMemories({
+      provider: stubProvider({ todos: [{ title: '取快递', when: '今天' }] }),
+      messages: [message('明天记得取快递')],
+    })
+
+    const todo = useTodoStore.getState().todos[0]
+    expect(todo?.title).toBe('取快递')
+    expect(todo?.source).toBe('ai-extract')
+    // 生活琐事匹配不到课程，这是正常的：它照样存在于今日清单里
+    expect(todo?.courseId).toBeUndefined()
+  })
+
+  it('模型给不出待办时，回执是空的（不会谎报"已加入"）', async () => {
+    const outcome = await extractMemories({
+      provider: stubProvider({ facts: ['他是计算机专业大三学生'] }),
+      messages: [message('我是计算机专业大三的')],
+    })
+
+    expect(outcome.todos).toEqual([])
+    expect(outcome.memories).toBe(1)
   })
 })

@@ -8,6 +8,7 @@ import { ConversationList } from '@/features/chat/components/ConversationList'
 import { MessageBubble } from '@/features/chat/components/MessageBubble'
 import { useChatSessionContext } from '@/features/chat/context'
 import { useActiveConversation } from '@/features/chat/useChatSession'
+import { AddedTodosNotice } from '@/features/today/AddedTodosNotice'
 import { useChatStore } from '@/store/chat'
 import { useCourseStore } from '@/store/courses'
 import { usePersonaStore } from '@/store/personas'
@@ -71,7 +72,7 @@ export function ChatPage() {
    * 没有选中会话但有历史时，自动接上最近聊过的那一场。
    *
    * activeId 不参与持久化，所以刷新后它一定是空的。原来的表现是：
-   * 左边列着一堆历史，右边却是一张"我是耐心学长"的空欢迎页 ——
+   * 左边列着一堆历史，右边却是一张"我是某某学伴"的空欢迎页 ——
    * 此时输入一句话会**新建**一场对话，等于把原本那场悄悄留在背后。
    * 微信/豆包打开就是最近一场，这里对齐同一个预期。
    */
@@ -202,6 +203,16 @@ export function ChatPage() {
         没有配置大模型时也照旧：上面的接入卡片照显示，输入条照样滑到底部。
       */}
         <div className="shrink-0 px-4 py-3">
+          {/*
+            「已加入待办」的回执显示在输入条**上方**：底部的输入条贴着屏幕下沿，
+            浮层往它下面推就出可视区了。放在这里还顺带把"回执 → 输入框"排成一条竖线，
+            视线不用来回找。
+          */}
+          {session.addedTodos.length > 0 && (
+            <div className="mb-2">
+              <AddedTodosNotice todos={session.addedTodos} onDismiss={session.dismissAddedTodos} />
+            </div>
+          )}
           <div ref={dockRef} className="h-12" />
         </div>
       </div>

@@ -15,13 +15,16 @@
 
 /** 意图动词：出现这些词说明他打算"做"点什么 */
 const ACTION_VERBS = [
+  // 学习类
   '做',
   '学',
   '看',
   '读',
   '写',
   '背',
+  '默写',
   '练',
+  '刷题',
   '复习',
   '预习',
   '整理',
@@ -30,26 +33,71 @@ const ACTION_VERBS = [
   '刷',
   '过一遍',
   '搞定',
-  '搞定',
-  '交',
-  '准备',
-  '开始',
-  '继续',
+  '翻译',
+  '听写',
+  '抄',
   '改',
   '订正',
   '查',
   '搜',
   '问',
+  '讲',
+  '讲一遍',
+  // 日常类：待办不只是学习任务，生活里的事同样要能落进待办栏
+  '买',
+  '取',
+  '拿',
+  '寄',
+  '发',
+  '交',
+  '提交',
+  '报名',
+  '预约',
+  '挂号',
+  '参加',
+  '开会',
+  '体检',
+  '打印',
+  '复印',
+  '还',
+  '借',
+  '修',
+  '面试',
+  '联系',
+  '回复',
+  '打电话',
+  '核对',
+  '检查',
+  '办',
+  '处理',
+  '寄回',
+  '订',
+  '抢',
+  '准备',
+  '开始',
+  '继续',
 ]
 
-/** 第一人称的意愿表达 */
+/**
+ * 第一人称的意愿表达 —— **单独出现也成立**（"我得赶紧交了"）。
+ *
+ * 这里放的都是"他已经在给自己派活"的说法，而不是任何含"要/得/该"的句子：
+ * 把光秃秃的「要」「得」「该」也当作标记的话，「这段代码要怎么写」「该怎么改」
+ * 这类纯提问会全部命中 —— 而每一次误判都是一次真实的抽取开销。
+ */
 const INTENT_MARKERS = [
   '我要',
   '我想',
   '我得',
-  '我要去',
+  '我得去',
+  '我该',
+  '我必须',
+  '我一定',
   '我打算',
   '我准备',
+  '我计划',
+  '我待会',
+  '我一会儿',
   '计划',
   '打算',
   '需要',
@@ -59,32 +107,133 @@ const INTENT_MARKERS = [
   '等下',
   '回头看',
   '回头',
-  '明天',
-  '后天',
+  '别忘了',
+  '别忘记',
+  '记得',
+  '帮我',
+  '提醒我',
+  '记一下',
+  '加个待办',
+  '待办',
+]
+
+/** 时间说法（按子串匹配） */
+const TIME_MARKERS = [
   '今天',
+  '今日',
   '今晚',
+  '明天',
+  '明日',
+  '明晚',
+  '后天',
+  '大后天',
   '这周',
   '本周',
   '下周',
-  '周[一二三四五六日天]',
+  '这周末',
+  '本周末',
+  '月底',
+  '月初',
+  '年底',
+  '周末',
+  '之前',
+  '以前',
+  '以后',
+  '过后',
+  '生日',
 ]
+
+/** 时间说法（按模式匹配）——「周五」「3 月 5 日」「下个月」这类没法用固定子串列全 */
+const TIME_PATTERNS = [
+  /(周|星期|礼拜)[一二三四五六日天]/,
+  /\d{1,2}\s*[月日号]/,
+  /(这|本|下|上)(周|个月|月)/,
+  /\d+\s*(天|周|个月)(后|内|以后)/,
+]
+
+/**
+ * 把字句（"把借的书还了""把作业交了"）。
+ *
+ * 它是汉语里最典型的"要去做"句式，却既没有时间词也没有主语 —— 上一版因此全部漏判。
+ * 要求**以「了/吧/哦」收尾**才认：这样"把这段代码改成 async 会怎样"这种提问不会被卷进来。
+ */
+const BA_CONSTRUCTION = /^把.{1,20}(了|吧|哦)[。！!]?$/
+
+/**
+ * 明确要求"帮我记下来"的说法。
+ *
+ * 与上面的推断是两件事：他**主动要求**记的时候，不该再去猜"这句话像不像任务" ——
+ * 判断错了他会觉得"我明明让你记了"。所以这类话一律触发，而且不受「自动抽取」开关影响
+ * （见 useChatSession：关掉自动抽取是"别偷偷替我记"，不是"我叫你记也别记"）。
+ */
+const EXPLICIT_TODO_COMMANDS = [
+  '加个待办',
+  '加一条待办',
+  '添加待办',
+  '新增待办',
+  '新建待办',
+  '创建待办',
+  '加到待办',
+  '加入待办',
+  '放进待办',
+  '记到待办',
+  '记入待办',
+  '待办里',
+  '帮我记',
+  '帮忙记',
+  '帮我加',
+  '帮我安排',
+  '帮我排',
+  '记一下',
+  '记下来',
+  '记录下来',
+  '记录一下',
+  '记着',
+  '提醒我',
+  '到时候提醒',
+  '别忘',
+  '不要忘',
+  '安排一下',
+  '排进',
+  '安排到',
+  '列个清单',
+  '列一下清单',
+]
+
+/** 这句话是不是在**明确要求**把某件事记进待办 */
+export function isExplicitTodoCommand(text: string): boolean {
+  const trimmed = text.trim()
+  if (trimmed.length < 2) return false
+  return EXPLICIT_TODO_COMMANDS.some((command) => trimmed.includes(command))
+}
 
 /**
  * 判定这句话值不值得立刻跑一次抽取。
  *
- * 条件是"有意愿 + 有动作"或"有明确时间 + 有动作"——
- * 只看动词会把"我在学 React"这种陈述也当成任务，只看时间会把"今天几号"也算进来。
+ * 三个入口，满足任意一个就算：
+ * 1. **明确要求记**（"帮我记一下""提醒我"）—— 他主动开口了；
+ * 2. **有动作 + 有时间/意愿**（"明天要交作业""我今天想把第一章看完"）；
+ * 3. **第一人称 + 动作**（"我得赶紧把报告交了"）—— 没有时间词，但已经在给自己派活。
+ *
+ * 只看动词会把"我在学 React"这种陈述也当成任务；只看时间会把"今天几号"也算进来。
  */
 export function detectIntent(text: string): boolean {
   const trimmed = text.trim()
   if (trimmed.length < 3) return false
 
+  if (isExplicitTodoCommand(trimmed)) return true
+
   const hasVerb = ACTION_VERBS.some((verb) => trimmed.includes(verb))
   if (!hasVerb) return false
 
-  return INTENT_MARKERS.some((marker) =>
-    marker.startsWith('周[') ? new RegExp(marker).test(trimmed) : trimmed.includes(marker),
-  )
+  const hasTime =
+    TIME_MARKERS.some((marker) => trimmed.includes(marker)) ||
+    TIME_PATTERNS.some((pattern) => pattern.test(trimmed))
+  if (hasTime) return true
+
+  if (BA_CONSTRUCTION.test(trimmed)) return true
+
+  return INTENT_MARKERS.some((marker) => trimmed.includes(marker))
 }
 
 /**
@@ -111,7 +260,9 @@ export function splitIntent(text: string): string[] {
 export function extractIntentPhrases(text: string): string[] {
   if (!detectIntent(text)) return []
   return splitIntent(text).filter((phrase) => {
-    // 每个片段自己也要像一件"要做的事"，否则"我打算"这种残句会被当成任务
+    // 每个片段自己也要像一件"要做的事"，否则"我打算"这种残句会被当成任务。
+    // 明确要求记的那句话例外：「帮我记一下：周五交报告」里"帮我记一下"这一段
+    // 本身不带动作词，但它后面那半句带着，切开后各自判断即可。
     return ACTION_VERBS.some((verb) => phrase.includes(verb))
   })
 }

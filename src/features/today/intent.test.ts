@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { detectIntent, extractIntentPhrases, splitIntent } from '@/features/today/intent'
+import { detectIntent, extractIntentPhrases, isExplicitTodoCommand, splitIntent } from '@/features/today/intent'
 
 /**
  * 这一组守的是用户直接报上来的那个问题：
@@ -48,6 +48,52 @@ describe('detectIntent', () => {
   it('有时间没动作、或有动作没时间，都不算', () => {
     expect(detectIntent('今天几号')).toBe(false)
     expect(detectIntent('看')).toBe(false)
+  })
+
+  /*
+   * 用户报的第二个问题：「软件里配置的 AI 是可以帮我添加待办的……需要识别模糊指令」。
+   * 模糊指令有两种：一种是**没说得那么规整**（"月底前把论文写完""记得买牛奶"），
+   * 另一种是**直接开口让你记**（"帮我记一下…"）。两种都必须命中。
+   */
+  it('口语化的说法也算 —— 时间词和动作词都不必标准', () => {
+    for (const text of [
+      '月底前把论文写完',
+      '3号交实验报告',
+      '下个月初要去体检',
+      '记得买牛奶',
+      '周五之前把实验报告交了',
+      '把借的书还了',
+      '明天取快递',
+      '帮我报名四级',
+    ]) {
+      expect(detectIntent(text), text).toBe(true)
+    }
+  })
+
+  it('纯提问里出现"要/得/该"不算任务 —— 否则每次提问都要多花一次抽取', () => {
+    for (const text of ['这段代码要怎么写', '这个函数该怎么改', '为什么要用 useMemo']) {
+      expect(detectIntent(text), text).toBe(false)
+    }
+  })
+})
+
+describe('isExplicitTodoCommand', () => {
+  it('开口让你记的说法一律认', () => {
+    for (const text of [
+      '帮我记一下，周五之前把实验报告写完',
+      '提醒我明天买书',
+      '别忘了把借的书还了',
+      '加个待办：月底前复习完第三章',
+      '记下来：下周三开会',
+    ]) {
+      expect(isExplicitTodoCommand(text), text).toBe(true)
+    }
+  })
+
+  it('普通的请教与聊天不算指令', () => {
+    for (const text of ['这道题怎么做', '帮我讲讲闭包', '我今天有点累']) {
+      expect(isExplicitTodoCommand(text), text).toBe(false)
+    }
   })
 })
 

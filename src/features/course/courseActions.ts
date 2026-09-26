@@ -230,6 +230,39 @@ export function materializeTodos(courseId: Id): number {
 }
 
 /**
+ * 删除这门课的学习计划 —— 只删计划与它生成的待办，**课程内容原样保留**。
+ *
+ * 为什么要有这个动作，而不是"只能删课"：排期是"怎么学"的安排，内容才是"学什么"。
+ * 用户改主意了（不想按这个节奏走、想重新排一次、deadline 变了）需要的是把安排清掉重来，
+ * 而不是连同教材一起扔掉。上一版只有「删除这门课」和「生成计划」两个动作，
+ * 于是排错了就只能删课重来 —— 用户报的"没有删除制定学习计划这个功能"就是这个缺口。
+ *
+ * 三条边界：
+ * 1. **只删这个计划派生的待办**（带 planItemId 且指向本计划的排期项），手动添加的、
+ *    对话里抽出来的待办一律不动 —— 它们不是计划的产物。
+ * 2. 已完成的派生待办也一起删。留着它们的后果比删掉更糟：planItemId 已指向不存在的排期项，
+ *    它们会永远显示为「来自学习计划」，点完成却回流不到任何地方。
+ * 3. 掌握状态不删。那是"他学会了什么"的记录，与"打算怎么学"无关，
+ *    删计划不该让已经学会的东西变回没学过。
+ *
+ * 返回被一起删掉的待办条数，供界面如实告知用户。
+ */
+export function deletePlanForCourse(courseId: Id): number {
+  const plan = usePlanStore.getState().getByCourse(courseId)
+  if (!plan) return 0
+
+  const itemIds = new Set(plan.items.map((item) => item.id))
+  const derived = useTodoStore
+    .getState()
+    .todos.filter((todo) => todo.planItemId !== undefined && itemIds.has(todo.planItemId))
+
+  for (const todo of derived) useTodoStore.getState().remove(todo.id)
+  usePlanStore.getState().removeByCourse(courseId)
+
+  return derived.length
+}
+
+/**
  * 彻底删除课程：课程本体、计划、待办、以及挂在这门课上的记忆一起清掉。
  * 不能只删课程 —— 留下孤儿计划与待办，今日列表里会出现点不进去的任务。
  * 全局记忆（courseId 为空，如「我是计算机专业大三」）不动：那是关于用户本人的，不该被删课牵连。

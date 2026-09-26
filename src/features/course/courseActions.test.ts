@@ -27,6 +27,7 @@ vi.mock('@/lib/storage/idbStorage', () => {
 import {
   createCourse,
   deleteCourseCompletely,
+  deletePlanForCourse,
   generatePlanForCourse,
   materializeTodos,
   planItemState,
@@ -381,6 +382,81 @@ describe('rescheduleCourse', () => {
     expect(result?.schedule.empty).toBe(true)
     expect(result?.summary.remainingMinutes).toBe(0)
     expect(requirePlan(id).items.every((item) => item.status === 'done')).toBe(true)
+  })
+})
+
+describe('deletePlanForCourse', () => {
+  /** 造一个"有计划的课程 + 一条手动待办"的现场 */
+  function setup() {
+    const id = createCourse(draft())
+    generatePlanForCourse(id, { startDate: START })
+    materializeTodos(id)
+    const manualId = useTodoStore
+      .getState()
+      .add({ title: '取快递', date: START, source: 'manual' })
+    return { id, manualId }
+  }
+
+  it('删计划会连它派生的待办一起删掉，手动待办与课程内容一概不动', () => {
+    const { id, manualId } = setup()
+    const itemCount = requirePlan(id).items.length
+    expect(itemCount).toBeGreaterThan(0)
+
+    const derivedCount = useTodoStore.getState().todos.filter((todo) => todo.planItemId).length
+    expect(derivedCount).toBeGreaterThan(0)
+
+    expect(deletePlanForCourse(id)).toBe(derivedCount)
+
+    expect(usePlanStore.getState().getByCourse(id)).toBeUndefined()
+    // 手动添加的待办不是计划的产物，必须留下来
+    expect(useTodoStore.getState().todos.map((todo) => todo.id)).toEqual([manualId])
+    // 课程本体（教材）与删计划无关
+    expect(requireCourse(id).stages.length).toBeGreaterThan(0)
+  })
+
+  it('已完成的派生待办也一起删 —— 留着会永远指向已不存在的排期项', () => {
+    const { id } = setup()
+    const todos = useTodoStore.getState().todos.filter((todo) => todo.planItemId)
+    const first = todos[0]
+    if (!first) throw new Error('应当已经生成派生待办')
+    useTodoStore.getState().toggle(first.id)
+
+    deletePlanForCourse(id)
+
+    // 一条都不剩：不留"来自学习计划"却点不进去的幽灵任务
+    expect(useTodoStore.getState().todos.filter((todo) => todo.planItemId)).toHaveLength(0)
+  })
+
+  it('掌握记录不动：删的是「打算怎么学」，不是「学会了什么」', () => {
+    const { id } = setup()
+    useMemoryStore.getState().add({
+      layer: 'mastery',
+      courseId: id,
+      knowledgePoint: 'useState',
+      content: '已经会用',
+      level: 'mastered',
+      confidence: 0.8,
+      source: 'rule',
+    })
+
+    deletePlanForCourse(id)
+
+    expect(useMemoryStore.getState().entries).toHaveLength(1)
+  })
+
+  it('删完可以立刻重新生成一份计划', () => {
+    const { id } = setup()
+    deletePlanForCourse(id)
+
+    const result = generatePlanForCourse(id, { startDate: START })
+
+    expect(result).not.toBeNull()
+    expect(requirePlan(id).items.length).toBeGreaterThan(0)
+  })
+
+  it('没有计划时是空操作', () => {
+    const id = createCourse(draft())
+    expect(deletePlanForCourse(id)).toBe(0)
   })
 })
 

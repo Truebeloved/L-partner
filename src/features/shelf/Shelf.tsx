@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 
 import { deleteCourseCompletely, planItemState } from '@/features/course/courseActions'
 import { ConfirmDialog } from '@/features/course/components/ConfirmDialog'
+import { NewCourseButton } from '@/features/course/components/NewCourseButton'
 import { BlankSpine } from '@/features/shelf/BlankSpine'
 import { BookDetailPopup } from '@/features/shelf/BookDetailPopup'
 import type { AnchorRect } from '@/features/shelf/BookDetailPopup'
@@ -208,9 +209,13 @@ export function Shelf() {
           <div className="text-center">
             <p className="font-display text-h3 font-bold text-ink">书架还是空的</p>
             <p className="hint mt-2">建立第一门课程，它就会成为这里的一本书</p>
-            <Link to="/courses" className="btn btn-primary btn-sm mt-4">
-              添加课程
-            </Link>
+            {/*
+              这里必须是**新建课程本身**，不能是一个跳去"课程列表"的链接 ——
+              课程总览页早就删掉了，那个链接只会把用户送回书架自己（点了跟没点一样）。
+            */}
+            <div className="mt-4 flex justify-center">
+              <NewCourseButton />
+            </div>
           </div>
         </div>
       )}

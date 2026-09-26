@@ -6,7 +6,7 @@ import {
   planSummary,
   summarizeConversation,
 } from '@/features/memory/extract'
-import { detectIntent } from '@/features/today/intent'
+import { detectIntent, isExplicitTodoCommand } from '@/features/today/intent'
 import { looksLikeFollowUp, matchCourseForMessage } from '@/features/chat/routing'
 import { retrieveMemories } from '@/features/memory/retrieve'
 import { createProvider } from '@/lib/llm'
@@ -22,6 +22,7 @@ import { usePlanStore } from '@/store/plans'
 import { useSettingsStore } from '@/store/settings'
 import { useTodoStore } from '@/store/todos'
 import { todayKey } from '@/lib/date'
+import type { DateKey } from '@/types/models'
 
 export interface ChatSession {
   streaming: boolean
@@ -30,6 +31,14 @@ export interface ChatSession {
   usedMemoryCount: number
   /** 本轮请求的上下文估算 token 数 —— 让"花了多少"可见，而不是月底看账单 */
   contextTokens: number
+  /**
+   * 刚才那句话里被落进待办栏的条目。
+   *
+   * 抽取是后台跑的，不把结果说出来，用户就只会看到"我说了要记，界面什么都没发生" ——
+   * 而这个应用里"它真的记下了"恰恰是最需要被看见的一件事。
+   */
+  addedTodos: { title: string; date: DateKey }[]
+  dismissAddedTodos: () => void
   send: (text: string) => Promise<void>
   stop: () => void
   rememberNow: () => Promise<number>
@@ -49,13 +58,23 @@ export function useChatSession(): ChatSession {
   const [error, setError] = useState<ChatSession['error']>(null)
   const [usedMemoryCount, setUsedMemoryCount] = useState(0)
   const [contextTokens, setContextTokens] = useState(0)
+  const [addedTodos, setAddedTodos] = useState<ChatSession['addedTodos']>([])
   const abortRef = useRef<AbortController | null>(null)
+  /** 「已加入待办」那条回执的退场计时器 —— 它是一次性提示，不该永久占着位置 */
+  const noticeTimerRef = useRef<number | null>(null)
 
   // 卸载时中断在途请求，避免往已卸载的 store 里写状态
   useEffect(() => {
     return () => {
       abortRef.current?.abort()
+      if (noticeTimerRef.current !== null) window.clearTimeout(noticeTimerRef.current)
     }
+  }, [])
+
+  const dismissAddedTodos = useCallback(() => {
+    if (noticeTimerRef.current !== null) window.clearTimeout(noticeTimerRef.current)
+    noticeTimerRef.current = null
+    setAddedTodos([])
   }, [])
 
   const send = useCallback(
@@ -251,25 +270,39 @@ export function useChatSession(): ChatSession {
       // ---- 按策略抽取记忆 ----
       // 放在 finally 之后：即使这轮失败也不影响后续；抽取本身失败也只是静默跳过
       const after = useChatStore.getState().getById(targetId)
-      if (!after || !settings.autoExtractMemory) return
+      if (!after) return
 
       /*
-       * 触发条件有两条，而且都指向同一件事 —— **别让用户觉得"我说了它没记住"**：
+       * 触发条件有三条，而且都指向同一件事 —— **别让用户觉得"我说了它没记住"**：
        *
-       * 1. **这一句里有要做的事**（本地规则判定，零成本）：立刻抽一次。
+       * 1. **这一句是明确指令**（"帮我记一下周五交报告""提醒我明天买书"）：一定抽。
+       *    而且**不受「自动抽取记忆」开关约束** —— 那个开关的语义是"别偷偷替我记"，
+       *    不是"我让你记你也别记"。关掉它却因此连明确指令都失效，是上一版的漏洞。
+       * 2. **这一句里有要做的事**（本地规则判定，零成本）：立刻抽一次。
        *    原来只有周期触发（每 8 条消息），于是"我今天想把第一章看完"这种话
        *    说完什么都不发生，用户得再聊三四个来回才可能见到待办 ——
        *    他报的正是这个："只会分析出待办任务但不会添加到待办区域"。
-       * 2. **攒够了一个周期**：兜底那些不像"要做的事"、但其实值得记的对话。
+       * 3. **攒够了一个周期**：兜底那些不像"要做的事"、但其实值得记的对话。
        */
+      const explicit = isExplicitTodoCommand(trimmed)
       const eager = detectIntent(trimmed)
       const periodic = after.messages.length % EXTRACTION_INTERVAL === 0
-      if (eager || periodic) {
+
+      if ((settings.autoExtractMemory || explicit) && (eager || periodic)) {
         void extractMemories({
           provider: createProvider(settings.llm),
           messages: after.messages,
           courseId: after.courseId,
           conversationId: after.id,
+        }).then((outcome) => {
+          if (outcome.todos.length === 0) return
+          setAddedTodos(outcome.todos)
+          if (noticeTimerRef.current !== null) window.clearTimeout(noticeTimerRef.current)
+          // 8 秒够看清一句话，又不至于在页面上留一块永久的小告示
+          noticeTimerRef.current = window.setTimeout(() => {
+            noticeTimerRef.current = null
+            setAddedTodos([])
+          }, 8000)
         })
       }
 
@@ -315,17 +348,39 @@ export function useChatSession(): ChatSession {
     if (!conversation || conversation.messages.length === 0) return 0
     if (!settings.llm.baseUrl || !settings.llm.apiKey) return 0
 
-    return extractMemories({
+    // 这里只关心"新记住了多少条"，顺手落下的待办由页面的待办栏自己体现
+    const outcome = await extractMemories({
       provider: createProvider(settings.llm),
       messages: conversation.messages,
       courseId: conversation.courseId,
       conversationId: conversation.id,
     })
+    return outcome.memories
   }, [conversationId, settings.llm])
 
   return useMemo(
-    () => ({ streaming, error, usedMemoryCount, contextTokens, send, stop, rememberNow }),
-    [streaming, error, usedMemoryCount, contextTokens, send, stop, rememberNow],
+    () => ({
+      streaming,
+      error,
+      usedMemoryCount,
+      contextTokens,
+      addedTodos,
+      dismissAddedTodos,
+      send,
+      stop,
+      rememberNow,
+    }),
+    [
+      streaming,
+      error,
+      usedMemoryCount,
+      contextTokens,
+      addedTodos,
+      dismissAddedTodos,
+      send,
+      stop,
+      rememberNow,
+    ],
   )
 }
 

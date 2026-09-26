@@ -6,12 +6,24 @@ export interface RetrieveOptions {
   courseId?: Id
   /** 查询文本，通常取最近几条用户消息拼起来 */
   query?: string
+  /** 条数上限（配合 maxChars 用，两个都到才算满） */
   limit?: number
+  /**
+   * 字符预算：按相关度从高到低取，直到装不下为止。
+   *
+   * 为什么不能只靠条数：记忆有长有短，'条数上限 = 8' 既可能只带进 8 条一句话的印象，
+   * 也可能塞进 8 段长文本。真正该控的是**总长度**（也就是 token），
+   * 条数只作为"别带太多条"的兜底。用户要的"超长记忆"正是靠这个预算放开的 ——
+   * 短句记忆可以带进去几十条，而总长度仍然可控。
+   */
+  maxChars?: number
   /** 注入当前时间，便于测试 */
   now?: Date
 }
 
 const DEFAULT_LIMIT = 8
+/** 不传 maxChars 时的默认字符预算（约等于以前 8 条中长记忆的量） */
+const DEFAULT_MAX_CHARS = 1600
 /** 置信度低于这个值的记忆不注入 —— 宁可少记，也不要拿不确定的印象误导模型 */
 const MIN_CONFIDENCE = 0.3
 
@@ -28,9 +40,19 @@ const LAYER_WEIGHT: Record<MemoryEntry['layer'], number> = {
  * 纯前端环境没有向量库，但这不构成阻碍：记忆条数通常在几百量级，
  * 用「关键词重叠 + 课程归属 + 新鲜度 + 使用频次」打分排序已经够用，
  * 而且打分过程完全可解释 —— 用户在记忆面板里能看懂「为什么它记得这个」。
+ *
+ * 取的时候同时受两个约束：**字符预算**（主要）与**条数上限**（兜底）。
+ * 预算至少保证第一条进得来 —— 一条都带不进去的话，这套记忆等于不存在。
  */
 export function retrieveMemories(options: RetrieveOptions): MemoryEntry[] {
-  const { entries, courseId, query, limit = DEFAULT_LIMIT, now = new Date() } = options
+  const {
+    entries,
+    courseId,
+    query,
+    limit = DEFAULT_LIMIT,
+    maxChars = DEFAULT_MAX_CHARS,
+    now = new Date(),
+  } = options
 
   const queryTokens = query ? tokenize(query) : new Set<string>()
   const nowMs = now.getTime()
@@ -40,7 +62,23 @@ export function retrieveMemories(options: RetrieveOptions): MemoryEntry[] {
     .map((entry) => ({ entry, score: scoreEntry(entry, queryTokens, courseId, nowMs) }))
 
   scored.sort((a, b) => b.score - a.score)
-  return scored.slice(0, limit).map((item) => item.entry)
+
+  const picked: MemoryEntry[] = []
+  let used = 0
+  for (const item of scored) {
+    if (picked.length >= limit) break
+    const cost = memoryCost(item.entry)
+    if (picked.length > 0 && used + cost > maxChars) continue
+    picked.push(item.entry)
+    used += cost
+  }
+
+  return picked
+}
+
+/** 一条记忆在上下文里大致占多少字符（内容 + 知识点标注） */
+export function memoryCost(entry: MemoryEntry): number {
+  return entry.content.length + (entry.knowledgePoint?.length ?? 0) + 8
 }
 
 export function scoreEntry(

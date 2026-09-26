@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { extractMemories, EXTRACTION_INTERVAL } from '@/features/memory/extract'
+import {
+  extractMemories,
+  EXTRACTION_INTERVAL,
+  planSummary,
+  summarizeConversation,
+} from '@/features/memory/extract'
 import { retrieveMemories } from '@/features/memory/retrieve'
 import { createProvider } from '@/lib/llm'
 import { assembleMessages, clampText, estimateMessagesTokens } from '@/lib/llm/context'
@@ -102,13 +107,20 @@ export function useChatSession(): ChatSession {
         .map((message) => message.content)
         .join(' ')
 
-      // 省流模式下少带几条记忆、每条也短一些 —— 记忆是"辅助"，不该喧宾夺主
+      /*
+       * 记忆注入改成按**字符预算**取，不再只给 5 条。
+       *
+       * 之前省流模式只带 5 条记忆（宽松 8 条），对于"它记得我"这件事来说太薄了：
+       * 一条记忆往往只有一句话，5 句话装不下一个人。现在按相关度排序、
+       * 装满预算为止 —— 短句记忆能进去几十条，而总长度仍然可控（不会失控烧 token）。
+       */
       const efficient = settings.efficientMode
       const memories = retrieveMemories({
         entries: useMemoryStore.getState().entries,
         courseId,
         query,
-        limit: efficient ? 5 : 8,
+        maxChars: efficient ? 2600 : 6000,
+        limit: efficient ? 30 : 60,
       })
       setUsedMemoryCount(memories.length)
       // 记录「被使用过」，这是记忆演化（常用加权 / 长期不用降权）的数据来源
@@ -119,11 +131,9 @@ export function useChatSession(): ChatSession {
         course,
         plan,
         todayTodos,
+        // 单条记忆不再砍到 80 字：长记忆往往正是"有细节的那条"，砍了就等于没记
         memories: efficient
-          ? memories.map((memory) => ({
-              ...memory,
-              content: clampText(memory.content, 80),
-            }))
+          ? memories.map((memory) => ({ ...memory, content: clampText(memory.content, 160) }))
           : memories,
         efficient,
       }
@@ -208,6 +218,34 @@ export function useChatSession(): ChatSession {
           courseId: after.courseId,
           conversationId: after.id,
         })
+      }
+
+      /*
+       * ---- 滚动更新会话摘要 ----
+       *
+       * 这一步是"超长记忆"的关键：注入的历史只有 4000 字符（最近几个来回），
+       * 再往前的对话如果不压进摘要，就是**真的丢了**，用户会觉得"它怎么不记得我们聊过"。
+       *
+       * 它同时也是一次额外的模型调用（每 12 条消息一次、输出上限 512），
+       * 所以跟着「自动抽取记忆」这个开关一起走 —— 用户关掉自动抽取时，
+       * 不该有另一个后台调用偷偷花钱。
+       */
+      if (after && settings.autoExtractMemory) {
+        const plan = planSummary({
+          messageCount: after.messages.length,
+          summaryUpTo: after.summaryUpTo ?? 0,
+        })
+        if (plan.needed) {
+          void summarizeConversation({
+            provider: createProvider(settings.llm),
+            previousSummary: after.summary,
+            // 只把"即将滑出注入窗口"的那一段交给它，已经摘要过的不重复送
+            messages: after.messages.slice(after.summaryUpTo ?? 0, plan.upTo),
+          }).then((summary) => {
+            if (!summary) return
+            useChatStore.getState().setSummary(after.id, summary, plan.upTo)
+          })
+        }
       }
     },
     [settings],

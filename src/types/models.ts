@@ -208,6 +208,14 @@ export interface Conversation {
   messages: ChatMessage[]
   /** 记忆第 1 层：会话过长时的摘要压缩结果 */
   summary?: string
+  /**
+   * 摘要已经覆盖到第几条消息（messages 的下标数量）。
+   *
+   * 没有它就没法知道"摘要之外还有哪些没被压缩过" ——
+   * 结果要么重复摘要、要么把中间一段对话永久丢掉。
+   * 会话越长这个字段越关键：它是"超长记忆"能成立的唯一依据。
+   */
+  summaryUpTo?: number
   createdAt: IsoDateTime
   updatedAt: IsoDateTime
 }

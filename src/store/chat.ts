@@ -18,7 +18,7 @@ interface ChatState {
   appendMessage: (conversationId: Id, message: Pick<ChatMessage, 'role' | 'content'>) => Id
   updateMessage: (conversationId: Id, messageId: Id, patch: Partial<ChatMessage>) => void
   /** 记忆第 1 层：会话过长时写入的摘要压缩结果 */
-  setSummary: (conversationId: Id, summary: string) => void
+  setSummary: (conversationId: Id, summary: string, summaryUpTo: number) => void
   rename: (conversationId: Id, title: string) => void
   remove: (id: Id) => void
   listByCourse: (courseId: Id) => Conversation[]
@@ -103,10 +103,10 @@ export const useChatStore = create<ChatState>()(
           ),
         })),
 
-      setSummary: (conversationId, summary) =>
+      setSummary: (conversationId, summary, summaryUpTo) =>
         set((state) => ({
           conversations: state.conversations.map((c) =>
-            c.id === conversationId ? { ...c, summary } : c,
+            c.id === conversationId ? { ...c, summary, summaryUpTo } : c,
           ),
         })),
 

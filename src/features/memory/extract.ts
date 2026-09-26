@@ -298,6 +298,42 @@ export function applyExtractedTodos(
 }
 
 /** 会话摘要（记忆第 1 层）：对话变长后，用摘要替换掉冗长的原始历史 */
+
+/**
+ * 每积累这么多条**新**消息，就滚动更新一次会话摘要。
+ *
+ * 这是"超长记忆"的关键：每轮注入的历史只有 4000 字符（约最近几个来回），
+ * 更早的内容如果没有摘要承载，就是**真的丢了** —— 用户会说"它怎么不记得我们聊过"。
+ * 12 条（约 6 个来回）一次，配上 512 的输出上限，是"记得住"与"花得起"之间的平衡点。
+ */
+export const SUMMARY_EVERY = 12
+
+/**
+ * 最近这么多条消息不进入摘要，始终以原文保留。
+ *
+ * 它们本来就在注入窗口里，压进摘要反而丢掉原话的语气与细节 ——
+ * 摘要负责"很久以前"，原文负责"刚刚"。
+ */
+export const SUMMARY_KEEP_RECENT = 6
+
+/**
+ * 判断这一轮结束后要不要更新摘要，以及摘要该覆盖到第几条消息。
+ *
+ * 抽成纯函数：这段边界条件（够不够、覆盖到哪、还有没有新内容）最容易写错，
+ * 而写错的表现是"聊了很久却什么都没记住"，在界面上根本看不出来。
+ */
+export function planSummary(input: {
+  messageCount: number
+  summaryUpTo: number
+}): { needed: boolean; upTo: number } {
+  const { messageCount, summaryUpTo } = input
+  const upTo = messageCount - SUMMARY_KEEP_RECENT
+
+  if (upTo <= summaryUpTo) return { needed: false, upTo: summaryUpTo }
+  if (upTo - summaryUpTo < SUMMARY_EVERY) return { needed: false, upTo: summaryUpTo }
+  return { needed: true, upTo }
+}
+
 export async function summarizeConversation(input: {
   provider: LlmProvider
   previousSummary?: string

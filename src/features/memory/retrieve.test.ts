@@ -21,6 +21,62 @@ export function makeMemory(
 
 const NOW = new Date('2026-09-25T12:00:00.000Z')
 
+describe('retrieveMemories 的字符预算', () => {
+  /** 造 n 条同样相关度的短记忆 */
+  function manyMemories(count: number, content = '他晚上效率更高'): MemoryEntry[] {
+    return Array.from({ length: count }, (_, index) =>
+      makeMemory({ content: `${content} ${index}` }),
+    )
+  }
+
+  /*
+   * 这一组是「超长记忆」的守门测试。
+   * 以前注入是按**条数**卡的（省流模式只有 5 条），一条记忆往往只有一句话，
+   * 5 句话装不下一个人 —— 用户会说"它记性太差"。现在按字符预算取。
+   */
+  it('预算够时能塞进远超以往条数上限的记忆', () => {
+    const result = retrieveMemories({ entries: manyMemories(40), maxChars: 2000, limit: 30, now: NOW })
+    expect(result.length).toBeGreaterThan(10)
+  })
+
+  it('预算是硬的：同样的预算，长文带得少、短句带得多', () => {
+    const budgetCost = (list: MemoryEntry[]) =>
+      list.reduce((sum, entry) => sum + entry.content.length + 8, 0)
+
+    const long = retrieveMemories({
+      entries: manyMemories(40, '这是一条比较长的记忆内容用来占用预算'),
+      maxChars: 300,
+      limit: 30,
+      now: NOW,
+    })
+    const short = retrieveMemories({ entries: manyMemories(40), maxChars: 300, limit: 30, now: NOW })
+
+    expect(budgetCost(long)).toBeLessThanOrEqual(300)
+    expect(budgetCost(short)).toBeLessThanOrEqual(300)
+    // 同一笔预算，短句装得下更多条 —— 这就是"按长度而不是按条数"的意义
+    expect(long.length).toBeLessThan(short.length)
+  })
+
+  it('条数上限仍然生效（预算是主要约束，条数是兜底）', () => {
+    const result = retrieveMemories({ entries: manyMemories(40), maxChars: 99_999, limit: 6, now: NOW })
+    expect(result).toHaveLength(6)
+  })
+
+  it('即使预算极紧，也至少带一条进去 —— 一条都没有等于这套记忆不存在', () => {
+    const result = retrieveMemories({
+      entries: manyMemories(5, '很长很长的一条记忆内容'),
+      maxChars: 1,
+      now: NOW,
+    })
+    expect(result).toHaveLength(1)
+  })
+
+  it('不传预算时保持原来的量级（不传参不会突然变贵）', () => {
+    const result = retrieveMemories({ entries: manyMemories(40), now: NOW })
+    expect(result.length).toBeLessThanOrEqual(8)
+  })
+})
+
 describe('retrieveMemories', () => {
   it('排除已归档与低置信度的记忆', () => {
     const kept = makeMemory({ content: '他是计算机专业大三学生' })

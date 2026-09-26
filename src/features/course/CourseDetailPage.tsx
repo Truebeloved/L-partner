@@ -4,9 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { PageHeader } from '@/components/PageHeader'
 import {
   deletePlanForCourse,
-  generatePlanForCourse,
   generateUnitLesson,
-  materializeTodos,
   summarizePlan,
 } from '@/features/course/courseActions'
 import { ConfirmDialog } from '@/features/course/components/ConfirmDialog'
@@ -87,49 +85,24 @@ export function CourseDetailPage() {
 
   const totals = courseTotals(course)
 
-  function handleGenerate() {
-    if (!courseId) return
-    const result = generatePlanForCourse(courseId)
-    if (!result) return
-
-    if (result.schedule.empty) {
-      setFeedback('这门课还没有可排期的单元，先补充阶段与单元再来生成计划。')
-      return
-    }
-
-    // 刚生成就把那一段展开：用户点这个按钮就是要看结果的
-    setPlanOpen(true)
-    const created = materializeTodos(courseId)
-    setFeedback(
-      created > 0
-        ? `已生成计划：${result.summary.studyDays} 个学习日，并新增 ${created} 条今日待办。`
-        : '已生成计划；对应的待办此前已经建过，没有重复添加。',
-    )
-  }
-
   return (
     <>
       <PageHeader
         title={course.title}
         description={course.description ?? '这门课程还没有简介'}
         actions={
-          <>
-            <button type="button" className="btn btn-ghost" onClick={() => navigate('/')}>
-              返回书架
-            </button>
-            {/*
-              只有"还没有计划"时才给这个按钮。
-              「重新排期」与「重新生成计划」都删掉了：前者是把剩下的内容按当前每周投入重排，
-              后者是整门课重排一次，两者对用户来说是同一件事的两种说法，
-              而真正需要重排的时刻（改了每周投入、落下几天进度）系统自己心里有数，
-              让用户去猜该点哪个只会把计划搞乱。
-            */}
-            {!plan && (
-              <button type="button" className="btn btn-primary" onClick={handleGenerate}>
-                生成学习计划
-              </button>
-            )}
-          </>
+          /*
+           * 这里**只有**「返回书架」。
+           *
+           * 「生成学习计划」这个按钮按用户要求去掉了（原来在右上角）。
+           * 排期这件事现在由学伴代劳：跟他说一句「帮我排一下这门课」，
+           * 走的是同一条 generatePlanForCourse（见 features/agent/execute.ts），
+           * 而且随时可重排、可删除 —— 比让用户自己猜该点哪个按钮更符合"它是 agent"这个定位。
+           * 「重新排期 / 重新生成计划」也早就删掉了，理由见那次提交的说明。
+           */
+          <button type="button" className="btn btn-ghost" onClick={() => navigate('/')}>
+            返回书架
+          </button>
         }
       />
 
@@ -209,7 +182,7 @@ export function CourseDetailPage() {
         <div className="mt-3">
           {!plan ? (
             <p className="muted leading-relaxed">
-              还没有排期。点右上角「生成学习计划」，会按课程的每周可投入把
+              还没有排期。跟学伴说一句「帮我排一下这门课」，它会按每周可投入把
               {totals.unitCount} 节铺到日历上，并同步生成今日待办。
             </p>
           ) : (

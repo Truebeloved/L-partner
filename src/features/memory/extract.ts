@@ -9,6 +9,7 @@ import { buildActionPrompt } from '@/features/agent/actions'
 import { applyAgentActions } from '@/features/agent/execute'
 import type { PendingAction } from '@/features/agent/execute'
 import { splitIntent } from '@/features/today/intent'
+import { compactMemories, planCompaction } from '@/features/memory/compact'
 import { extractJson } from '@/lib/llm'
 import { buildMemoryExtractionMessages, buildSummaryMessages } from '@/lib/llm/prompts'
 import type { LlmProvider } from '@/lib/llm/types'
@@ -69,6 +70,13 @@ export function shouldExtractMemory(
  * 把落库的条目交给界面，才能给一句"已加入待办：…"的回执。
  */
 export interface ExtractionOutcome {
+  /**
+   * 这次抽取是否真的跑成了。
+   *
+   * 调用方据此决定要不要推进"已经抽到第几条"的记账：失败还推进的话，
+   * 那一批消息就永远不会再被处理（用户的待办与记忆凭空少一段）。
+   */
+  ok: boolean
   /** 新落库的记忆条数（不含被合并进已有条目的那些） */
   memories: number
   /** 这次顺手落进待办栏的条目 */
@@ -100,14 +108,14 @@ export async function extractMemories(input: {
   expectAction?: boolean
 }): Promise<ExtractionOutcome> {
   const { provider, messages, courseId, conversationId, expectAction = false } = input
-  if (messages.length === 0) return { memories: 0, todos: [], receipts: [], pending: [] }
+  if (messages.length === 0) return { ok: false, memories: 0, todos: [], receipts: [], pending: [] }
 
   /*
-   * 只发**自上次抽取以来的增量**，而不是整段对话。
+   * 只发**自上次抽取以来的增量**（调用方已经切好），这里再兜一道上限。
    *
-   * 原来每一轮抽取都把全部历史重发一遍：对话到 100 条时，每 8 条消息就要重发一次全部内容 ——
-   * 抽取本意是"省着点花"，结果成了最贵的一个调用。截取最近 EXTRACTION_WINDOW 条就够了：
-   * 更早的内容早就抽过了。
+   * ⚠️ 这个上限是"遇到长间隔时宁可跳过，也不要把窗口撑爆"的取舍：
+   * 中间那段真的被跳过（标记会推到最新），但那种情况只在"关了自动抽取很久又打开"
+   * 或者手动触发时出现，而把几百条消息一次发过去是另一种更糟的结果。
    */
   const recent = messages.slice(-EXTRACTION_WINDOW)
 
@@ -178,7 +186,7 @@ export async function extractMemories(input: {
     parsed = extractJson<RawExtraction>(rawText)
   } catch (error) {
     console.warn('[L-partner] 记忆抽取失败，已跳过本次：', error)
-    return { memories: 0, todos: [], receipts: [], pending: [] }
+    return { ok: false, memories: 0, todos: [], receipts: [], pending: [] }
   }
 
   /*
@@ -279,8 +287,20 @@ export async function extractMemories(input: {
    */
   const agent = applyAgentActions(parsed.actions, { conversationCourseId: courseId })
 
+  /*
+   * 顺手做一次记忆整理（只有攒到阈值以上才真的跑，见 compact.ts）。
+   * 放在最后：它读的是"刚刚写入之后"的全量条目，这一轮新加的也会被一起整理进去。
+   */
+  const plan = planCompaction(useMemoryStore.getState().entries)
+  if (plan) {
+    void compactMemories({ provider, plan }).then((replaced) => {
+      if (replaced > 0) console.warn(`[L-partner] 记忆整理：${plan.layer} 层 ${replaced} 条合并为更少的条目`)
+    })
+  }
+
   // 被拒绝的动作也要回执 —— 这个应用里最伤信任的不是"没做成"，而是"我说了它没反应"
   return {
+    ok: true,
     memories: fresh.length + createdCount + linked,
     todos,
     receipts: [...agent.applied.map((item) => item.receipt), ...agent.rejected],

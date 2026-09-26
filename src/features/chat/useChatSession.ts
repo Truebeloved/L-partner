@@ -81,15 +81,16 @@ export function useChatSession(): ChatSession {
     /*
      * 回执**只**靠这个计时器退场，界面上没有"知道了"按钮 ——
      * 用户要的是"看一眼就知道它办了事"，而不是每次都被要求点一下。
-     * 6 秒够读完两三行，也不至于在页面上留一块永久的小告示。
+     * 3 秒（用户指定的时长）：他关心的只是"到底办没办"，一句话看完就走，
+     * 停留更久就变成占地方了。
      *
-     * ⚠️ 待确认的动作（删课程/删计划）**不**跟着一起消失：那是一句问话，
+     * ⚠️ 待确认的动作（删课程/删计划/清空待办）**不**跟着一起消失：那是一句问话，
      * 得等用户回答，自动消失等于默默替他做了决定。
      */
     noticeTimerRef.current = window.setTimeout(() => {
       noticeTimerRef.current = null
       setReceipts([])
-    }, 6000)
+    }, 3000)
   }, [])
 
   const dismissPendingAction = useCallback((id: string) => {
@@ -326,9 +327,21 @@ export function useChatSession(): ChatSession {
       const periodic = after.messages.length % EXTRACTION_INTERVAL === 0
 
       if ((settings.autoExtractMemory || explicit) && (eager || periodic)) {
+        /*
+         * 只发**还没抽过的那一批**。
+         *
+         * 原来每一轮都取"最近 24 条"，于是同一句话会被反复抽取：待办靠"同天同名去重"
+         * 侥幸没翻倍，而**动作没有第二道防线** —— 用户说了一句"我想学编曲"，
+         * 之后每抽一次就再弹一遍"要按『我想学编曲』新建课程吗"。用户报的
+         * "这个弹窗不需要反复弹出"就是这个。顺带这里也是省 token 的一处：
+         * 重叠窗口意味着同一段对话平均要被发三遍。
+         */
+        const pending = after.messages.slice(after.extractUpTo ?? 0)
+        const totalAtCall = after.messages.length
+
         void extractMemories({
           provider: createProvider(settings.llm),
-          messages: after.messages,
+          messages: pending,
           courseId: after.courseId,
           conversationId: after.id,
           /*
@@ -339,6 +352,10 @@ export function useChatSession(): ChatSession {
            */
           expectAction: explicit,
         }).then((outcome) => {
+          // 跑成了才记账：失败还推进的话，这一批消息就永远不会再被处理
+          if (outcome.ok) {
+            useChatStore.getState().setExtractUpTo(after.id, totalAtCall)
+          }
           // 新增待办先合成一条自己的回执，再拼上动作的回执 ——
           // 界面上看到的是"它办了哪些事"的一份完整清单
           const lines = [
@@ -401,13 +418,22 @@ export function useChatSession(): ChatSession {
     if (!conversation || conversation.messages.length === 0) return 0
     if (!settings.llm.baseUrl || !settings.llm.apiKey) return 0
 
+    // 与自动抽取同一套增量口径：不重复处理已经抽过的消息（也就不会重放旧动作）
+    const pending = conversation.messages.slice(conversation.extractUpTo ?? 0)
+    if (pending.length === 0) return 0
+
     // 这里只关心"新记住了多少条"，顺手落下的待办由页面的待办栏自己体现
     const outcome = await extractMemories({
       provider: createProvider(settings.llm),
-      messages: conversation.messages,
+      messages: pending,
       courseId: conversation.courseId,
       conversationId: conversation.id,
+      expectAction: true,
     })
+
+    if (outcome.ok) {
+      useChatStore.getState().setExtractUpTo(conversation.id, conversation.messages.length)
+    }
     return outcome.memories
   }, [conversationId, settings.llm])
 

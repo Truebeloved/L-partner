@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 
 import { formatRelativeDay } from '@/lib/date'
 import { useEscapeKey } from '@/lib/useEscapeKey'
@@ -23,6 +24,14 @@ interface TodoMenuPopupProps {
  *
  * 刻意做得**轻**：一块小面板、一道浅边、一层很浅的阴影（不用 shadow-pop 那种弹窗量级），
  * 一行标题 + 一行元信息 + 一个删除按钮。它要的是"顺手一划"，不是"打开一个对话框"。
+ *
+ * ⚠️ 它**挂在 document.body 上**（portal），而不是留在侧栏里。
+ *
+ * 侧栏里的今日待办是这个菜单最常见的调用方，而侧栏是一个独立的层叠上下文：
+ * 光把 z-index 写大没用 —— 那个值只在侧栏内部比较，走出侧栏就被整个压在主内容区下面。
+ * 表现就是"在侧栏右键删除一条待办，菜单被书架上的书盖住"（用户报的正是这个）。
+ * 挂到 body 之后它和书架的小窗在**同一个**层叠上下文里比 z-index，60 > 40 才真的成立。
+ * 顺带也躲开了侧栏的 overflow 裁剪。
  */
 export function TodoMenuPopup({
   todo,
@@ -52,7 +61,7 @@ export function TodoMenuPopup({
 
   const position = resolvePosition(anchor)
 
-  return (
+  return createPortal(
     <div
       ref={ref}
       data-todo-menu
@@ -91,7 +100,8 @@ export function TodoMenuPopup({
         Esc 或点击别处关闭
         {todo.planItemId ? ' · 删除不会撤销课程进度' : ''}
       </p>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

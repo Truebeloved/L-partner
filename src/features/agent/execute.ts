@@ -80,6 +80,7 @@ const EXECUTION_ORDER: AgentActionType[] = [
   'reschedule_course',
   'set_deadline',
   'delete_todo',
+  'clear_todos',
   'delete_plan',
   'delete_course',
 ]
@@ -133,6 +134,8 @@ function execute(
       return updateTodo(action, context)
     case 'delete_todo':
       return deleteTodo(action, context)
+    case 'clear_todos':
+      return clearTodos(action, context)
     case 'complete_todo':
       return completeTodo(action, context)
     case 'reschedule_course':
@@ -226,6 +229,62 @@ function completeTodo(action: RawAction, context: AgentActionContext): Outcome {
   // 走与界面勾选同一条链路：排期项状态与知识点掌握状态都要跟上
   setTodoDone(todo.item.id, true)
   return { kind: 'applied', receipt: `已把「${todo.item.title}」标记为完成` }
+}
+
+/**
+ * 清空待办。
+ *
+ * 与「删掉一条」刻意区别对待：单条删除直接执行（轻量、常常就是用户刚说的那句话），
+ * 而**批量清空必须问一句** —— 它一次抹掉的是几十条，而且往往是用户气头上说的
+ * （"把这些破待办全删了"），误执行的代价与单条完全不是一个量级。
+ *
+ * 只删**未完成**的：已完成的那些是学习记录（完成情况已经回流到掌握状态），
+ * 删掉它们等于篡改历史，而用户说"清空待办"时想清掉的是"还欠着的事"。
+ */
+function clearTodos(action: RawAction, context: AgentActionContext): Outcome {
+  const courseRef = asText(action.course)
+  const todos = useTodoStore.getState().todos.filter((todo) => !todo.done)
+
+  let targets = todos
+  let scope = '全部'
+
+  if (courseRef) {
+    const course = resolveCourse(courseRef, {
+      courses: useCourseStore.getState().courses,
+      conversationCourseId: context.conversationCourseId,
+    })
+    if (!course.ok) return { kind: 'rejected', reason: course.reason }
+    targets = todos.filter((todo) => todo.courseId === course.item.id)
+    scope = `《${course.item.title}》的`
+  }
+
+  if (targets.length === 0) {
+    return { kind: 'applied', receipt: `${scope}未完成待办本来就是空的` }
+  }
+
+  const doneCount = useTodoStore.getState().todos.length - todos.length
+  const courseId = courseRef ? targets[0]?.courseId : undefined
+
+  return {
+    kind: 'pending',
+    pending: {
+      id: newId(),
+      kind: 'destructive',
+      prompt:
+        `要清空${scope}全部 ${targets.length} 条未完成待办吗？` +
+        (doneCount > 0 ? `（已完成的 ${doneCount} 条会保留）` : ''),
+      confirmText: `清空 ${targets.length} 条`,
+      run: () => {
+        const store = useTodoStore.getState()
+        // 重新按同一口径取一遍：确认框停留期间用户可能又勾掉/加了几条
+        const finalTargets = store.todos.filter(
+          (todo) => !todo.done && (!courseRef || todo.courseId === courseId),
+        )
+        for (const todo of finalTargets) useTodoStore.getState().remove(todo.id)
+        return `已清空 ${finalTargets.length} 条未完成待办`
+      },
+    },
+  }
 }
 
 // ---------------------------------------------------------------------------

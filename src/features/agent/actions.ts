@@ -21,6 +21,8 @@ export type AgentActionType =
   | 'update_todo'
   /** 删掉一条待办 */
   | 'delete_todo'
+  /** 清空待办：全部未完成的，或某一门课的那一批 */
+  | 'clear_todos'
   /** 把一条待办标记为完成（会回流到计划与掌握状态） */
   | 'complete_todo'
   /** 重新排期；可同时改「每周可投入」 */
@@ -58,6 +60,14 @@ export const AGENT_ACTIONS: Record<AgentActionType, AgentActionSpec> = {
     label: '删待办',
     needsConfirm: false,
     params: { todo: '待办标题（原样照抄）' },
+  },
+  clear_todos: {
+    type: 'clear_todos',
+    label: '清空待办',
+    needsConfirm: true,
+    params: {
+      course: '只清某一门课的待办时填课程标题；清空全部就留空',
+    },
   },
   complete_todo: {
     type: 'complete_todo',

@@ -83,6 +83,14 @@ function mergeGroup(key: string, bucket: Conversation[]): Conversation {
     createdAt,
     updatedAt,
     ...(summary ? { summary, summaryUpTo: 0 } : {}),
+    /*
+     * 合并之后原来的下标没有意义了，这里**推到最新**而不是归零。
+     *
+     * 归零会让下一轮把整场合并对话重新抽一遍 —— 而抽取里现在带着"动作"，
+     * 于是很久以前说过的一句"我想学编曲"会被翻出来再弹一次新建课程。
+     * 宁可漏抽这段历史（它本来就是老数据、多数已经抽过），也不要重放旧决定。
+     */
+    extractUpTo: messages.length,
   }
 }
 
@@ -113,6 +121,12 @@ interface ChatState {
   updateMessage: (conversationId: Id, messageId: Id, patch: Partial<ChatMessage>) => void
   /** 记忆第 1 层：会话过长时写入的摘要压缩结果 */
   setSummary: (conversationId: Id, summary: string, summaryUpTo: number) => void
+  /**
+   * 记账：抽取已经处理到第几条消息。
+   *
+   * 只由抽取成功后调用 —— 抽取失败时不推进，下一次才会重试那一批消息。
+   */
+  setExtractUpTo: (conversationId: Id, extractUpTo: number) => void
   rename: (conversationId: Id, title: string) => void
   remove: (id: Id) => void
   listByCourse: (courseId: Id) => Conversation[]
@@ -247,6 +261,13 @@ export const useChatStore = create<ChatState>()(
         set((state) => ({
           conversations: state.conversations.map((c) =>
             c.id === conversationId ? { ...c, summary, summaryUpTo } : c,
+          ),
+        })),
+
+      setExtractUpTo: (conversationId, extractUpTo) =>
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c.id === conversationId ? { ...c, extractUpTo } : c,
           ),
         })),
 

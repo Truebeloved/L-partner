@@ -132,12 +132,14 @@ describe('动作注册表', () => {
     }
   })
 
-  it('只有删除类动作需要确认', () => {
+  it('只有不可撤销的动作需要确认', () => {
     const needConfirm = Object.values(AGENT_ACTIONS)
       .filter((spec) => spec.needsConfirm)
       .map((spec) => spec.type)
       .sort()
-    expect(needConfirm).toEqual(['delete_course', 'delete_plan'])
+    // 单条待办删除**不**在这里：它轻量、而且常常就是用户刚说的那句话。
+    // 批量清空必须在：一次抹掉几十条，误执行的代价完全不是一个量级
+    expect(needConfirm).toEqual(['clear_todos', 'delete_course', 'delete_plan'])
   })
 })
 
@@ -254,6 +256,69 @@ describe('待办类动作', () => {
     expect(result.applied).toHaveLength(0)
     expect(result.rejected[0]).toContain('没找到')
     expect(useTodoStore.getState().todos).toHaveLength(1)
+  })
+})
+
+describe('清空待办（批量）', () => {
+  function withTodos() {
+    useTodoStore.setState({
+      todos: [
+        makeTodo({ id: 't1', title: '第一讲', courseId: 'c-react' }),
+        makeTodo({ id: 't2', title: '第二讲', courseId: 'c-react' }),
+        makeTodo({ id: 't3', title: '取快递' }),
+        makeTodo({ id: 't4', title: '交作业', done: true }),
+      ],
+    })
+  }
+
+  it('不直接执行 —— 一次抹掉几十条，先问一句', () => {
+    withTodos()
+    const result = applyAgentActions([{ type: 'clear_todos' }])
+
+    expect(result.applied).toHaveLength(0)
+    expect(result.pending).toHaveLength(1)
+    // 还没点确认，一条都不能少
+    expect(useTodoStore.getState().todos).toHaveLength(4)
+  })
+
+  it('确认后清掉未完成的，**已完成的保留**（那是学习记录）', () => {
+    withTodos()
+    const pending = pendingOf(applyAgentActions([{ type: 'clear_todos' }]).pending, 0)
+    if (pending.kind !== 'destructive') throw new Error('应当是待确认动作')
+
+    expect(pending.prompt).toContain('3 条未完成')
+    expect(pending.prompt).toContain('已完成的 1 条会保留')
+
+    const receipt = pending.run()
+
+    expect(useTodoStore.getState().todos.map((todo) => todo.id)).toEqual(['t4'])
+    expect(receipt).toContain('3 条')
+  })
+
+  it('只说清某一门课时只清那一门的（"把 C语言那门课的待办都删了"）', () => {
+    withTodos()
+    const result = applyAgentActions([{ type: 'clear_todos', course: 'React' }])
+    const pending = pendingOf(result.pending, 0)
+    if (pending.kind !== 'destructive') throw new Error('应当是待确认动作')
+
+    pending.run()
+
+    // React 的两条没了，日常的那条留着
+    expect(useTodoStore.getState().todos.map((todo) => todo.id)).toEqual(['t3', 't4'])
+  })
+
+  it('没有未完成待办时不必问，直接说本来就是空的', () => {
+    useTodoStore.setState({ todos: [makeTodo({ id: 't1', title: '交作业', done: true })] })
+    const result = applyAgentActions([{ type: 'clear_todos' }])
+    expect(result.pending).toHaveLength(0)
+    expect(result.applied[0]?.receipt).toContain('本来就是空的')
+  })
+
+  it('课程名认不出来时拒绝，不做任何事', () => {
+    withTodos()
+    const result = applyAgentActions([{ type: 'clear_todos', course: '高数' }])
+    expect(result.pending).toHaveLength(0)
+    expect(result.rejected[0]).toContain('没认出')
   })
 })
 

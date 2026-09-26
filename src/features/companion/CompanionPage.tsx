@@ -26,30 +26,39 @@ export function CompanionPage() {
   const [tab, setTab] = useState<CompanionTab>('persona')
 
   return (
-    <div className="page-container">
-      {/* 标题与导航条目同名，避免"我点的是学伴设定、打开的却叫学伴"这种不一致 */}
+    <>
+      {/*
+        标题与导航条目同名，避免"我点的是学伴设定、打开的却叫学伴"这种不一致。
+
+        ⚠️ PageHeader 不能放进 .page-container 里：两者各自都带 `max-w-3xl px-8`，
+        嵌套之后标题会拿到**两层**内边距（64px），于是它的左边缘比「设置」那一类的标题
+        多缩进 32px —— 换页时标题横着跳一下，看着就是"没对齐"。
+        标题与容器并列，才是同一套坐标系。
+      */}
       <PageHeader title="学伴设定" description="它是什么样的人，以及它记得你什么" />
 
-      {/* 分段控件：选中态是黑底白字（设计约束里"激活"的唯一表达） */}
-      <div className="mb-6 flex gap-2">
-        {TABS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            aria-pressed={tab === item.id}
-            className={
-              tab === item.id
-                ? 'btn btn-sm bg-ink text-ink-inverse'
-                : 'btn btn-ghost btn-sm text-ink-soft'
-            }
-            onClick={() => setTab(item.id)}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+      <div className="page-container">
+        {/* 分段控件：选中态是黑底白字（设计约束里"激活"的唯一表达） */}
+        <div className="mb-6 flex gap-2">
+          {TABS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              aria-pressed={tab === item.id}
+              className={
+                tab === item.id
+                  ? 'btn btn-sm bg-ink text-ink-inverse'
+                  : 'btn btn-ghost btn-sm text-ink-soft'
+              }
+              onClick={() => setTab(item.id)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
 
-      {tab === 'persona' ? <PersonaSection /> : <MemorySection />}
-    </div>
+        {tab === 'persona' ? <PersonaSection /> : <MemorySection />}
+      </div>
+    </>
   )
 }

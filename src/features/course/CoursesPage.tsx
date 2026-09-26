@@ -87,8 +87,12 @@ export function CoursesPage({ onGenerateWithAi }: CoursesPageProps = {}) {
 
   return (
     // 外壳的 <main> 只负责滚动、不带内边距（这样书架这类需要自己控制
-    // 边距的页面才能贴边排布），所以每个功能页要自己给边距
-    <div className="page-container">
+    // 边距的页面才能贴边排布），所以每个功能页要自己给边距。
+    //
+    // ⚠️ PageHeader 与 .page-container **并列**，不能嵌套：
+    // 两者各自都带 `max-w-3xl px-8`，套在一起标题就会多出一层内边距，
+    // 左边缘比别的页面多缩进 32px —— 那正是"标题没对齐"的来源。
+    <div>
       <PageHeader
         title="课程"
         description="建立课程，生成学习计划与每日待办"
@@ -110,37 +114,40 @@ export function CoursesPage({ onGenerateWithAi }: CoursesPageProps = {}) {
         }
       />
 
-      {rows.length === 0 ? (
-        <section className="card py-10 text-center">
-          <h2 className="card-title">还没有课程</h2>
-          <p className="muted mx-auto mt-3 max-w-sm leading-relaxed">
-            先载入一份示例课程走一遍，或者直接建立你自己的目标。
-          </p>
+      {/* 内容自己在 page-container 里，标题在外面 —— 两者左边缘因此是同一条竖线 */}
+      <div className="page-container">
+        {rows.length === 0 ? (
+          <section className="card py-10 text-center">
+            <h2 className="card-title">还没有课程</h2>
+            <p className="muted mx-auto mt-3 max-w-sm leading-relaxed">
+              先载入一份示例课程走一遍，或者直接建立你自己的目标。
+            </p>
 
-          {/* 顶部栏已经有「新建课程」和「让 AI 帮我生成方案」，这里不再重复一遍 ——
-              同一个动作在一屏里出现两次，用户反而不知道该点哪个 */}
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-4">
-            <button type="button" className="btn btn-primary" onClick={handleLoadDemo}>
-              载入示例课程
-            </button>
-            <button type="button" className="btn btn-secondary" onClick={openManualForm}>
-              手写新建课程
-            </button>
+            {/* 顶部栏已经有「新建课程」和「让 AI 帮我生成方案」，这里不再重复一遍 ——
+                同一个动作在一屏里出现两次，用户反而不知道该点哪个 */}
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-4">
+              <button type="button" className="btn btn-primary" onClick={handleLoadDemo}>
+                载入示例课程
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={openManualForm}>
+                手写新建课程
+              </button>
+            </div>
+          </section>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {rows.map(({ course, summary }) => (
+              <CourseCard
+                key={course.id}
+                course={course}
+                summary={summary}
+                onOpen={() => navigate(`/courses/${course.id}`)}
+                onDelete={() => setPendingDelete(course)}
+              />
+            ))}
           </div>
-        </section>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {rows.map(({ course, summary }) => (
-            <CourseCard
-              key={course.id}
-              course={course}
-              summary={summary}
-              onOpen={() => navigate(`/courses/${course.id}`)}
-              onDelete={() => setPendingDelete(course)}
-            />
-          ))}
-        </div>
-      )}
+        )}
+      </div>
 
       {formOpen && (
         <CourseFormDialog

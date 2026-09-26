@@ -109,8 +109,12 @@ export function TodayPage() {
   }
 
   return (
-    <div className="page-container">
+    <>
+      {/* PageHeader 与 page-container 并列：两者都带 max-w-3xl px-8，
+          嵌套会让标题多缩进 32px，与其它页面的标题对不齐 */}
       <PageHeader title="今日" description={formatDateHuman(today)} />
+
+      <div className="page-container">
 
       {/* 一条待办都没有时不渲染统计卡：0 / 0 配一条全空的进度条没有任何信息量，
           反而把「今天还没安排」这个真正有用的提示挤到下面去 */}
@@ -235,6 +239,7 @@ export function TodayPage() {
           void requestPermission()
         }}
       />
-    </div>
+      </div>
+    </>
   )
 }

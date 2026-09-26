@@ -150,7 +150,9 @@ function UnitRow({
 
       {/*
         正文：这是"课程不是空壳"的地方。
-        没写过就给一个按钮让学伴写；写过就直接能读，不再重复花钱生成。
+        但**已经有视频链接的节不提供"让学伴写"** —— 那门课本身讲得比模型现写的更好，
+        再让模型写一遍纯属浪费 token（用户明确要求）。视频才是这一节的主路径，
+        正文只在"没有外部好课可用"时才是选项。
       */}
       <div className="mt-2">
         {hasLesson ? (
@@ -162,7 +164,7 @@ function UnitRow({
           >
             {open ? '收起这一节' : '读这一节'}
           </button>
-        ) : (
+        ) : unit.resourceUrl ? null : (
           <button
             type="button"
             className="btn btn-secondary btn-sm"

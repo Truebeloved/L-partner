@@ -8,6 +8,7 @@ import type {
 import { createProvider, extractJson } from '@/lib/llm'
 import { buildCoursePlanMessages } from '@/lib/llm/prompts'
 import { LlmError } from '@/lib/llm/types'
+import { draftFromCatalog, findCatalogCourse } from '@/lib/seed/great-courses'
 import { useSettingsStore } from '@/store/settings'
 
 /**
@@ -26,6 +27,21 @@ interface RawPlan {
 }
 
 export async function generateCoursePlan(request: AiPlanRequest): Promise<CoursePlanDraft> {
+  /*
+   * 先查"公认好课"目录，命中就**直接按它的讲次建课，一次模型调用都不发**。
+   *
+   * 这是用户明确要求的方向：C 语言学翁恺就够了，让模型再写一份自己的章节体系
+   * 既不如它好，还白白烧掉几千 token。目录命中是最理想的情况 ——
+   * 结构是验证过的、链接是能打开的、成本是零。
+   */
+  const catalog = findCatalogCourse(request.goal)
+  if (catalog) {
+    return draftFromCatalog(catalog, {
+      weeklyHours: request.weeklyHours,
+      deadline: request.deadline,
+    })
+  }
+
   const settings = useSettingsStore.getState().settings
   const { baseUrl, apiKey, model } = settings.llm
 

@@ -56,7 +56,9 @@ export function AiPlanDialog({ generate, onCancel, onGenerated }: AiPlanDialogPr
       >
         <h2 className="card-title">让 AI 帮我生成方案</h2>
         <p className="mt-2 text-small leading-relaxed text-ink-soft">
-          说清楚目标，由你配置的大模型拆出阶段、单元与知识点；生成结果会先填进表单，改完再保存。
+          说清楚目标。如果这门学科有公认最好的公开课（比如 C 语言 → 浙大翁恺），
+          会**直接按它的讲次建课并附上每一讲的链接**，不消耗任何 token；
+          没有的话再由你配置的大模型拆阶段与单元。生成结果都会先填进表单，改完再保存。
         </p>
 
         <div className="mt-4 space-y-3">

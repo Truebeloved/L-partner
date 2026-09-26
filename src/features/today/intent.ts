@@ -159,6 +159,65 @@ const TIME_PATTERNS = [
  */
 const BA_CONSTRUCTION = /^把.{1,20}(了|吧|哦)[。！!]?$/
 
+// ---------------------------------------------------------------------------
+// 「他在指挥我办事」—— 全局 AI 的动作触发
+// ---------------------------------------------------------------------------
+
+/**
+ * 改动数据的动词。
+ *
+ * 与 ACTION_VERBS 的区别：那些是"他自己要做的事"（学、写、背），
+ * 这些是"让我去改数据"（挪、删、改期、重排）。
+ */
+const MUTATION_VERBS =
+  /(挪|移|改|调|删|去掉|取消|勾掉|勾上|标记|加到|放进|换成|设成|排到|推到|提前|延|推迟|重排|更新|改期)/
+
+/** 祈使/处置的说法 */
+const IMPERATIVE_START = /^(把|请|麻烦|帮我|帮忙|给我|替我)/
+
+/**
+ * 改变主意：他不想继续这件事了。
+ *
+ * 这类话**一个动作词都没有**（"React 那门先不学了"），却是一条要执行的决定 ——
+ * 上一版因为它既不像待办、又没有时间和动词，连抽取都不会触发，
+ * 于是用户会看到"我说了那门课不学了，它毫无反应"。
+ */
+const CHANGE_OF_MIND = /(不学了|不想学|不打算学|不上了|不考了|退课|退掉|放弃)/
+
+/** 完成声明：「第一章我看完了」 */
+const COMPLETION_CLAIM = /(看完|学完|做完|写完|背完|复习完|过完|搞定)了/
+
+/** 调整提醒 */
+const REMINDER_CHANGE = /(提醒|闹钟|通知)[^。！？]{0,8}(改|调|设|换|提前|延后|晚|早)/
+
+/**
+ * 提问的标记 —— 这些是"问我一件事"，不是"让我去办一件事"。
+ *
+ * 这一条是"指挥类"判定里唯一真正的护栏：「把这段代码改成 async 会怎样」和
+ * 「把周三那条挪到周五」在词面上几乎同构，区别只在**这句话是不是在问我**。
+ * 不挡的话，每个带"把…改…"的技术提问都会白花一次抽取。
+ */
+const QUESTION = /(会怎样|会怎么样|是什么|为什么|怎么|如何|是不是|会不会|能不能|可以吗)|[?？]\s*$/
+
+/**
+ * 这句话是不是**在指挥我办事**（改期、删除、勾掉、重排、改提醒、改主意……）。
+ *
+ * 为什么必须与 detectIntent 一起用：动作是**立刻要生效**的，
+ * 而它靠的是"这句话值得马上抽一次"。判定不出来，用户说完就得等攒够 8 条消息 ——
+ * 或者永远等不到。误判的代价只是多一次抽取，与"说了没反应"完全不对等。
+ */
+export function isAgentCommand(text: string): boolean {
+  const trimmed = text.trim()
+  if (trimmed.length < 3) return false
+  if (QUESTION.test(trimmed)) return false
+
+  if (CHANGE_OF_MIND.test(trimmed)) return true
+  if (COMPLETION_CLAIM.test(trimmed)) return true
+  if (REMINDER_CHANGE.test(trimmed)) return true
+
+  return IMPERATIVE_START.test(trimmed) && MUTATION_VERBS.test(trimmed)
+}
+
 /**
  * 明确要求"帮我记下来"的说法。
  *
@@ -210,10 +269,11 @@ export function isExplicitTodoCommand(text: string): boolean {
 /**
  * 判定这句话值不值得立刻跑一次抽取。
  *
- * 三个入口，满足任意一个就算：
+ * 四个入口，满足任意一个就算：
  * 1. **明确要求记**（"帮我记一下""提醒我"）—— 他主动开口了；
- * 2. **有动作 + 有时间/意愿**（"明天要交作业""我今天想把第一章看完"）；
- * 3. **第一人称 + 动作**（"我得赶紧把报告交了"）—— 没有时间词，但已经在给自己派活。
+ * 2. **在指挥我办事**（"把周三那条挪到周五""React 那门先不学了"）—— 见 isAgentCommand；
+ * 3. **有动作 + 有时间/意愿**（"明天要交作业""我今天想把第一章看完"）；
+ * 4. **第一人称 + 动作**（"我得赶紧把报告交了"）—— 没有时间词，但已经在给自己派活。
  *
  * 只看动词会把"我在学 React"这种陈述也当成任务；只看时间会把"今天几号"也算进来。
  */
@@ -222,6 +282,7 @@ export function detectIntent(text: string): boolean {
   if (trimmed.length < 3) return false
 
   if (isExplicitTodoCommand(trimmed)) return true
+  if (isAgentCommand(trimmed)) return true
 
   const hasVerb = ACTION_VERBS.some((verb) => trimmed.includes(verb))
   if (!hasVerb) return false

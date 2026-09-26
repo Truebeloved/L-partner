@@ -5,6 +5,9 @@ import {
   resolveWhen,
   weekStartOf,
 } from '@/features/today/autoTodo'
+import { buildActionPrompt } from '@/features/agent/actions'
+import { applyAgentActions } from '@/features/agent/execute'
+import type { PendingAction } from '@/features/agent/execute'
 import { splitIntent } from '@/features/today/intent'
 import { extractJson } from '@/lib/llm'
 import { buildMemoryExtractionMessages, buildSummaryMessages } from '@/lib/llm/prompts'
@@ -45,6 +48,8 @@ interface RawExtraction {
   todos?: unknown
   weekly?: unknown
   todoLinks?: unknown
+  /** 全局 AI 的动作：改期、勾掉、删除、重排、改 deadline、建课、改提醒 */
+  actions?: unknown
 }
 
 export function shouldExtractMemory(
@@ -68,6 +73,10 @@ export interface ExtractionOutcome {
   memories: number
   /** 这次顺手落进待办栏的条目 */
   todos: { title: string; date: DateKey }[]
+  /** 这次替他做掉的事（一句话一条，直接显示给用户） */
+  receipts: string[]
+  /** 不可撤销、等用户点确认的动作 */
+  pending: PendingAction[]
 }
 
 /**
@@ -83,7 +92,7 @@ export async function extractMemories(input: {
   conversationId?: Id
 }): Promise<ExtractionOutcome> {
   const { provider, messages, courseId, conversationId } = input
-  if (messages.length === 0) return { memories: 0, todos: [] }
+  if (messages.length === 0) return { memories: 0, todos: [], receipts: [], pending: [] }
 
   /*
    * 只发**自上次抽取以来的增量**，而不是整段对话。
@@ -114,20 +123,45 @@ export async function extractMemories(input: {
       ),
     )
 
+  /*
+   * 动作能引用的对象清单：课程标题 + 未完成的待办。
+   *
+   * 只给**标题**（不给内容、大纲）—— 模型在这些动作里只需要"照抄一个标题回来"，
+   * 而它抄得准不准，取决于清单里有没有这一条。待办按日期取最近的一批并封顶：
+   * 攒到几百条时全列出来，光这一项就能把每次抽取都变贵。
+   */
+  const courses = useCourseStore.getState().courses.map((course) => course.title)
+  const openTodos = useTodoStore
+    .getState()
+    .todos.filter((todo) => !todo.done)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, OPEN_TODO_LIMIT)
+    .map((todo) => ({
+      title: todo.title,
+      note: [todo.date, courseTitleOf(todo.courseId)].filter(Boolean).join(' · '),
+    }))
+
   let parsed: RawExtraction
   try {
     const raw = await provider.chat(
-      buildMemoryExtractionMessages(recent, existing, { pendingTodos, courseUnits }),
+      buildMemoryExtractionMessages(recent, existing, {
+        pendingTodos,
+        courseUnits,
+        courses,
+        openTodos,
+        actionGuide: buildActionPrompt(),
+      }),
       {
         // 抽取任务要的是稳定输出，不是创造力
         temperature: 0,
-        maxTokens: 1024,
+        // 动作与记忆挤在同一次调用里，输出上限要留得下两者
+        maxTokens: 1536,
       },
     )
     parsed = extractJson<RawExtraction>(raw)
   } catch (error) {
     console.warn('[L-partner] 记忆抽取失败，已跳过本次：', error)
-    return { memories: 0, todos: [] }
+    return { memories: 0, todos: [], receipts: [], pending: [] }
   }
 
   const drafts: MemoryDraft[] = []
@@ -210,11 +244,37 @@ export async function extractMemories(input: {
     .todos.filter((todo) => !beforeIds.has(todo.id))
     .map((todo) => ({ title: todo.title, date: todo.date }))
 
-  return { memories: fresh.length + createdCount + linked, todos }
+  /*
+   * 最后执行动作。放在待办之后：同一轮里既"加了一条"又"要改那条"时，
+   * 改的目标必须已经存在（模型看到的清单是这一轮之前的，它不会指一条刚加的）。
+   */
+  const agent = applyAgentActions(parsed.actions, { conversationCourseId: courseId })
+
+  // 被拒绝的动作也要回执 —— 这个应用里最伤信任的不是"没做成"，而是"我说了它没反应"
+  return {
+    memories: fresh.length + createdCount + linked,
+    todos,
+    receipts: [...agent.applied.map((item) => item.receipt), ...agent.rejected],
+    pending: agent.pending,
+  }
 }
 
 /** 请模型判定的待办条数上限：清单越长，模型越容易乱挂 */
 export const PENDING_LINK_LIMIT = 5
+
+/**
+ * 动作清单里最多列多少条未完成待办。
+ *
+ * 20 条是"够用"与"别把每次抽取都变贵"的平衡点：用户真正会开口去改的，
+ * 几乎都是最近这几天的那几条，而不是三个月前的一条。
+ */
+export const OPEN_TODO_LIMIT = 20
+
+/** courseId → 课程标题，只为了给待办标注归属，让模型分得清同名待办 */
+function courseTitleOf(courseId?: Id): string | undefined {
+  if (!courseId) return undefined
+  return useCourseStore.getState().getById(courseId)?.title
+}
 
 /** 一条抽取结果最多切成几条：防止模型返回一句超长的话被切成十几条 */
 const MAX_SPLIT_PER_ITEM = 4

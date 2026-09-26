@@ -5,6 +5,7 @@ import { createCourse } from '@/features/course/courseActions'
 import { AiPlanDialog } from '@/features/course/components/AiPlanDialog'
 import { ConfirmDialog } from '@/features/course/components/ConfirmDialog'
 import { CourseFormDialog } from '@/features/course/components/CourseFormDialog'
+import { useCreateCourseIntent } from '@/features/course/createIntent'
 import { generateCoursePlan } from '@/features/course/aiPlan'
 import type { CoursePlanDraft } from '@/features/course/drafts'
 import { useSettingsStore } from '@/store/settings'
@@ -34,17 +35,42 @@ export function NewCourseButton() {
     ),
   )
 
-  const [aiOpen, setAiOpen] = useState(false)
-  const [needLlm, setNeedLlm] = useState(false)
+  const [manualOpen, setManualOpen] = useState(false)
+  const [manualNeedLlm, setManualNeedLlm] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
   const [formInitial, setFormInitial] = useState<CoursePlanDraft | null>(null)
+
+  /*
+   * 全局 AI 带过来的目标：**直接由 store 驱动渲染**，不搬进组件 state。
+   *
+   * 用 useEffect 把 store 的值"搬"进本地 state 是 React 里典型的多余一轮渲染
+   * （也会被 lint 拦下）；而在这里它还有一个更要紧的理由：用户可能**已经站在书架上**，
+   * 从输入条点「去核对课程方案」并不会让这个组件重新挂载 —— 靠 effect 的写法
+   * 得额外监听变化才能弹出来，而 store 驱动天然就是"值是啥就画啥"。
+   */
+  const presetGoal = useCreateCourseIntent((state) => state.goal)
+  const clearPreset = useCreateCourseIntent((state) => state.clear)
+
+  const presetReady = presetGoal !== null && llmReady
+  const presetNeedLlm = presetGoal !== null && !llmReady
+  const aiOpen = manualOpen || presetReady
+
+  function handleOpen() {
+    if (llmReady) setManualOpen(true)
+    else setManualNeedLlm(true)
+  }
+
+  function closeNeedLlm() {
+    setManualNeedLlm(false)
+    if (presetNeedLlm) clearPreset()
+  }
 
   return (
     <>
       <button
         type="button"
         className="btn btn-primary"
-        onClick={() => (llmReady ? setAiOpen(true) : setNeedLlm(true))}
+        onClick={handleOpen}
         title={
           llmReady
             ? '说说你想学什么，AI 会设计出阶段与单元'
@@ -57,9 +83,14 @@ export function NewCourseButton() {
       {aiOpen && (
         <AiPlanDialog
           generate={generateCoursePlan}
-          onCancel={() => setAiOpen(false)}
+          initialGoal={presetGoal ?? ''}
+          onCancel={() => {
+            setManualOpen(false)
+            clearPreset()
+          }}
           onGenerated={(draft) => {
-            setAiOpen(false)
+            setManualOpen(false)
+            clearPreset()
             // 不停在「已生成」：立刻把草稿交给表单，让用户看到 AI 到底写了什么再决定保存
             setFormInitial(draft)
             setFormOpen(true)
@@ -85,16 +116,16 @@ export function NewCourseButton() {
         书架上已经有随应用交付的示例课程，所以零配置时也不是无事可做 —— 提示语里要说这一点，
         否则用户会以为"没配 key 就什么都干不了"。
       */}
-      {needLlm && (
+      {(manualNeedLlm || presetNeedLlm) && (
         <ConfirmDialog
           title="先接入你的大模型"
           message="课程由 AI 按你的目标设计，所以新建课程需要先配置模型。书架上的示例课程不受影响，现在就能直接学。"
           confirmText="去设置"
           onConfirm={() => {
-            setNeedLlm(false)
+            closeNeedLlm()
             navigate('/settings')
           }}
-          onCancel={() => setNeedLlm(false)}
+          onCancel={closeNeedLlm}
         />
       )}
     </>

@@ -246,7 +246,20 @@ function buildMemorySection(memories: MemoryEntry[]): string {
 // 记忆抽取
 // ---------------------------------------------------------------------------
 
-export const MEMORY_EXTRACTION_SYSTEM_PROMPT = `你是一个长期记忆抽取器。唯一目标是：让学伴**下次见面时还认得这个人**。
+/**
+ * 记忆抽取 + 全局 AI 的动作抽取。
+ *
+ * ⚠️ 一次调用同时产出"记忆"与"动作"，是因为用户的一句话里两件事常常同时存在
+ * （"把周三那个挪到周五，另外我最近晚上效率更高"）。拆成两次调用等于每轮多花一倍的钱，
+ * 而这个项目的一贯取舍是：**能挤进同一次调用的，绝不单独发一次请求**。
+ *
+ * 字段分工要说清楚，否则后来人会把它们合并：
+ * - `todos` / `weekly` / `todoLinks` 是**新增与关联待办**的专用通道。它们历史最久、
+ *   规则最多（时间解析、同天同名去重、阶段序号），所以保持独立字段；
+ * - `actions` 是**其余动作**的通道（改期、勾掉、删除、重排、改 deadline、建课、改提醒）。
+ *   动作清单由 `buildActionPrompt()` 从动作注册表生成，不在这里手写一份。
+ */
+export const MEMORY_EXTRACTION_SYSTEM_PROMPT = `你是一个长期记忆抽取器，同时是这个学习应用里**替他办事的执行者**。唯一目标是：让学伴**下次见面时还认得这个人**，并且**顺手把他交代的事办掉**。
 
 所以重点不是"他学过哪些知识点"，而是"他是谁"：身份、性格、在意的事、经历、习惯。
 知识点只在与"他这个人"有关时才值得记（他哪里薄弱、他反复卡在哪）。
@@ -258,7 +271,8 @@ export const MEMORY_EXTRACTION_SYSTEM_PROMPT = `你是一个长期记忆抽取�
   "episodes": ["这次聊了什么、卡在哪里、有没有讲通，一句话"],
   "todos": [{"title": "要做的事，动词开头，20 字以内", "when": "今天|明天|后天|周三|下周三|这周|月底|3月5日|2026-03-05"}],
   "weekly": ["这一周想做到的、比较笼统的目标，如「把第一章过一遍」"],
-  "todoLinks": [{"todo": "待办标题（原样照抄）", "unit": "课程单元标题（指某一节时填）", "stage": "阶段名或「阶段一」（指整段/整章时填）"}]
+  "todoLinks": [{"todo": "待办标题（原样照抄）", "unit": "课程单元标题（指某一节时填）", "stage": "阶段名或「阶段一」（指整段/整章时填）"}],
+  "actions": [{"type": "动作类型", "其余字段见下方说明"}]
 }
 严格规则：
 - **记人优先**。身份、性格、重大经历、在意的事、长期目标 —— 这些才是"不像陌生人"的来源。
@@ -281,26 +295,28 @@ export const MEMORY_EXTRACTION_SYSTEM_PROMPT = `你是一个长期记忆抽取�
   没提时间就留空字符串 —— 系统会自己解析成日期，不要你去算，也不要改写成别的说法。
 - **weekly 只收"这一周"这种跨天的笼统目标**（"这周把英语单词过完"）。
   具体到某一天的事放 todos，不要两处都放。
+- **actions 只在他明确要求时才写**。「把周三那条挪到周五」「第一章我看完了」
+  「这周我只能学 3 小时」「React 那门先不学了」「我想学 Rust」这类话才是动作；
+  他只是在聊学习、问问题、发感慨时，actions 一律留空数组。
+  动作的具体类型与字段见下面单独给出的说明。
 - 没有任何值得记的内容时，所有字段都返回空数组。`
 
 /**
- * 记忆抽取的输入。
+ * 记忆与动作抽取的输入。
  *
- * 两处封顶都是必须的，否则这个请求会随对话增长而无限变贵：
- * - `conversation` 只该是**自上次抽取以来的增量**（调用方负责切），这里再对单条与整体做截断；
- * - `existing` 是"不要重复"的参照，但记忆越攒越多，全列出来等于每 8 条消息就重发一遍全部记忆。
- *   只带最近的若干条就够了 —— 更早的记忆要么已经重复过，要么本来就不相关。
- */
-/**
- * 记忆抽取的输入。
- *
- * 三处封顶都是必须的，否则这个请求会随对话增长而无限变贵：
+ * 四处封顶都是必须的，否则这个请求会随对话与数据增长而无限变贵：
  * - `conversation` 只该是**自上次抽取以来的增量**（调用方负责切），这里再对单条与整体做截断；
  * - `existing` 是"不要重复"的参照，但记忆越攒越多，全列出来等于每 8 条消息就重发一遍全部记忆；
- * - `pendingTodos` 是要请模型判定归属的那几条待办（规则匹配不上的），同样要封顶。
+ * - `pendingTodos` 是要请模型判定归属的那几条待办（规则匹配不上归属的），同样要封顶；
+ * - `courses` / `openTodos` 是动作能引用的对象清单。模型只会"照抄"标题，
+ *   所以清单必须给全（但只给标题与日期，不给内容）。
  *
- * ⚠️ 这里**不额外多花一次请求**：待办、周目标、待办与课程的关联判定，
- * 全都挤在这一次抽取里产出 —— 否则每轮对话要为"全局 AI"多付一次钱。
+ * ⚠️ 这里**不额外多花一次请求**：待办、周目标、待办与课程的关联判定、
+ * 以及改期/删除/重排这类动作，全都挤在这一次抽取里产出 ——
+ * 否则每轮对话要为"全局 AI"多付一次钱。
+ *
+ * `actionGuide` 由调用方从动作注册表生成后传进来（而不是在这里 import 业务模块）：
+ * 提示词层不该反过来依赖 features，而动作清单又必须和代码里支持的动作是同一份。
  */
 export function buildMemoryExtractionMessages(
   conversation: ChatMessage[],
@@ -310,6 +326,12 @@ export function buildMemoryExtractionMessages(
     pendingTodos?: string[]
     /** 可供归属的课程单元清单 */
     courseUnits?: { course: string; unit: string }[]
+    /** 书架上的课程标题 —— 动作的 course 字段只能从这里挑 */
+    courses?: string[]
+    /** 未完成的待办 —— 动作的 todo 字段只能从这里挑 */
+    openTodos?: { title: string; note?: string }[]
+    /** 动作清单说明（由 features/agent 的注册表生成） */
+    actionGuide?: string
   } = {},
 ): LlmMessage[] {
   const transcript = conversation
@@ -336,11 +358,28 @@ export function buildMemoryExtractionMessages(
           .join('\n')}\n\n请额外输出 todoLinks：格式 [{ "todo": "待办标题原样", "unit": "单元标题原样" }]。\n**如果这条待办指的是整章/整段**（"学完阶段一""第一章过一遍"），把 title 写进 "stage" 而不是 "unit" —— 系统会把那一段整体标记为完成；只填一个即可。拿不准就不要写 —— 宁可让它留在待办里，也不要挂错课程。`
       : ''
 
+  const courses = options.courses ?? []
+  const openTodos = options.openTodos ?? []
+  const reference =
+    courses.length > 0 || openTodos.length > 0
+      ? `\n\n## 书架上的课程（actions 的 course 字段只能从这里挑，标题原样照抄）\n${
+          courses.length > 0 ? courses.map((title) => `- ${title}`).join('\n') : '（还没有课程）'
+        }\n\n## 他的未完成待办（actions 的 todo 字段只能从这里挑，标题原样照抄）\n${
+          openTodos.length > 0
+            ? openTodos
+                .map((todo) => `- ${todo.title}${todo.note ? `（${todo.note}）` : ''}`)
+                .join('\n')
+            : '（没有未完成的待办）'
+        }`
+      : ''
+
+  const actionGuide = options.actionGuide ? `\n\n${options.actionGuide}` : ''
+
   return [
-    { role: 'system', content: MEMORY_EXTRACTION_SYSTEM_PROMPT },
+    { role: 'system', content: `${MEMORY_EXTRACTION_SYSTEM_PROMPT}${actionGuide}` },
     {
       role: 'user',
-      content: `## 已知记忆（不要重复，只列了最近 ${recent.length} 条）\n${known}\n\n## 新增对话\n${transcript}\n\n请抽取新记忆。${linking}`,
+      content: `## 已知记忆（不要重复，只列了最近 ${recent.length} 条）\n${known}\n\n## 新增对话\n${transcript}\n\n请抽取新记忆与动作。${linking}${reference}`,
     },
   ]
 }

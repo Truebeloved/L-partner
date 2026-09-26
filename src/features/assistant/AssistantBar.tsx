@@ -8,7 +8,7 @@ import { stepExchange, toExchanges } from '@/features/assistant/exchanges'
 import { DOCK_METRICS } from '@/features/assistant/dock'
 import type { DockPlacement } from '@/features/assistant/dock'
 import { useChatSessionContext } from '@/features/chat/context'
-import { AddedTodosNotice } from '@/features/today/AddedTodosNotice'
+import { AgentNotice } from '@/features/agent/components/AgentNotice'
 import { usePersonaStore } from '@/store/personas'
 import { useSettingsStore } from '@/store/settings'
 
@@ -384,16 +384,22 @@ export function AssistantBar({ placement }: AssistantBarProps) {
       )}
 
       {/*
-        「已加入待办」的回执 + 错误条，共用同一个浮层容器。
-        为什么必须放在这条输入条上、而不是页面里：抽出待办是**后台**发生的，
-        用户此刻的注意力就在输入条上（他刚在那句话里让你记东西）。
+        「学伴替你做了什么」+ 错误条，共用同一个浮层容器。
+        为什么必须放在这条输入条上、而不是页面里：动作是**后台**发生的，
+        用户此刻的注意力就在输入条上（他刚在那句话里让你办事）。
 
-        底部的对话页（inputOnly）不在这里渲染：那条输入条贴着屏幕下沿，
+        底部的对话页（inputOnly）不在这里渲染回执：那条输入条贴着屏幕下沿，
         浮层推出可视区就等于没有。它由 ChatPage 在输入区上方留出的位置里显示。
       */}
-      {!inputOnly && (session.error || session.addedTodos.length > 0) && (
+      {!inputOnly && (session.error || session.receipts.length > 0 || session.pendingActions.length > 0) && (
         <div className="absolute top-full right-0 mt-2 flex w-full flex-col gap-2">
-          <AddedTodosNotice todos={session.addedTodos} onDismiss={session.dismissAddedTodos} />
+          <AgentNotice
+            receipts={session.receipts}
+            pending={session.pendingActions}
+            onDismissReceipts={session.dismissReceipts}
+            onConfirm={session.confirmPendingAction}
+            onDismissPending={session.dismissPendingAction}
+          />
 
           {session.error && (
             <div className="rounded-card border border-alert/40 bg-raised px-3 py-2 shadow-lift">
@@ -411,7 +417,7 @@ export function AssistantBar({ placement }: AssistantBarProps) {
         </div>
       )}
 
-      {/* 底部这一条只显示错误：待办回执已经挪到输入区上方（见 ChatPage） */}
+      {/* 底部这一条只显示错误：回执已经挪到输入区上方（见 ChatPage） */}
       {inputOnly && session.error && (
         <div className="absolute top-full right-0 mt-2 w-full rounded-card border border-alert/40 bg-raised px-3 py-2 shadow-lift">
           <p className="text-small font-bold text-alert">{session.error.message}</p>

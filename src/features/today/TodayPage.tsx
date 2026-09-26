@@ -6,10 +6,10 @@ import { useShallow } from 'zustand/react/shallow'
 import { PageHeader } from '@/components/PageHeader'
 import { ReminderPanel } from '@/features/reminder/components/ReminderPanel'
 import { useReminder } from '@/features/reminder/context'
-import { syncMasteryForCourse } from '@/features/memory/mastery'
 import { matchTodoToCourse } from '@/features/today/autoTodo'
 import { TodoItem } from '@/features/today/TodoItem'
 import { TodoMenuPopup } from '@/features/today/TodoMenuPopup'
+import { setTodoDone } from '@/features/today/todoActions'
 import { useTodoMenu } from '@/features/today/useTodoMenu'
 import { formatDateHuman, formatMinutes, isOverdue, todayKey } from '@/lib/date'
 import { useCourseStore } from '@/store/courses'
@@ -32,12 +32,10 @@ export function TodayPage() {
   // 否则 zustand v5 会认为快照一直在变，直接无限重渲染
   const todayTodos = useTodoStore(useShallow((state) => state.listByDate(today)))
   const addTodo = useTodoStore((state) => state.add)
-  const toggleTodo = useTodoStore((state) => state.toggle)
   const removeTodo = useTodoStore((state) => state.remove)
 
   const courses = useCourseStore((state) => state.courses)
   const plans = usePlanStore((state) => state.plans)
-  const updatePlanItemStatus = usePlanStore((state) => state.updateItemStatus)
 
   // 提醒开关与时刻都由「设置」页维护，这里只读出来展示，避免同一个设置项两处显示不一致
   const reminderEnabled = useSettingsStore((state) => state.settings.reminderEnabled)
@@ -121,17 +119,8 @@ export function TodayPage() {
   }
 
   const handleToggle = (todo: Todo) => {
-    toggleTodo(todo.id)
-    // 计划派生的待办要把状态回流给计划，否则课程页里这条还挂着「未完成」，
-    // 两处状态互相矛盾，用户不知道该信哪个
-    if (todo.planItemId && todo.courseId) {
-      updatePlanItemStatus(todo.courseId, todo.planItemId, todo.done ? 'todo' : 'done')
-    }
-    // 再往前一步：把完成情况变成知识点的掌握状态。
-    // 这一步是「计划会跟着我的实际进度变」的落点 —— 少了它，勾选就只是勾选。
-    if (todo.courseId) {
-      syncMasteryForCourse(todo.courseId)
-    }
+    // 勾选 → 排期项状态 → 掌握状态，三步一体（见 todoActions 的说明）
+    setTodoDone(todo.id, !todo.done)
   }
 
   const handleRemove = (todo: Todo) => removeTodo(todo.id)

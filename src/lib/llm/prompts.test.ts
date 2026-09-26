@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildStablePrompt, buildSystemPrompt, buildVolatilePrompt } from '@/lib/llm/prompts'
-import type { Course, Persona, Plan } from '@/types/models'
+import {
+  buildMemoryExtractionMessages,
+  buildStablePrompt,
+  buildSystemPrompt,
+  buildVolatilePrompt,
+} from '@/lib/llm/prompts'
+import type { ChatMessage, Course, Persona, Plan } from '@/types/models'
 
 const PERSONA: Persona = {
   id: 'p1',
@@ -127,5 +132,40 @@ describe('buildSystemPrompt', () => {
     const full = buildSystemPrompt({ persona: PERSONA, course: COURSE, plan: PLAN })
     expect(full.startsWith(buildStablePrompt(PERSONA))).toBe(true)
     expect(full).toContain('两个月上手 React')
+  })
+})
+
+describe('buildMemoryExtractionMessages', () => {
+  const conversation: ChatMessage[] = [
+    { id: 'm1', role: 'user', content: '把周三那条挪到周五', createdAt: '2026-09-23T00:00:00.000Z' },
+  ]
+
+  it('把动作清单拼在系统提示里（由调用方从注册表生成后传进来）', () => {
+    const messages = buildMemoryExtractionMessages(conversation, [], {
+      actionGuide: '## 你可以替他做的事（actions）\n- delete_todo（删待办）：…',
+    })
+
+    expect(messages[0]?.content).toContain('你可以替他做的事')
+    expect(messages[0]?.content).toContain('delete_todo')
+    // 记忆抽取的正文仍在
+    expect(messages[0]?.content).toContain('下次见面时还认得这个人')
+  })
+
+  it('把课程与未完成待办列给他 —— 动作只能引用这些，抄不准就办错事', () => {
+    const messages = buildMemoryExtractionMessages(conversation, [], {
+      courses: ['两个月上手 React', 'C语言基础入门'],
+      openTodos: [{ title: '写实验报告', note: '9月27日 · C语言基础入门' }],
+    })
+
+    const user = messages[1]?.content ?? ''
+    expect(user).toContain('C语言基础入门')
+    expect(user).toContain('写实验报告')
+    expect(user).toContain('9月27日')
+  })
+
+  it('没有课程与待办时也要说清楚是空的，而不是省略整段', () => {
+    const messages = buildMemoryExtractionMessages(conversation, [], { courses: [], openTodos: [] })
+    // 两个清单都给空时不必生成那一段
+    expect(messages[1]?.content).not.toContain('书架上的课程')
   })
 })

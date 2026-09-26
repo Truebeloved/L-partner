@@ -3,10 +3,10 @@ import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 
 import { isWeeklyTodo, matchTodoToCourse, repairStageLinks } from '@/features/today/autoTodo'
-import { syncMasteryForCourse } from '@/features/memory/mastery'
 import { formatDateHuman, isOverdue, todayKey } from '@/lib/date'
 import { useCourseStore } from '@/store/courses'
 import { TodoMenuPopup } from '@/features/today/TodoMenuPopup'
+import { setTodoDone } from '@/features/today/todoActions'
 import { useTodoMenu } from '@/features/today/useTodoMenu'
 import { usePlanStore } from '@/store/plans'
 import { useTodoStore } from '@/store/todos'
@@ -30,9 +30,7 @@ export function TodaySidebarWidget() {
 
   const todos = useTodoStore((state) => state.todos)
   const addTodo = useTodoStore((state) => state.add)
-  const toggleTodo = useTodoStore((state) => state.toggle)
   const removeTodo = useTodoStore((state) => state.remove)
-  const updatePlanItemStatus = usePlanStore((state) => state.updateItemStatus)
   const plans = usePlanStore((state) => state.plans)
   const courses = useCourseStore((state) => state.courses)
 
@@ -118,12 +116,9 @@ export function TodaySidebarWidget() {
   const percent = totalCount === 0 ? 0 : Math.round((doneCount / totalCount) * 100)
 
   function handleToggle(todo: Todo) {
-    toggleTodo(todo.id)
-    // 与今日页同一套回流：勾选 → 排期项状态 → 知识点掌握状态
-    if (todo.planItemId && todo.courseId) {
-      updatePlanItemStatus(todo.courseId, todo.planItemId, todo.done ? 'todo' : 'done')
-    }
-    if (todo.courseId) syncMasteryForCourse(todo.courseId)
+    // 勾选 → 排期项状态 → 掌握状态，三步一体（见 todoActions 的说明）。
+    // 这里原来抄了一份，抄件正是"迟早会漂"的来源
+    setTodoDone(todo.id, !todo.done)
   }
 
   function handleAdd(event: FormEvent<HTMLFormElement>) {

@@ -8,7 +8,7 @@ import { ConversationList } from '@/features/chat/components/ConversationList'
 import { MessageBubble } from '@/features/chat/components/MessageBubble'
 import { useChatSessionContext } from '@/features/chat/context'
 import { useActiveConversation } from '@/features/chat/useChatSession'
-import { AddedTodosNotice } from '@/features/today/AddedTodosNotice'
+import { AgentNotice } from '@/features/agent/components/AgentNotice'
 import { useChatStore } from '@/store/chat'
 import { useCourseStore } from '@/store/courses'
 import { usePersonaStore } from '@/store/personas'
@@ -204,13 +204,19 @@ export function ChatPage() {
       */}
         <div className="shrink-0 px-4 py-3">
           {/*
-            「已加入待办」的回执显示在输入条**上方**：底部的输入条贴着屏幕下沿，
+            「学伴替你做了什么」显示在输入条**上方**：底部的输入条贴着屏幕下沿，
             浮层往它下面推就出可视区了。放在这里还顺带把"回执 → 输入框"排成一条竖线，
             视线不用来回找。
           */}
-          {session.addedTodos.length > 0 && (
+          {(session.receipts.length > 0 || session.pendingActions.length > 0) && (
             <div className="mb-2">
-              <AddedTodosNotice todos={session.addedTodos} onDismiss={session.dismissAddedTodos} />
+              <AgentNotice
+                receipts={session.receipts}
+                pending={session.pendingActions}
+                onDismissReceipts={session.dismissReceipts}
+                onConfirm={session.confirmPendingAction}
+                onDismissPending={session.dismissPendingAction}
+              />
             </div>
           )}
           <div ref={dockRef} className="h-12" />

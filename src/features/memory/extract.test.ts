@@ -319,4 +319,54 @@ describe('extractMemories：模糊指令也要落成待办', () => {
     expect(outcome.todos).toEqual([])
     expect(outcome.memories).toBe(1)
   })
+
+  /*
+   * 「全局 AI 像 agent 一样在规则内办事」这一条，最终的落点就是这里：
+   * 一次抽取调用回来，记忆、待办、动作三样一起被处理掉。
+   */
+  it('动作会被执行，并把回执交给界面', async () => {
+    useTodoStore.setState({
+      todos: [
+        {
+          id: 't1',
+          title: '取快递',
+          date: '2026-09-23',
+          done: false,
+          createdAt: '2026-09-23T00:00:00.000Z',
+          source: 'manual',
+        },
+      ],
+    })
+
+    const outcome = await extractMemories({
+      provider: stubProvider({ actions: [{ type: 'delete_todo', todo: '取快递' }] }),
+      messages: [message('那条取快递不用做了')],
+    })
+
+    expect(useTodoStore.getState().todos).toHaveLength(0)
+    expect(outcome.receipts).toHaveLength(1)
+    expect(outcome.receipts[0]).toContain('取快递')
+  })
+
+  it('不可撤销的动作只产出待确认，绝不顺手执行', async () => {
+    const outcome = await extractMemories({
+      provider: stubProvider({ actions: [{ type: 'delete_course', course: '两个月上手 React' }] }),
+      messages: [message('React 那门课我不想学了')],
+    })
+
+    expect(outcome.pending).toHaveLength(1)
+    expect(outcome.receipts).toEqual([])
+    // 课程还在
+    expect(useCourseStore.getState().getById('c1')).toBeDefined()
+  })
+
+  it('没做成的动作也要回执 —— 最伤信任的是"我说了它没反应"', async () => {
+    const outcome = await extractMemories({
+      provider: stubProvider({ actions: [{ type: 'delete_todo', todo: '一件根本不存在的待办' }] }),
+      messages: [message('那条不做了')],
+    })
+
+    expect(outcome.receipts).toHaveLength(1)
+    expect(outcome.receipts[0]).toContain('没找到')
+  })
 })

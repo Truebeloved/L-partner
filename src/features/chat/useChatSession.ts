@@ -6,7 +6,8 @@ import {
   planSummary,
   summarizeConversation,
 } from '@/features/memory/extract'
-import { detectIntent, isExplicitTodoCommand } from '@/features/today/intent'
+import { detectIntent, isAgentCommand, isExplicitTodoCommand } from '@/features/today/intent'
+import type { PendingAction } from '@/features/agent/execute'
 import { looksLikeFollowUp, matchCourseForMessage } from '@/features/chat/routing'
 import { retrieveMemories } from '@/features/memory/retrieve'
 import { createProvider } from '@/lib/llm'
@@ -22,7 +23,6 @@ import { usePlanStore } from '@/store/plans'
 import { useSettingsStore } from '@/store/settings'
 import { useTodoStore } from '@/store/todos'
 import { todayKey } from '@/lib/date'
-import type { DateKey } from '@/types/models'
 
 export interface ChatSession {
   streaming: boolean
@@ -32,13 +32,18 @@ export interface ChatSession {
   /** 本轮请求的上下文估算 token 数 —— 让"花了多少"可见，而不是月底看账单 */
   contextTokens: number
   /**
-   * 刚才那句话里被落进待办栏的条目。
+   * 学伴刚刚替你做掉的事，一句话一条（含"没做成"的原因）。
    *
-   * 抽取是后台跑的，不把结果说出来，用户就只会看到"我说了要记，界面什么都没发生" ——
-   * 而这个应用里"它真的记下了"恰恰是最需要被看见的一件事。
+   * 抽取是后台跑的，不把结果说出来，用户就只会看到"我说了要办，界面什么都没发生" ——
+   * 而这个应用里"它真的办了"恰恰是最需要被看见的一件事。
    */
-  addedTodos: { title: string; date: DateKey }[]
-  dismissAddedTodos: () => void
+  receipts: string[]
+  /** 不可撤销、等用户点头的动作。它们**不会**被自动执行 */
+  pendingActions: PendingAction[]
+  dismissReceipts: () => void
+  /** 确认并执行一条待确认动作；执行后的回执会补进 receipts */
+  confirmPendingAction: (id: string) => void
+  dismissPendingAction: (id: string) => void
   send: (text: string) => Promise<void>
   stop: () => void
   rememberNow: () => Promise<number>
@@ -58,9 +63,10 @@ export function useChatSession(): ChatSession {
   const [error, setError] = useState<ChatSession['error']>(null)
   const [usedMemoryCount, setUsedMemoryCount] = useState(0)
   const [contextTokens, setContextTokens] = useState(0)
-  const [addedTodos, setAddedTodos] = useState<ChatSession['addedTodos']>([])
+  const [receipts, setReceipts] = useState<string[]>([])
+  const [pendingActions, setPendingActions] = useState<PendingAction[]>([])
   const abortRef = useRef<AbortController | null>(null)
-  /** 「已加入待办」那条回执的退场计时器 —— 它是一次性提示，不该永久占着位置 */
+  /** 回执的退场计时器 —— 它是一次性提示，不该永久占着位置 */
   const noticeTimerRef = useRef<number | null>(null)
 
   // 卸载时中断在途请求，避免往已卸载的 store 里写状态
@@ -71,11 +77,42 @@ export function useChatSession(): ChatSession {
     }
   }, [])
 
-  const dismissAddedTodos = useCallback(() => {
+  const scheduleReceiptClear = useCallback(() => {
+    if (noticeTimerRef.current !== null) window.clearTimeout(noticeTimerRef.current)
+    // 8 秒够看清几句话，又不至于在页面上留一块永久的小告示。
+    // ⚠️ 待确认的动作**不**跟着一起消失：它是一句问话，得等用户回答
+    noticeTimerRef.current = window.setTimeout(() => {
+      noticeTimerRef.current = null
+      setReceipts([])
+    }, 8000)
+  }, [])
+
+  const dismissReceipts = useCallback(() => {
     if (noticeTimerRef.current !== null) window.clearTimeout(noticeTimerRef.current)
     noticeTimerRef.current = null
-    setAddedTodos([])
+    setReceipts([])
   }, [])
+
+  const dismissPendingAction = useCallback((id: string) => {
+    setPendingActions((list) => list.filter((action) => action.id !== id))
+  }, [])
+
+  const confirmPendingAction = useCallback(
+    (id: string) => {
+      const action = pendingActions.find((item) => item.id === id)
+      if (!action || action.kind !== 'destructive') return
+
+      /*
+       * 闭包在生成动作时就已经把目标解析成了 id，所以这里不会再"重新认一遍是哪门课"——
+       * 用户点的是他刚看到的那句话，执行的就必须是那一刻的对象。
+       */
+      const receipt = action.run()
+      setPendingActions((list) => list.filter((item) => item.id !== id))
+      setReceipts((list) => [...list, receipt])
+      scheduleReceiptClear()
+    },
+    [pendingActions, scheduleReceiptClear],
+  )
 
   const send = useCallback(
     async (text: string) => {
@@ -275,16 +312,17 @@ export function useChatSession(): ChatSession {
       /*
        * 触发条件有三条，而且都指向同一件事 —— **别让用户觉得"我说了它没记住"**：
        *
-       * 1. **这一句是明确指令**（"帮我记一下周五交报告""提醒我明天买书"）：一定抽。
+       * 1. **他明确开口了**（"帮我记一下周五交报告""把周三那条挪到周五"）：一定抽。
        *    而且**不受「自动抽取记忆」开关约束** —— 那个开关的语义是"别偷偷替我记"，
        *    不是"我让你记你也别记"。关掉它却因此连明确指令都失效，是上一版的漏洞。
+       *    指挥类的话（isAgentCommand）同理：那是让我去改数据，等不得。
        * 2. **这一句里有要做的事**（本地规则判定，零成本）：立刻抽一次。
        *    原来只有周期触发（每 8 条消息），于是"我今天想把第一章看完"这种话
        *    说完什么都不发生，用户得再聊三四个来回才可能见到待办 ——
        *    他报的正是这个："只会分析出待办任务但不会添加到待办区域"。
        * 3. **攒够了一个周期**：兜底那些不像"要做的事"、但其实值得记的对话。
        */
-      const explicit = isExplicitTodoCommand(trimmed)
+      const explicit = isExplicitTodoCommand(trimmed) || isAgentCommand(trimmed)
       const eager = detectIntent(trimmed)
       const periodic = after.messages.length % EXTRACTION_INTERVAL === 0
 
@@ -295,14 +333,23 @@ export function useChatSession(): ChatSession {
           courseId: after.courseId,
           conversationId: after.id,
         }).then((outcome) => {
-          if (outcome.todos.length === 0) return
-          setAddedTodos(outcome.todos)
-          if (noticeTimerRef.current !== null) window.clearTimeout(noticeTimerRef.current)
-          // 8 秒够看清一句话，又不至于在页面上留一块永久的小告示
-          noticeTimerRef.current = window.setTimeout(() => {
-            noticeTimerRef.current = null
-            setAddedTodos([])
-          }, 8000)
+          // 新增待办先合成一条自己的回执，再拼上动作的回执 ——
+          // 界面上看到的是"它办了哪些事"的一份完整清单
+          const lines = [
+            ...(outcome.todos.length > 0
+              ? [`已加入待办：${outcome.todos.map((todo) => todo.title).join('、')}`]
+              : []),
+            ...outcome.receipts,
+          ]
+
+          if (lines.length > 0) {
+            setReceipts(lines)
+            scheduleReceiptClear()
+          }
+          if (outcome.pending.length > 0) {
+            // 追加而不是覆盖：上一轮还没回答的问题不该被这一轮挤掉
+            setPendingActions((list) => [...list, ...outcome.pending])
+          }
         })
       }
 
@@ -334,7 +381,7 @@ export function useChatSession(): ChatSession {
         }
       }
     },
-    [settings],
+    [settings, scheduleReceiptClear],
   )
 
   const stop = useCallback(() => {
@@ -364,8 +411,11 @@ export function useChatSession(): ChatSession {
       error,
       usedMemoryCount,
       contextTokens,
-      addedTodos,
-      dismissAddedTodos,
+      receipts,
+      pendingActions,
+      dismissReceipts,
+      confirmPendingAction,
+      dismissPendingAction,
       send,
       stop,
       rememberNow,
@@ -375,8 +425,11 @@ export function useChatSession(): ChatSession {
       error,
       usedMemoryCount,
       contextTokens,
-      addedTodos,
-      dismissAddedTodos,
+      receipts,
+      pendingActions,
+      dismissReceipts,
+      confirmPendingAction,
+      dismissPendingAction,
       send,
       stop,
       rememberNow,

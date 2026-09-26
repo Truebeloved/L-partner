@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { detectIntent, extractIntentPhrases, isExplicitTodoCommand, splitIntent } from '@/features/today/intent'
+import {
+  detectIntent,
+  extractIntentPhrases,
+  isAgentCommand,
+  isExplicitTodoCommand,
+  splitIntent,
+} from '@/features/today/intent'
 
 /**
  * 这一组守的是用户直接报上来的那个问题：
@@ -94,6 +100,58 @@ describe('isExplicitTodoCommand', () => {
     for (const text of ['这道题怎么做', '帮我讲讲闭包', '我今天有点累']) {
       expect(isExplicitTodoCommand(text), text).toBe(false)
     }
+  })
+})
+
+/**
+ * 「全局 AI 像 agent 一样在规则内办事」的前置条件：**这些话得先让抽取跑起来**。
+ *
+ * 这一组是照着真实说法一条条试出来的 —— 探针跑第一遍时，十条里有五条根本不触发，
+ * 而它们恰恰是最自然的说法（"把周三那条挪到周五"）。当时的触发规则是任务导向的：
+ * 既要有动作词、又要有时间或意愿，而"挪""删""不学了"一个都不在其列。
+ * 结果会是"我说了它毫无反应"，而且得攒够 8 条消息才有下一次机会。
+ */
+describe('isAgentCommand', () => {
+  it('指挥我改数据的说法一律认', () => {
+    for (const text of [
+      '把周三那条挪到周五',
+      '帮我把取快递那条删了',
+      '把提醒改到九点',
+      '把 deadline 延到月底',
+      '把第一章标记成完成',
+    ]) {
+      expect(isAgentCommand(text), text).toBe(true)
+    }
+  })
+
+  it('改变主意、完成声明也算 —— 它们一个动作词都没有', () => {
+    for (const text of ['React 那门先不学了', '我不想学高数了', '第一章我看完了', '实验报告写完了']) {
+      expect(isAgentCommand(text), text).toBe(true)
+    }
+  })
+
+  it('**提问**不算 —— 这是这套判定里唯一真正的护栏', () => {
+    // 与「把周三那条挪到周五」词面几乎同构，区别只在"是不是在问我"
+    for (const text of [
+      '把这段代码改成 async 会怎样',
+      '为什么要把状态提上去',
+      '把这个函数改成纯函数有什么好处？',
+      'React 那门课要怎么学',
+    ]) {
+      expect(isAgentCommand(text), text).toBe(false)
+      expect(detectIntent(text), text).toBe(false)
+    }
+  })
+
+  it('闲话不算', () => {
+    expect(isAgentCommand('我今天有点累')).toBe(false)
+    expect(isAgentCommand('')).toBe(false)
+  })
+
+  it('指挥类的话一定触发抽取 —— 否则用户说完就得等攒够 8 条消息', () => {
+    expect(detectIntent('把周三那条挪到周五')).toBe(true)
+    expect(detectIntent('React 那门先不学了')).toBe(true)
+    expect(detectIntent('第一章我看完了')).toBe(true)
   })
 })
 

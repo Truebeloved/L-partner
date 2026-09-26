@@ -15,11 +15,24 @@ interface AiPlanDialogProps {
   onCancel: () => void
   /** 拿到草稿后交给页面：它会打开手写表单让用户继续编辑，符合 D3「AI 产出必须可编辑后落库」 */
   onGenerated: (draft: CoursePlanDraft) => void
+  /**
+   * 预填的学习目标。
+   *
+   * 存在的理由：全局 AI 会在对话里问"要按「两个月上手 Rust」新建一门课吗"，
+   * 用户点了「去核对课程方案」之后，**目标不该让他再打一遍** ——
+   * 那句话本来就是他刚说的。
+   */
+  initialGoal?: string
 }
 
 /** 「让 AI 帮我生成方案」的输入弹窗（D3 路径 A：用户只说想学什么） */
-export function AiPlanDialog({ generate, onCancel, onGenerated }: AiPlanDialogProps) {
-  const [goal, setGoal] = useState('')
+export function AiPlanDialog({
+  generate,
+  onCancel,
+  onGenerated,
+  initialGoal = '',
+}: AiPlanDialogProps) {
+  const [goal, setGoal] = useState(initialGoal)
   const [collectionUrl, setCollectionUrl] = useState('')
   const [weeklyHours, setWeeklyHours] = useState('10')
   const [deadline, setDeadline] = useState('')

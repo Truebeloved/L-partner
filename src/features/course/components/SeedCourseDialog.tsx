@@ -36,7 +36,7 @@ export function SeedCourseDialog({ onPick, onCancel }: SeedCourseDialogProps) {
           随仓库交付的完整教学方案，不需要配置大模型也能直接跑通「课程 → 计划 → 待办」。
         </p>
 
-        <ul className="no-scrollbar mt-4 max-h-[60vh] space-y-3 overflow-y-auto pr-1">
+        <ul className="mt-4 max-h-[60vh] space-y-3 overflow-y-auto pr-2">
           {SEED_COURSES.map((seed) => (
             <li key={seed.id} className="rounded-card border border-line-soft p-4">
               <h3 className="font-display text-h3 font-bold text-ink">{seed.title}</h3>

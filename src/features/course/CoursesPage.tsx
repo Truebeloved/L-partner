@@ -62,12 +62,6 @@ export function CoursesPage({ onGenerateWithAi }: CoursesPageProps = {}) {
     [courses, plans, todos],
   )
 
-  function openManualForm() {
-    setFormInitial(null)
-    setFormFromAi(false)
-    setFormOpen(true)
-  }
-
   function handleFormSubmit(draft: CoursePlanDraft) {
     const id = createCourse(draft)
     setFormOpen(false)
@@ -115,9 +109,6 @@ export function CoursesPage({ onGenerateWithAi }: CoursesPageProps = {}) {
             <button type="button" className="btn btn-secondary" onClick={() => setSeedOpen(true)}>
               示例课程
             </button>
-            <button type="button" className="btn btn-primary" onClick={openManualForm}>
-              新建课程
-            </button>
           </>
         }
       />
@@ -128,17 +119,14 @@ export function CoursesPage({ onGenerateWithAi }: CoursesPageProps = {}) {
           <section className="card py-10 text-center">
             <h2 className="card-title">还没有课程</h2>
             <p className="muted mx-auto mt-3 max-w-sm leading-relaxed">
-              先载入一份示例课程走一遍，或者直接建立你自己的目标。
+              回到书架，用「新建课程」说说你想学什么，AI 会设计出阶段与单元；
+              也可以先载入一份示例课程走一遍。
             </p>
 
-            {/* 顶部栏已经有「新建课程」和「让 AI 帮我生成方案」，这里不再重复一遍 ——
-                同一个动作在一屏里出现两次，用户反而不知道该点哪个 */}
+            {/* 这里只留一个动作：新建课程的入口在书架上（唯一入口，避免两处抢同一个动作） */}
             <div className="mt-6 flex flex-wrap items-center justify-center gap-4">
               <button type="button" className="btn btn-primary" onClick={() => setSeedOpen(true)}>
                 载入示例课程
-              </button>
-              <button type="button" className="btn btn-secondary" onClick={openManualForm}>
-                手写新建课程
               </button>
             </div>
           </section>

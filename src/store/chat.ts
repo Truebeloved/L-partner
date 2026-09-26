@@ -106,7 +106,10 @@ interface ChatState {
   setCourse: (conversationId: Id, courseId: Id | undefined) => void
   /** 切换角色。记忆是跨角色共享的，所以这里只换「谁在教」 */
   setPersona: (conversationId: Id, personaId: Id) => void
-  appendMessage: (conversationId: Id, message: Pick<ChatMessage, 'role' | 'content'>) => Id
+  appendMessage: (
+    conversationId: Id,
+    message: Pick<ChatMessage, 'role' | 'content'> & { personaId?: Id },
+  ) => Id
   updateMessage: (conversationId: Id, messageId: Id, patch: Partial<ChatMessage>) => void
   /** 记忆第 1 层：会话过长时写入的摘要压缩结果 */
   setSummary: (conversationId: Id, summary: string, summaryUpTo: number) => void
@@ -170,11 +173,37 @@ export const useChatStore = create<ChatState>()(
           ),
         })),
 
+      /*
+       * 切换角色时，先把"还没有署名"的历史回答补上**旧角色**。
+       *
+       * 这是给老数据做的迁移，也是这个字段的意义所在：一条回答一旦产生，
+       * 它属于谁说定了。如果不在这里补，那些回答之后会被界面用新角色渲染，
+       * 用户看到的就是"我一换性格，它以前说的话全变成新性格说的了"。
+       */
       setPersona: (conversationId, personaId) =>
         set((state) => ({
-          conversations: state.conversations.map((c) =>
-            c.id === conversationId ? { ...c, personaId } : c,
-          ),
+          conversations: state.conversations.map((c) => {
+            if (c.id !== conversationId) return c
+            /*
+             * 用"最近一条已署名的回答"作为旧角色，而不是会话上记的那个：
+             * 角色可能在别处（比如学伴设定页）被改过，会话字段未必跟得上，
+             * 而最后一条回答的署名才是**真正在说话的那个人**。
+             */
+            const lastSpoken = [...c.messages]
+              .reverse()
+              .find((message) => message.role === 'assistant' && message.personaId)?.personaId
+            const outgoing = lastSpoken ?? c.personaId
+
+            return {
+              ...c,
+              personaId,
+              messages: c.messages.map((message) =>
+                message.role === 'assistant' && !message.personaId
+                  ? { ...message, personaId: outgoing }
+                  : message,
+              ),
+            }
+          }),
         })),
 
       appendMessage: (conversationId, message) => {

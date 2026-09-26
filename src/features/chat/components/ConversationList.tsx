@@ -37,7 +37,8 @@ export function ConversationList({
         </span>
       </div>
 
-      <div className="no-scrollbar flex-1 overflow-y-auto py-1">
+      {/* 会滚动就让它看得见：一条统一风格的细滚动条比"藏起来"更有助于发现还有历史 */}
+      <div className="flex-1 overflow-y-auto py-1">
         {sorted.map((conversation) => {
           const active = conversation.id === activeId
           return (

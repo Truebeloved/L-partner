@@ -1,9 +1,11 @@
 import { PersonaAvatar } from '@/components/PersonaAvatar'
 import { MarkdownLite } from '@/features/chat/components/MarkdownLite'
+import { usePersonaStore } from '@/store/personas'
 import type { ChatMessage, Persona } from '@/types/models'
 
 interface MessageBubbleProps {
   message: ChatMessage
+  /** 当前角色：这条回答没记下是谁说的时才用它（老数据） */
   persona: Persona | undefined
 }
 
@@ -16,8 +18,12 @@ interface MessageBubbleProps {
  * 且在灰度打印或色觉障碍下依然成立。
  *
  * 两种气泡都是**跟着内容走**的宽度，不是等宽的长条。
+ *
+ * ⚠️ 每条回答用**它自己那个角色**来渲染（message.personaId），
+ * 而不是当前选中的角色：用户可以中途换性格接着聊，历史必须保持原样。
  */
 export function MessageBubble({ message, persona }: MessageBubbleProps) {
+  const personas = usePersonaStore((state) => state.personas)
   const isUser = message.role === 'user'
 
   if (isUser) {
@@ -30,6 +36,12 @@ export function MessageBubble({ message, persona }: MessageBubbleProps) {
     )
   }
 
+  // 角色被删掉时退回当前角色：宁可显示成现在这位，也不要留一个空白署名
+  const speaker = message.personaId
+    ? personas.find((item) => item.id === message.personaId)
+    : undefined
+  const shown = speaker ?? persona
+
   /*
    * 学伴气泡要**跟着内容走**。
    *
@@ -41,9 +53,9 @@ export function MessageBubble({ message, persona }: MessageBubbleProps) {
    */
   return (
     <div data-chat-message="assistant" data-message-id={message.id} className="flex gap-2.5">
-      <PersonaAvatar value={persona?.avatar} size={28} className="mt-0.5" />
+      <PersonaAvatar value={shown?.avatar} size={28} className="mt-0.5" />
       <div className="min-w-0">
-        <div className="mb-1 text-small text-ink-faint">{persona?.name ?? '学伴'}</div>
+        <div className="mb-1 text-small text-ink-faint">{shown?.name ?? '学伴'}</div>
         <div
           className={
             message.failed

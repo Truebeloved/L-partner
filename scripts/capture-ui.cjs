@@ -185,15 +185,24 @@ async function seedConversations(window) {
       personaId: 'builtin-senior',
       title: '今天该学什么',
       messages: [
-        message('m1', 'user', '帮我看看今天该学什么', 12),
-        message(
-          'm2',
-          'assistant',
-          '按你现在的进度，今天适合先复习「状态与事件」，再做两道变式题。',
-          11,
-        ),
+        message('m1', 'user', '帮我看看今天该学什么', 14),
+        {
+          ...message(
+            'm2',
+            'assistant',
+            '按你现在的进度，今天适合先复习「状态与事件」，再做两道变式题。',
+            13,
+          ),
+          personaId: 'builtin-senior',
+        },
+        message('m3', 'user', '换个人来盯我，别这么温柔', 12),
+        // 中途换过角色：这条是「严格督学」说的，历史里必须仍显示它
+        {
+          ...message('m4', 'assistant', '那就定死：今天 20:00 前把这一章做完，我只看结果。', 11),
+          personaId: 'builtin-strict',
+        },
       ],
-      createdAt: at(12),
+      createdAt: at(14),
       updatedAt: at(11),
     },
     {
@@ -201,17 +210,20 @@ async function seedConversations(window) {
       personaId: 'builtin-senior',
       title: '为什么我总是学了就忘',
       messages: [
-        message('m3', 'user', '为什么我总是学了就忘', 300),
-        message('m4', 'assistant', '因为你只在输入。回忆一次比再读一遍有用得多。', 298),
+        message('m5', 'user', '为什么我总是学了就忘', 300),
+        {
+          ...message('m6', 'assistant', '因为你只在输入。回忆一次比再读一遍有用得多。', 298),
+          personaId: 'builtin-senior',
+        },
       ],
       createdAt: at(300),
       updatedAt: at(298),
     },
     {
       id: 'seed-conv-3',
-      personaId: 'builtin-senior',
+      personaId: 'builtin-socratic',
       title: '《劝学》里的比喻论证',
-      messages: [message('m5', 'user', '《劝学》为什么要连用六个比喻？', 2900)],
+      messages: [message('m7', 'user', '《劝学》为什么要连用六个比喻？', 2900)],
       createdAt: at(2900),
       updatedAt: at(2900),
     },

@@ -119,6 +119,45 @@
     scroll-behavior: smooth;
   }
 
+  /*
+   * 滚动条：全局统一成"一根细的浅灰滑块，没有轨道底色"。
+   *
+   * 为什么要管它：默认滚动条是浅色系统控件那一套，一块带箭头的灰条压在
+   * 中灰底上，和"只靠明度与边框分层级"的界面是两个世界的语言 ——
+   * 用户的原话是"风格太割裂太丑"。全应用只有一种滚动条之后，
+   * 它才像是界面的一部分，而不是浏览器塞进来的一件东西。
+   *
+   * 用 ::-webkit- 伪元素而不是标准的 scrollbar-width / scrollbar-color：
+   * 后者没法控制圆角、hover 与轨道留白，而且 Chromium 一旦看到 scrollbar-color
+   * 就会**忽略**这些伪元素 —— 两个都写等于白写。
+   */
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    /* 3px 透明边框 + content-box：滑块的"可见宽度"只有 6px，
+       两侧留白让它不贴着内容边缘 —— 直接铺满 12px 会显得笨重 */
+    background-color: rgba(0, 0, 0, 0.16);
+    background-clip: content-box;
+    border: 3px solid transparent;
+    border-radius: 8px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(0, 0, 0, 0.3);
+  }
+
+  /* 两个方向同时滚动时右下角那块小方块：默认会画成另一个颜色 */
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
   body {
     @apply bg-surface font-sans text-body text-ink antialiased;
   }
@@ -257,8 +296,10 @@
 
   /*
    * 隐藏滚动条但保留滚动能力。
-   * 用在学伴输入条里：那条长条上挂一根系统滚动条，比"看不到结尾"更破坏观感，
-   * 而内容本身仍然可以滚（滚轮、触摸、键盘都照常）。
+   *
+   * 现在只用在学伴输入条里：那是一条正在输入的长条，挂一根滚动条比"看不到结尾"
+   * 更破坏观感。其余会滚动的地方（对话列表、弹窗里的长列表）都改成显示全局那条
+   * 统一风格的细滚动条 —— "藏起来"会让用户不知道下面还有内容。
    */
   .no-scrollbar {
     scrollbar-width: none;

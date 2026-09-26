@@ -102,10 +102,24 @@ export function useChatSession(): ChatSession {
       const before = useChatStore.getState().getById(targetId)
       const history = before?.messages ?? []
 
+      /*
+       * 会话上记的角色要跟这一轮真正用的角色对齐。
+       * 角色可能在别处被改过（学伴设定页），而不只是在这页的下拉框里 ——
+       * 对齐的同时会把"还没署名"的历史回答按旧角色补上署名（见 store 的 setPersona）。
+       */
+      if (before && before.personaId !== settings.activePersonaId) {
+        chat.setPersona(targetId, settings.activePersonaId)
+      }
+
       chat.appendMessage(targetId, { role: 'user', content: trimmed })
       const assistantMessageId = useChatStore
         .getState()
-        .appendMessage(targetId, { role: 'assistant', content: '' })
+        .appendMessage(targetId, {
+          role: 'assistant',
+          content: '',
+          // 逐条记住是谁在回答：中途换角色时，历史不能跟着改
+          personaId: settings.activePersonaId,
+        })
 
       // ---- 组装上下文 ----
       const persona =

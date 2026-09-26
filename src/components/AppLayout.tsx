@@ -19,13 +19,14 @@ interface NavItem {
  *
  * ⚠️ 过渡期的临时清单 —— 用户说过导航栏后续还要改。
  * 「今日」不再是独立页面，已移到侧栏下方常驻显示（TodaySidebarWidget）。
+ * 「添加书籍」也去掉了：新建课程是书架上的一个动作，不该占一格导航 ——
+ * 用户要在书架前决定学什么，而不是先跳到一个管理页面。
  */
 const NAV_ITEMS: NavItem[] = [
   { to: '/', label: '书架', icon: 'shelf', end: true },
   { to: '/chat', label: '学伴对话', icon: 'chat' },
   { to: '/companion', label: '学伴设定', icon: 'user' },
   { to: '/settings', label: '设置', icon: 'sliders' },
-  { to: '/courses', label: '添加书籍', icon: 'plus' },
 ]
 
 /**

@@ -4,6 +4,7 @@ import { Icon } from '@/components/Icon'
 import { createProvider } from '@/lib/llm'
 import { LlmError } from '@/lib/llm/types'
 import { useSettingsStore } from '@/store/settings'
+import type { LlmSettings } from '@/types/models'
 
 interface Preset {
   label: string
@@ -41,21 +42,67 @@ type TestState =
   | { status: 'ok' }
   | { status: 'error'; message: string; hint?: string }
 
+/**
+ * 大模型接入卡片。
+ *
+ * 这一版重做了**使用逻辑**，修的是上一版三处互相打架的地方：
+ *
+ * 1. **草稿与已保存分开**。上一版每敲一个字就直接写进设置（自动保存），
+ *    唯独密钥要单独点一次「保存」—— 同一张卡片两套模型，用户不知道
+ *    "现在到底算配置好了没有"。现在统一成：编辑的是草稿，点「保存并使用」才生效。
+ * 2. **测试连接测的是屏幕上的值**。上一版测的是已保存的配置，
+ *    改了密钥必须先保存才能测，而那一刻测的其实还是旧的 —— 这是真正的逻辑错误。
+ *    现在测试直接用草稿（密钥留空时用已保存的那把）。
+ * 3. **配好之后有一个"当前状态"**。上一版永远停在一排输入框上，
+ *    看不出"已经在用了"。现在未配置是表单、已配置是状态卡，改配置才进编辑态。
+ *
+ * 密钥保存后不再回显（输入框绑的是草稿，已保存的密钥根本不进 DOM），
+ * 编辑态里留空即"不修改"，要换只能重新输入一遍。
+ */
 export function LlmSettingsCard() {
   const settings = useSettingsStore((state) => state.settings)
   const updateLlm = useSettingsStore((state) => state.updateLlm)
-  const [test, setTest] = useState<TestState>({ status: 'idle' })
-  /** 正在输入的**新**密钥。它不是已保存的那把 —— 见下方密钥字段的说明 */
-  const [keyDraft, setKeyDraft] = useState('')
-  const [editingKey, setEditingKey] = useState(false)
 
-  const { llm } = settings
-  const hasKey = llm.apiKey.trim().length > 0
+  const saved = settings.llm
+  const hasKey = saved.apiKey.trim().length > 0
+
+  /*
+   * 编辑态的草稿：`null` 表示"没在编辑"，此时草稿**就是**已保存的配置。
+   *
+   * 不用 useEffect 去同步草稿（保存完还要把它拉回来）：
+   * 那样每次 store 变化都会触发一次额外渲染，而且中间会有一帧显示旧值。
+   * 把"没在编辑"表达成 null，读取时兜底到 saved，就不存在需要同步的两份状态。
+   */
+  const [editState, setEditState] = useState<LlmSettings | null>(null)
+  const editing = editState !== null
+  const draft = editState ?? saved
+  const [keyDraft, setKeyDraft] = useState('')
+  const [test, setTest] = useState<TestState>({ status: 'idle' })
+
+  /** 改草稿；第一次改动会自动进入编辑态 */
+  function patchDraft(patch: Partial<LlmSettings>) {
+    setEditState((current) => ({ ...(current ?? saved), ...patch }))
+  }
+
+  function leaveEditing() {
+    setEditState(null)
+    setKeyDraft('')
+    setTest({ status: 'idle' })
+  }
+
+  /** 这一轮真正要用的配置：草稿 + 新密钥（留空则沿用已保存的那把） */
+  function effectiveConfig(): LlmSettings {
+    return { ...draft, apiKey: keyDraft.trim() || saved.apiKey }
+  }
+
+  function canSave(): boolean {
+    return Boolean(draft.baseUrl.trim() && draft.model.trim() && effectiveConfig().apiKey.trim())
+  }
 
   async function handleTest() {
     setTest({ status: 'testing' })
     try {
-      const result = await createProvider(llm).testConnection()
+      const result = await createProvider(effectiveConfig()).testConnection()
       setTest(
         result.ok
           ? { status: 'ok' }
@@ -69,14 +116,89 @@ export function LlmSettingsCard() {
     }
   }
 
+  function handleSave() {
+    const next = effectiveConfig()
+    updateLlm({
+      baseUrl: next.baseUrl.trim(),
+      model: next.model.trim(),
+      temperature: next.temperature,
+      maxTokens: next.maxTokens,
+      ...(keyDraft.trim() ? { apiKey: keyDraft.trim() } : {}),
+    })
+    leaveEditing()
+  }
+
+  // ---- 已配置且不在编辑：状态卡 ----
+  if (hasKey && !editing) {
+    return (
+      <section className="card">
+        <div className="mb-4 flex min-w-0 items-baseline gap-3">
+          <h2 className="shrink-0 text-h3 font-bold text-ink">大模型接入</h2>
+          <span className="truncate text-small text-ink-faint">密钥只存本地，不上传</span>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="badge">
+            <Icon name="check" size={12} /> 使用中
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-body font-bold text-ink">{saved.model}</p>
+            <p className="truncate text-small text-ink-faint">{saved.baseUrl}</p>
+          </div>
+        </div>
+
+        <p className="hint mt-3">密钥已保存，不再显示。要换密钥或模型，点「修改配置」。</p>
+
+        <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-line-soft pt-4">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={handleTest}
+            disabled={test.status === 'testing'}
+          >
+            {test.status === 'testing' ? '正在测试…' : '测试连接'}
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => {
+              setEditState(saved)
+              setKeyDraft('')
+              setTest({ status: 'idle' })
+            }}
+          >
+            修改配置
+          </button>
+          <button
+            type="button"
+            className="btn btn-danger btn-sm ml-auto"
+            onClick={() => {
+              updateLlm({ apiKey: '' })
+              setTest({ status: 'idle' })
+            }}
+          >
+            清除密钥
+          </button>
+        </div>
+
+        <TestResult test={test} />
+      </section>
+    )
+  }
+
+  // ---- 未配置 / 编辑中：表单 ----
   return (
     <section className="card">
-      {/* 与其他设置区块保持同一种排版语言：标题 + 一行灰字说明。
-          原来那两行"不内置密钥、只存在本地…"在下面密钥字段处已经说过一次了 */}
       <div className="mb-4 flex min-w-0 items-baseline gap-3">
         <h2 className="shrink-0 text-h3 font-bold text-ink">大模型接入</h2>
         <span className="truncate text-small text-ink-faint">密钥只存本地，不上传</span>
       </div>
+
+      {hasKey && (
+        <p className="mb-4 rounded-sm bg-ink/5 px-3 py-2 text-small leading-relaxed text-ink">
+          正在修改配置。密钥留空表示不改动已保存的那把。
+        </p>
+      )}
 
       <div className="mb-4 flex flex-wrap gap-2">
         {PRESETS.map((preset) => (
@@ -86,7 +208,7 @@ export function LlmSettingsCard() {
             title={preset.note}
             className="btn btn-secondary btn-sm"
             onClick={() => {
-              updateLlm({ baseUrl: preset.baseUrl, model: preset.model })
+              patchDraft({ baseUrl: preset.baseUrl, model: preset.model })
               setTest({ status: 'idle' })
             }}
           >
@@ -103,9 +225,12 @@ export function LlmSettingsCard() {
           <input
             id="llm-base-url"
             className="input"
-            value={llm.baseUrl}
+            value={draft.baseUrl}
             placeholder="https://api.deepseek.com/v1"
-            onChange={(event) => updateLlm({ baseUrl: event.target.value })}
+            onChange={(event) => {
+              const baseUrl = event.target.value
+              patchDraft({ baseUrl })
+            }}
           />
           <p className="hint mt-1">
             多数厂商需要以 <code className="rounded-sm bg-ink/5 px-1 font-mono">/v1</code> 结尾
@@ -119,97 +244,29 @@ export function LlmSettingsCard() {
           <input
             id="llm-model"
             className="input"
-            value={llm.model}
+            value={draft.model}
             placeholder="deepseek-chat"
-            onChange={(event) => updateLlm({ model: event.target.value })}
+            onChange={(event) => {
+              const model = event.target.value
+              patchDraft({ model })
+            }}
           />
         </div>
 
         <div>
-          {/*
-            密钥保存之后就不再回显 —— 输入框里绑的是**草稿**而不是 store 里的密钥，
-            所以配置好以后 DOM 里根本不出现那串字符（原来的实现把密钥一直绑在
-            value 上，再加一个「显示」按钮，等于只要打开设置页就能看到明文）。
-            要改就只能重新输入一遍：这是这类界面唯一安全的做法。
-          */}
-          {hasKey && !editingKey ? (
-            <>
-              {/* 没有输入框时用 span 而不是 label：dangling 的 for 会让读屏软件念一个不存在的控件 */}
-              <span className="label">API Key</span>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="badge">
-                  <Icon name="check" size={12} /> 已配置
-                </span>
-                <span className="text-small text-ink-faint">密钥已保存，不再显示</span>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm ml-auto"
-                  onClick={() => {
-                    setEditingKey(true)
-                    setKeyDraft('')
-                    setTest({ status: 'idle' })
-                  }}
-                >
-                  更换密钥
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-danger btn-sm"
-                  onClick={() => {
-                    updateLlm({ apiKey: '' })
-                    setKeyDraft('')
-                    setEditingKey(false)
-                    setTest({ status: 'idle' })
-                  }}
-                >
-                  清除
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <label className="label" htmlFor="llm-api-key">
-                API Key
-              </label>
-              <div className="flex gap-2">
-                <input
-                  id="llm-api-key"
-                  className="input"
-                  type="password"
-                  value={keyDraft}
-                  placeholder="sk-..."
-                  autoComplete="off"
-                  autoFocus={editingKey}
-                  onChange={(event) => setKeyDraft(event.target.value)}
-                />
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  disabled={!keyDraft.trim()}
-                  onClick={() => {
-                    updateLlm({ apiKey: keyDraft.trim() })
-                    setKeyDraft('')
-                    setEditingKey(false)
-                    setTest({ status: 'idle' })
-                  }}
-                >
-                  保存
-                </button>
-                {editingKey && (
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={() => {
-                      setKeyDraft('')
-                      setEditingKey(false)
-                    }}
-                  >
-                    取消
-                  </button>
-                )}
-              </div>
-            </>
-          )}
+          <label className="label" htmlFor="llm-api-key">
+            API Key
+          </label>
+          <input
+            id="llm-api-key"
+            className="input"
+            type="password"
+            value={keyDraft}
+            placeholder={hasKey ? '已保存，留空表示不修改' : 'sk-...'}
+            autoComplete="off"
+            onChange={(event) => setKeyDraft(event.target.value)}
+          />
+          <p className="hint mt-1">保存后不再显示；要更换只能重新输入一遍。</p>
         </div>
 
         <details className="rounded-sm bg-ink/5 px-4 py-3">
@@ -219,7 +276,7 @@ export function LlmSettingsCard() {
           <div className="mt-3 grid gap-4 sm:grid-cols-2">
             <div>
               <label className="label" htmlFor="llm-temperature">
-                温度 {llm.temperature.toFixed(1)}
+                温度 {draft.temperature.toFixed(1)}
               </label>
               <input
                 id="llm-temperature"
@@ -227,10 +284,13 @@ export function LlmSettingsCard() {
                 min={0}
                 max={2}
                 step={0.1}
-                value={llm.temperature}
+                value={draft.temperature}
                 /* accent-ink：滑块的默认主题色是浏览器蓝，不改成黑会在单色界面里格外扎眼 */
                 className="w-full accent-ink"
-                onChange={(event) => updateLlm({ temperature: Number(event.target.value) })}
+                onChange={(event) => {
+                  const temperature = Number(event.target.value)
+                  patchDraft({ temperature })
+                }}
               />
               <p className="hint mt-1">越低越稳定，越高越发散。答疑建议 0.3~0.8。</p>
             </div>
@@ -245,40 +305,73 @@ export function LlmSettingsCard() {
                 max={32768}
                 step={256}
                 className="input tabular"
-                value={llm.maxTokens}
-                onChange={(event) => updateLlm({ maxTokens: Number(event.target.value) || 2048 })}
+                value={draft.maxTokens}
+                onChange={(event) => {
+                  const maxTokens = Number(event.target.value) || 2048
+                  patchDraft({ maxTokens })
+                }}
               />
             </div>
           </div>
         </details>
 
-        <div className="flex flex-wrap items-center gap-4 border-t border-line-soft pt-4">
+        <div className="flex flex-wrap items-center gap-3 border-t border-line-soft pt-4">
           <button
             type="button"
             className="btn btn-primary"
+            onClick={handleSave}
+            disabled={!canSave()}
+            title={canSave() ? undefined : 'API 地址、模型名称与密钥都要填齐才能保存'}
+          >
+            保存并使用
+          </button>
+          {/* 测试用的是**屏幕上的值**，不必先保存 —— 上一版必须先保存才能测，测的还往往是旧配置 */}
+          <button
+            type="button"
+            className="btn btn-secondary"
             onClick={handleTest}
-            disabled={test.status === 'testing' || !llm.baseUrl || !llm.apiKey || !llm.model}
+            disabled={test.status === 'testing' || !effectiveConfig().apiKey.trim()}
           >
             {test.status === 'testing' ? '正在测试…' : '测试连接'}
           </button>
-
-          {/* 成功态：单色系统里没有绿色。连接成功是一个"事实陈述"，
-              不是需要警觉的事，所以用中性徽章而不是 alert 红 */}
-          {test.status === 'ok' && (
-            <span className="badge">
-              <Icon name="check" size={12} /> 连接成功
-            </span>
+          {editing && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={leaveEditing}
+            >
+              取消
+            </button>
           )}
         </div>
 
-        {/* 错误态：这是 alert 红的正当使用场景 */}
-        {test.status === 'error' && (
-          <div className="rounded-card border border-alert bg-alert-soft px-4 py-3 text-body">
-            <p className="font-bold text-alert">{test.message}</p>
-            {test.hint && <p className="mt-1 leading-relaxed text-alert">{test.hint}</p>}
-          </div>
-        )}
+        <TestResult test={test} />
       </div>
     </section>
   )
+}
+
+function TestResult({ test }: { test: TestState }) {
+  if (test.status === 'ok') {
+    // 单色系统里没有绿色。连接成功是一个"事实陈述"，用中性徽章而不是 alert 红
+    return (
+      <p className="mt-1 flex items-center gap-2 text-small text-ink">
+        <span className="badge">
+          <Icon name="check" size={12} /> 连接成功
+        </span>
+      </p>
+    )
+  }
+
+  // 错误态：这是 alert 红的正当使用场景
+  if (test.status === 'error') {
+    return (
+      <div className="rounded-card border border-alert bg-alert-soft px-4 py-3 text-body">
+        <p className="font-bold text-alert">{test.message}</p>
+        {test.hint && <p className="mt-1 leading-relaxed text-alert">{test.hint}</p>}
+      </div>
+    )
+  }
+
+  return null
 }

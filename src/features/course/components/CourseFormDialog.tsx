@@ -261,7 +261,7 @@ export function CourseFormDialog({
             用户就得一路滑到底才能看到「保存」，而确认按钮恰恰是这个弹窗唯一的目的。
             现在弹窗高度固定，列表在内部滚，保存始终在视野里。
           */}
-          <div className="no-scrollbar mt-3 max-h-[46vh] space-y-4 overflow-y-auto pr-1">
+          <div className="mt-3 max-h-[46vh] space-y-4 overflow-y-auto pr-2">
             {form.stages.map((stage, stageIndex) => (
               <div key={stageIndex} className="rounded-card border border-line-soft p-4">
                 <div className="flex flex-wrap items-end gap-3">

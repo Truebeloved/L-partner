@@ -218,6 +218,14 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   createdAt: IsoDateTime
+  /**
+   * 这条回答是**哪个角色**说的。
+   *
+   * 必须逐条记住，不能只记在会话上：用户可以中途换角色接着聊，
+   * 之后回看这段历史时，每条回答都该是当时那个角色的头像与名字 ——
+   * 否则一换角色，整段历史看起来都变成了新角色说的，等于篡改了对话记录。
+   */
+  personaId?: Id
   /** 该条消息的生成是否失败，用于 UI 显示重试 */
   failed?: boolean
 }

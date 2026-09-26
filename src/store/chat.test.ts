@@ -136,6 +136,91 @@ describe('历史对话收敛', () => {
   })
 })
 
+describe('回答的角色署名', () => {
+  it('切换角色时，还没署名的历史回答归给旧角色', () => {
+    useChatStore.setState({
+      conversations: [
+        conversation({
+          id: 'c1',
+          personaId: 'builtin-senior',
+          messages: [
+            { id: 'm1', role: 'user', content: '你好', createdAt: '2026-09-25T08:00:00.000Z' },
+            {
+              id: 'm2',
+              role: 'assistant',
+              content: '在的',
+              createdAt: '2026-09-25T08:00:10.000Z',
+            },
+          ],
+        }),
+      ],
+    })
+
+    useChatStore.getState().setPersona('c1', 'builtin-strict')
+
+    const updated = useChatStore.getState().getById('c1')!
+    expect(updated.personaId).toBe('builtin-strict')
+    // 那条回答是"耐心学长"说的，换角色不该把它算到新角色头上
+    expect(updated.messages[0]?.personaId).toBeUndefined()
+    expect(updated.messages[1]?.personaId).toBe('builtin-senior')
+  })
+
+  it('已经署名的回答不会被之后的切换改写', () => {
+    useChatStore.setState({
+      conversations: [
+        conversation({
+          id: 'c1',
+          personaId: 'builtin-strict',
+          messages: [
+            {
+              id: 'm1',
+              role: 'assistant',
+              content: '我是严格督学说的',
+              createdAt: '2026-09-25T08:00:00.000Z',
+              personaId: 'builtin-strict',
+            },
+          ],
+        }),
+      ],
+    })
+
+    useChatStore.getState().setPersona('c1', 'builtin-ta')
+
+    expect(useChatStore.getState().getById('c1')?.messages[0]?.personaId).toBe('builtin-strict')
+  })
+
+  it('署名以最后一条已署名的回答为准，而不是会话上可能过期的字段', () => {
+    useChatStore.setState({
+      conversations: [
+        conversation({
+          id: 'c1',
+          // 会话字段停留在老角色上（角色可能是在别的页面被改的）
+          personaId: 'builtin-senior',
+          messages: [
+            {
+              id: 'm1',
+              role: 'assistant',
+              content: '实际是助教在说话',
+              createdAt: '2026-09-25T08:00:00.000Z',
+              personaId: 'builtin-ta',
+            },
+            {
+              id: 'm2',
+              role: 'assistant',
+              content: '这条还没署名',
+              createdAt: '2026-09-25T08:00:10.000Z',
+            },
+          ],
+        }),
+      ],
+    })
+
+    useChatStore.getState().setPersona('c1', 'builtin-strict')
+
+    expect(useChatStore.getState().getById('c1')?.messages[1]?.personaId).toBe('builtin-ta')
+  })
+})
+
 describe('ensureConversation', () => {
   it('主对话全局唯一：反复要也只建一场', () => {
     const first = useChatStore.getState().ensureConversation({ personaId: 'builtin-senior' })

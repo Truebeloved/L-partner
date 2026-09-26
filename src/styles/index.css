@@ -335,34 +335,21 @@
    于是它们**不参与**这次交叉淡入 —— 页面内容淡入淡出时，导航和输入条稳稳待着不动，
    这正是"左侧导航栏和对话框不受动画影响"的做法。
 --------------------------------------------------------------------------- */
-::view-transition-old(page),
-::view-transition-new(page) {
-  /* 交叉淡入的总时长；比组件级动效略长，因为它承载的是"换了一个地方"这件事 */
+/*
+ * 换页的交叉淡入：作用在**根快照**上。
+ *
+ * 页面上不再有 view-transition-name="page" 了（见 AppLayout 的注释）：
+ * 内容因此是根快照的一部分，而根盒子的尺寸换页前后不变（视口），
+ * 于是浏览器没有可补间的位移与尺寸，只剩这段透明度淡入淡出。
+ *
+ * 反面教材（都踩过）：
+ * - 给内容区命名 → 浏览器拿旧页/新页的内容盒子做补间 → "整页从下往上拉"；
+ * - 关掉那个 group 的动画来止血 → 旧快照被塞进新盒子里缩放 → 闪烁 + 掉帧。
+ */
+::view-transition-old(root),
+::view-transition-new(root) {
   animation-duration: 260ms;
   animation-timing-function: var(--ease-glide);
-}
-
-/*
- * 只保留"透明度交叉淡入"，**不要快照盒子的补间**。
- *
- * 这是上一版没做对的地方：我以为删掉 @keyframes 里的 translateY 就完事了，
- * 但浏览器默认还会给每个 view-transition-group 播一段 UA 动画
- * （-ua-view-transition-group-anim-*，动的是 transform / width / height）。
- * 两个页面的内容盒子不一样高时，那段补间看起来就是"整页从下往上拉" ——
- * 和我自己写的 keyframes 毫无关系。
- *
- * 用 document.getAnimations() 把每个伪元素的动画属性打出来才看清：
- *   ::view-transition-group(page)     属性=height,transform,width  ← 就是它在动
- *   ::view-transition-old/new(page)   属性=opacity                 ← 这才是淡入淡出
- * 所以把 group 的动画关掉即可；old/new 的淡入淡出是另一组动画，不受影响。
- *
- * assistant-bar 不在这一组里：一级 ↔ 二级之间的"生长"正是靠它的 group 动画，
- * 而进出对话页那一侧已经改成**不给名字**（见 AssistantDockHost），从源头不参与。
- */
-::view-transition-group(root),
-::view-transition-group(page),
-::view-transition-group(sidebar) {
-  animation: none;
 }
 
 /* ---------------------------------------------------------------------------

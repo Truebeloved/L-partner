@@ -112,14 +112,19 @@ export function AppLayout() {
             </div>
           )}
 
-          {/* 内容区带 view-transition-name="page"：换页时淡出淡入的是它。
-              侧栏与输入条各自有名字，所以它们稳在原地不动。
-              scroll-stable 给滚动条永久留位：否则"有没有滚动条"会改变可用宽度，
-              居中的标题在换页时会左右偏几像素（见 styles/index.css）。 */}
-          <main
-            className="scroll-stable min-h-0 flex-1 overflow-y-auto"
-            style={{ viewTransitionName: 'page' }}
-          >
+          {/*
+            内容区**不给** view-transition-name —— 这一条是"换页只有淡入淡出"的关键。
+
+            给了名字，浏览器就会为它单独建一个 group，并拿旧页与新页的**内容盒子**
+            做 transform/width/height 补间：两个页面不一样高时，看起来就是整页被
+            从下往上拉（用户报的"从底部上拉"）。把这段动画关掉又会走向另一个极端 ——
+            旧快照会被塞进新盒子里缩放，于是出现闪烁（旧页面被拉伸一下）与掉帧。
+
+            不给名字，它就是**根快照的一部分**：根盒子的尺寸在换页前后完全相同（视口），
+            于是既没有位移，也没有缩放，只剩 old/new 的透明度交叉淡入。
+            侧栏与输入条仍然各自命名（它们的位置本来就稳定，不参与这次淡入淡出）。
+          */}
+          <main className="scroll-stable min-h-0 flex-1 overflow-y-auto">
             <Outlet />
           </main>
 

@@ -39,8 +39,9 @@ export function CourseStudyPage() {
         <div ref={dockRef} className="h-12" />
       </header>
 
-      {/* 与一级界面的内容区同名：从书架进来时，两边的页面内容做交叉淡入 */}
-      <div className="mx-auto max-w-4xl px-6 py-6" style={{ viewTransitionName: 'page' }}>
+      {/* 与一级界面一样**不给** view-transition-name：换页只做透明度交叉淡入
+          （理由见 AppLayout 里的长注释：给了名字就会出现整页位移，关掉动画又会缩放闪烁） */}
+      <div className="mx-auto max-w-4xl px-6 py-6">
         <CourseDetailPage />
       </div>
     </div>

@@ -2,6 +2,7 @@ import { buildLessonMessages } from '@/lib/llm/prompts'
 import type { LlmProvider } from '@/lib/llm/types'
 import { buildSchedule } from '@/features/plan/schedule'
 import type { SchedulableUnit, ScheduleResult } from '@/features/plan/schedule'
+import { backfillCourseConversation } from '@/features/chat/backfill'
 import { dayjs, todayKey } from '@/lib/date'
 import { newId } from '@/lib/id'
 import { useCourseStore } from '@/store/courses'
@@ -32,11 +33,21 @@ export const LESSON_MAX_TOKENS = 8000
 
 /**
  * 创建课程。
- * 注意这里只落课程本身，不碰计划与待办 —— 用户看到内容确认无误后再点「生成学习计划」，
+ * 注意这里只落课程本身，不碰计划与待办 —— 用户看到内容确认无误后再生成计划，
  * 中间留一次人工检查，是 D3「AI 产出必须可编辑后落库」的前置条件。
+ *
+ * 落库后顺手做一次**对话回填**：这门课往往是用户在主对话里聊了一路才决定建的，
+ * 而分类只管"以后说的话" —— 不回填的话，他点进那门课会看到"我们没聊过"，
+ * 可明明刚聊完。用户要求这个过程无感，所以它就挂在这里，不弹窗也不提示。
+ *
+ * `originPhrase` 是用户当初说"想学这个"的那句话（新建课程弹窗里填的学习目标）。
+ * 它决定了回填能不能带上**最该带上的那一条** —— 见 backfill 里的说明。
  */
-export function createCourse(draft: NewCourseInput): Id {
-  return useCourseStore.getState().add({
+export function createCourse(
+  draft: NewCourseInput,
+  options: { originPhrase?: string } = {},
+): Id {
+  const id = useCourseStore.getState().add({
     title: draft.title.trim(),
     description: normalize(draft.description),
     goal: normalize(draft.goal),
@@ -45,6 +56,15 @@ export function createCourse(draft: NewCourseInput): Id {
     source: draft.source ?? 'manual',
     stages: buildStages(draft.stages),
   })
+
+  // 回填失败不该让"建课"这个动作失败：它只是把相关记录搬一份过去
+  try {
+    backfillCourseConversation(id, options.originPhrase)
+  } catch (error) {
+    console.warn('[L-partner] 建课后的对话回填失败，已跳过：', error)
+  }
+
+  return id
 }
 
 export interface PlanOptions {

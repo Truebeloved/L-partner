@@ -13,8 +13,14 @@ interface AiPlanDialogProps {
    */
   generate: (request: AiPlanRequest) => Promise<CoursePlanDraft>
   onCancel: () => void
-  /** 拿到草稿后交给页面：它会打开手写表单让用户继续编辑，符合 D3「AI 产出必须可编辑后落库」 */
-  onGenerated: (draft: CoursePlanDraft) => void
+  /**
+   * 拿到草稿后交给页面：它会打开手写表单让用户继续编辑，符合 D3「AI 产出必须可编辑后落库」。
+   *
+   * 第二个参数是**用户当初那句目标**（原话，未经模型改写）。页面要把它一路带到
+   * createCourse —— 建课之后要靠它回填主对话里相关的往来，而"编曲入门"这种课程名
+   * 与用户那句「我想学编曲」只共享两个字，靠课程词表是认不出来的。
+   */
+  onGenerated: (draft: CoursePlanDraft, request: AiPlanRequest) => void
   /**
    * 预填的学习目标。
    *
@@ -55,12 +61,14 @@ export function AiPlanDialog({
 
     setBusy(true)
     setError(null)
+    const request: AiPlanRequest = {
+      goal: goal.trim(),
+      weeklyHours: Number.isFinite(Number(weeklyHours)) && Number(weeklyHours) > 0 ? Number(weeklyHours) : undefined,
+      deadline: deadline || undefined,
+    }
+
     try {
-      const hours = Number(weeklyHours)
-      const options = {
-        weeklyHours: Number.isFinite(hours) && hours > 0 ? hours : undefined,
-        deadline: deadline || undefined,
-      }
+      const options = { weeklyHours: request.weeklyHours, deadline: request.deadline }
 
       /*
        * 给了合集链接就走"抓真实目录"这条路：**一讲就是一个单元**。
@@ -80,11 +88,12 @@ export function AiPlanDialog({
             { title: result.title ?? goal.trim(), episodes: result.episodes },
             { goal: goal.trim(), ...options },
           ),
+          request,
         )
         return
       }
 
-      onGenerated(await generate({ goal: goal.trim(), ...options }))
+      onGenerated(await generate(request), request)
     } catch (cause) {
       // 失败必须让用户看见：静默失败会让人以为按钮没反应，进而反复点击
       setError(cause instanceof Error ? cause.message : '生成失败，请检查大模型配置后重试。')

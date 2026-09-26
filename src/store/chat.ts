@@ -118,6 +118,14 @@ interface ChatState {
     conversationId: Id,
     message: Pick<ChatMessage, 'role' | 'content'> & { personaId?: Id },
   ) => Id
+  /**
+   * 原样追加一批**已有的**消息（保留各自的 id、时间与署名）。
+   *
+   * 与 appendMessage 的分工：那个是"刚产生一条新消息"，时间就是现在、id 现生成；
+   * 这个是"把别处已经存在的记录搬进来"（新建课程时从主对话复制相关往来），
+   * 时间必须还是当时那一刻，否则复制过来的内容会全部堆在"刚刚"。
+   */
+  appendExisting: (conversationId: Id, messages: ChatMessage[]) => void
   updateMessage: (conversationId: Id, messageId: Id, patch: Partial<ChatMessage>) => void
   /** 记忆第 1 层：会话过长时写入的摘要压缩结果 */
   setSummary: (conversationId: Id, summary: string, summaryUpTo: number) => void
@@ -256,6 +264,23 @@ export const useChatStore = create<ChatState>()(
               : c,
           ),
         })),
+
+      appendExisting: (conversationId, incoming) => {
+        if (incoming.length === 0) return
+        // 复制过来的内容用它们**本来**的时间：会话列表里显示的才是"那次聊到哪"
+        const lastAt = incoming[incoming.length - 1]?.createdAt
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c.id === conversationId
+              ? {
+                  ...c,
+                  messages: [...c.messages, ...incoming],
+                  updatedAt: lastAt && lastAt > c.updatedAt ? lastAt : c.updatedAt,
+                }
+              : c,
+          ),
+        }))
+      },
 
       setSummary: (conversationId, summary, summaryUpTo) =>
         set((state) => ({

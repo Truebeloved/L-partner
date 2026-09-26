@@ -91,6 +91,41 @@ describe('对话自动分类', () => {
     expect(matchCourseForMessage('你叫什么名字', COURSES)).toBeNull()
     expect(matchCourseForMessage('我今天有点累', COURSES)).toBeNull()
   })
+
+  /*
+   * 用户报的「分类分得乱了」的真正机制。
+   *
+   * 视频导入的课程有上百条**长标题**式的单元名。当用户那句话整个被标题包含时，
+   * 判据原来拿的是**标题长度**当分数，于是 3 个字的「为什么」对上一个 26 字的标题
+   * 会得到 score=26 —— 比任何真实匹配都高，这句追问就被吞进那门课。
+   * 课程里长标题越多，这张网越大。
+   */
+  describe('长标题式的课程（视频导入）不能把日常短句吞进去', () => {
+    const video = makeCourse('c-clang', 'C语言基础入门', [
+      { title: '1.1.1 计算机与编程语言：计算机是怎么做事情的，编程语言是什么_高清', points: [] },
+      { title: '2.3.1 为什么需要变量：内存里到底发生了什么_高清 720P', points: [] },
+      { title: '3.1.2 这个函数为什么要用指针：一个真实例子_高清 720P', points: [] },
+    ])
+    const books = [video, ...COURSES]
+
+    it('短追问不会被某个长标题"包含"就算命中', () => {
+      for (const text of ['为什么', '这个呢', '上面那个', '然后呢', '我今天有点累', '说说你的经历']) {
+        expect(matchCourseForMessage(text, books), text).toBeNull()
+      }
+    })
+
+    it('真正在聊这门课的内容仍然认得出', () => {
+      // 与标题有 4 字以上实质重合的，照旧命中
+      expect(matchCourseForMessage('编程语言是什么', books)?.courseId).toBe('c-clang')
+      expect(matchCourseForMessage('为什么要用指针', books)?.courseId).toBe('c-clang')
+    })
+
+    it('只重合两个字的不算 —— 关键词分类本来就不该假装看得懂改写', () => {
+      // 「指针」只有 2 个字：这类改写靠本地词表认不出来（要靠模型，而那会把每条消息的成本翻倍），
+      // 它宁可回主对话，也不要假装有把握地塞进某门课
+      expect(matchCourseForMessage('指针到底有什么用', books)).toBeNull()
+    })
+  })
 })
 
 describe('认不出课程时：追问留下、闲话回主对话', () => {

@@ -93,11 +93,23 @@ export function matchCourseForMessage(text: string, courses: Course[]): CourseMa
        * 2. 最长公共子串够长 —— 用户说的大多是**书面全称的前半截**
        *    （课程里叫「宾语前置句」，他说"宾语前置到底怎么判断"），
        *    这类前缀关系用"包含"一个都匹配不上。
+       *
+       * ⚠️ 命中长度取**短的那一边**，这是这个函数最容易写错、后果也最隐蔽的一处。
+       * 原来"包含"时直接拿 `candidate.length` 当分数，于是：
+       * 视频导入的课有上百条长标题（「2.3.1 为什么需要变量：内存里到底发生了什么_高清 720P」），
+       * 用户说一句 3 个字的「为什么」就被它包含，分数成了 26 —— 比任何真实匹配都高，
+       * 于是这句追问被塞进那门课，而不是留在原地或回主对话。
+       * 课程里长标题越多，这张网越大：用户看到的正是"分类分得乱了"。
+       *
+       * 短的那一边才是"这次到底对上了几个字"：3 个字对上一个长标题，就是只对上了 3 个字，
+       * 达不到内容词的 4 字门槛，不该算命中。
        */
       const contained = target.includes(candidate) || candidate.includes(target)
-      const overlap = contained ? candidate.length : longestCommonSubstring(target, candidate)
+      const overlap = contained
+        ? Math.min(target.length, candidate.length)
+        : longestCommonSubstring(target, candidate)
       const needed = alias.kind === 'title' ? MIN_OVERLAP : MIN_CONTENT_OVERLAP
-      if (!contained && overlap < needed) continue
+      if (overlap < needed) continue
 
       if (!best || overlap > best.score) {
         best = { courseId: course.id, matched: alias.text, score: overlap }
@@ -108,16 +120,18 @@ export function matchCourseForMessage(text: string, courses: Course[]): CourseMa
   return best
 }
 
-/** 词条来自哪里：课程名（判定宽一点）还是课程内容里的术语（严一点） */
+/** 这门课是怎么来的：词条来自哪里（课程名与目标判定宽一点，课程内容里的术语严一点） */
 interface CourseAlias {
   text: string
   kind: 'title' | 'content'
 }
 
-/**
- * 一门课的"词表"：**课程名**（含切开的分段 —— 用户说"文言文怎么学"，
- * 而课程叫「文言文阅读 · 中高考贯通」，整串是匹配不上的）与**课程内容**
- * （单元的标题与知识点，这门课真正在讲什么）。
+/** 一门课的"词表"：**课程名**（含切开的分段 —— 用户说"文言文怎么学"，
+ * 而课程叫「文言文阅读 · 中高考贯通」，整串是匹配不上的）、**学习目标**
+ * 与**课程内容**（单元的标题与知识点，这门课真正在讲什么）。
+ *
+ * 目标也算词条，因为它是用户自己那句话的落点：「我想学编曲」→《编曲入门》，
+ * 而"编曲"两个字单独是够不上课程名的门槛的。
  */
 export function aliasesOf(course: Course): string[] {
   return courseAliases(course).map((alias) => alias.text)
@@ -130,6 +144,8 @@ function courseAliases(course: Course): CourseAlias[] {
     if (segment.trim()) aliases.push({ text: segment.trim(), kind: 'title' })
   }
 
+  if (course.goal) aliases.push({ text: course.goal, kind: 'title' })
+
   for (const stage of course.stages) {
     aliases.push({ text: stage.title, kind: 'content' })
     for (const unit of stage.units) {
@@ -141,4 +157,24 @@ function courseAliases(course: Course): CourseAlias[] {
   }
 
   return aliases
+}
+
+/**
+ * 这句话与某个短语算不算"在说同一件事"（判据与课程匹配完全一致）。
+ *
+ * 用途：新建课程时回填主对话的往来。课程刚建出来，"编曲入门"和用户当时那句
+ * 「我想学编曲，从哪开始」只共享两个字 —— 靠课程词表认不出来，而那句恰恰
+ * 是**这门课之所以存在的原因**，不带上它，回填就漏掉了最该带上的那一条。
+ */
+export function matchesPhrase(text: string, phrase: string): boolean {
+  const target = normalizeForMatch(text)
+  const candidate = normalizeForMatch(phrase)
+  if (target.length < MIN_OVERLAP || candidate.length < MIN_OVERLAP) return false
+
+  const contained = target.includes(candidate) || candidate.includes(target)
+  const overlap = contained
+    ? Math.min(target.length, candidate.length)
+    : longestCommonSubstring(target, candidate)
+
+  return overlap >= MIN_OVERLAP
 }

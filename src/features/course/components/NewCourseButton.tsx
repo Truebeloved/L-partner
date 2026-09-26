@@ -39,6 +39,14 @@ export function NewCourseButton() {
   const [manualNeedLlm, setManualNeedLlm] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
   const [formInitial, setFormInitial] = useState<CoursePlanDraft | null>(null)
+  /**
+   * 用户当初那句学习目标（原话）。
+   *
+   * 一路带到 createCourse：建课之后要用它回填主对话里相关的往来，
+   * 而课程名往往是模型起的新名字（「编曲入门」），与那句「我想学编曲」
+   * 只共享两个字，靠课程词表认不出来。
+   */
+  const [originPhrase, setOriginPhrase] = useState('')
 
   /*
    * 全局 AI 带过来的目标：**直接由 store 驱动渲染**，不搬进组件 state。
@@ -88,9 +96,10 @@ export function NewCourseButton() {
             setManualOpen(false)
             clearPreset()
           }}
-          onGenerated={(draft) => {
+          onGenerated={(draft, request) => {
             setManualOpen(false)
             clearPreset()
+            setOriginPhrase(request.goal)
             // 不停在「已生成」：立刻把草稿交给表单，让用户看到 AI 到底写了什么再决定保存
             setFormInitial(draft)
             setFormOpen(true)
@@ -104,7 +113,7 @@ export function NewCourseButton() {
           fromAi
           onCancel={() => setFormOpen(false)}
           onSubmit={(draft) => {
-            const id = createCourse(draft)
+            const id = createCourse(draft, { originPhrase })
             setFormOpen(false)
             navigate(`/courses/${id}`)
           }}

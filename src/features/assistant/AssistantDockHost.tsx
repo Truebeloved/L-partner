@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useState } from 'react'
 
 import { AssistantBar } from '@/features/assistant/AssistantBar'
 import { useAssistantDockState } from '@/features/assistant/dock'
@@ -92,9 +92,27 @@ export function AssistantDockHost() {
     }
   }, [slot.element, slot.placement])
 
+  /*
+   * 换页时输入条该不该动，必须在**浏览器拍照之前**告诉 CSS。
+   *
+   * useLayoutEffect 的时机正好：它在 DOM 更新之后、浏览器拍新画面之前同步执行。
+   * 判断依据是"新旧停靠位里有没有对话页底部"——
+   * layout.placement 还是上一次量出来的旧位置，slot.placement 是这一次的新位置，
+   * 换页那一帧两者都在手上，所以进出对话页都能识别出来（用 ref 记旧值会在渲染期写 ref）。
+   *
+   * ⚠️ 这个 hook 必须放在下面的提前 return **之前**：Hook 不能有条件地调用。
+   */
+  const currentPlacement = layout?.placement ?? slot.placement
+  const involvesBottom = currentPlacement === 'bottom' || slot.placement === 'bottom'
+  const motion = involvesBottom ? 'none' : layout?.animate ? 'grow' : 'none'
+
+  useLayoutEffect(() => {
+    document.documentElement.dataset.dockMotion = motion
+  }, [motion])
+
   if (!layout) return null
 
-  const { box, placement, animate } = layout
+  const { box, animate } = layout
 
   return (
     <div
@@ -105,17 +123,15 @@ export function AssistantDockHost() {
         width: box.width,
         minHeight: box.height,
         /*
-         * view-transition-name 只在顶部两个位置给。
+         * view-transition-name 让换页时浏览器"认得出这是同一个元素"。
          *
-         * 给了名字等于告诉浏览器"这是同一个元素换了地方"，于是换页时它会**把整条输入条
-         * 从旧位置演到新位置** —— 从一级界面进对话页，看到的就是输入条（连同两个气泡）
-         * 从顶部一路滑到底部。用户明确不要这个"变来变去"。
-         *
-         * 在对话页底部**不命名**：于是旧画面里的它淡出、新画面里的它淡入，
-         * 只剩淡入淡出，没有任何位移。而一级 ↔ 二级两边都有名字，
-         * 生长动画照旧（那正是想要的效果）。
+         * ⚠️ 这正是"对话框平滑变成对话区域"那段动画的来源，而且**自己写的过渡关掉也没用**：
+         * 换页时浏览器会拿旧位置与新位置各拍一张，然后自动把整条输入条（连同两个气泡）
+         * 从旧位置演到新位置 —— 自己不写一行过渡，它也会动。
+         * 所以这里必须显式关掉：见下面 html[data-dock-motion='none'] 那组规则
+         * （由 useLayoutEffect 在换页那一帧之前就把属性写上去）。
          */
-        viewTransitionName: placement === 'bottom' ? undefined : 'assistant-bar',
+        viewTransitionName: 'assistant-bar',
         /*
          * 生长与位移用两套缓动：
          * - 尺寸（width / min-height）走 spring，末段有一点回弹 —— "长出来"的感觉就在这点回弹上；
@@ -133,7 +149,7 @@ export function AssistantDockHost() {
     >
       {/* 容器整体不接收鼠标事件（它是个定位壳，会盖住页面），交互只落在输入条自己身上 */}
       <div className="pointer-events-auto">
-        <AssistantBar placement={placement} />
+        <AssistantBar placement={currentPlacement} />
       </div>
     </div>
   )

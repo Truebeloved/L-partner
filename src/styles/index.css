@@ -302,6 +302,37 @@
 }
 
 /* ---------------------------------------------------------------------------
+   输入条的换页动画
+
+   给了 view-transition-name 的元素会被浏览器当成"同一个元素换了地方"，
+   于是换页时它自动把整条输入条（连带里面的气泡）从旧位置演到新位置 ——
+   这段动画**不是**自己写的过渡，关掉 CSS transition 也去不掉它，只能在这里关。
+
+   两档：
+   - grow：一级 ↔ 二级之间的生长（两边都在顶部，是一次尺寸变化）；
+   - none：进出对话页时**完全不动画**，旧位置的直接消失、新位置的直接出现。
+     用户明确不要"对话框平滑变成对话区域"这个效果，那一页只保留页面自己的淡入淡出。
+--------------------------------------------------------------------------- */
+::view-transition-group(assistant-bar) {
+  animation-duration: 460ms;
+  animation-timing-function: var(--ease-spring);
+}
+
+html[data-dock-motion='none'] ::view-transition-group(assistant-bar) {
+  animation: none;
+}
+
+html[data-dock-motion='none'] ::view-transition-old(assistant-bar) {
+  animation: none;
+  opacity: 0;
+}
+
+html[data-dock-motion='none'] ::view-transition-new(assistant-bar) {
+  animation: none;
+  opacity: 1;
+}
+
+/* ---------------------------------------------------------------------------
    开屏动效
    开屏是应用里唯一"不讲效率"的地方，它的任务是让人感到被迎接，
    所以用缓慢的缓出曲线和轻微的上浮 + 去模糊，而不是任何弹跳或缩放。
